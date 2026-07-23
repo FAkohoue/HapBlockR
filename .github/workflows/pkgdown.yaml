@@ -1,0 +1,117 @@
+name: pkgdown
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pages:    write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Pandoc
+        uses: r-lib/actions/setup-pandoc@v2
+        with:
+          pandoc-version: "3.1.11"
+
+      - name: Install R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+          use-public-rspm: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcurl4-openssl-dev libssl-dev libxml2-dev \
+            libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+            libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev \
+            zlib1g-dev libgit2-dev libhdf5-dev \
+            libopenblas-dev liblapack-dev gfortran
+
+      - name: Install Bioconductor packages
+        shell: Rscript {0}
+        run: |
+          if (!requireNamespace("BiocManager", quietly = TRUE))
+            install.packages("BiocManager", repos = "https://cloud.r-project.org")
+          BiocManager::install(ask = FALSE, update = FALSE)
+          bioc_pkgs <- c("SNPRelate", "gdsfmt")
+          to_install <- bioc_pkgs[!vapply(bioc_pkgs, requireNamespace,
+                                          logical(1L), quietly = TRUE)]
+          if (length(to_install))
+            BiocManager::install(to_install, ask = FALSE, update = FALSE)
+
+      - name: Install R package dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::pkgdown
+          needs: website
+
+      - name: Remove compiled artifacts
+        run: |
+          find . -type f \( \
+            -name "*.o" -o \
+            -name "*.obj" -o \
+            -name "*.so" -o \
+            -name "*.dll" -o \
+            -name "*.a" -o \
+            -name "*.lib" -o \
+            -name "*.def" -o \
+            -name "*.exp" -o \
+            -name "*.dylib" \
+          \) -print -delete
+          rm -rf src-i386 src-x64 libs
+
+      - name: Install HapBlockR
+        # R CMD INSTALL is the only reliable way to get the package into
+        # the default library so that library("HapBlockR") works in the
+        # subsequent pkgdown step.  install.packages(".", repos=NULL) can
+        # place the package in a non-default path that pkgdown cannot find.
+        run: R CMD INSTALL --no-multiarch --with-keep.source .
+
+      - name: Build pkgdown site
+        env:
+          PKGDOWN_DEV_MODE: release
+        shell: Rscript {0}
+        run: |
+          pkgdown::build_site_github_pages(
+            new_process = FALSE,
+            install     = FALSE
+          )
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url:  ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id:   deployment
+        uses: actions/deploy-pages@v4

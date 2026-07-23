@@ -1,0 +1,23 @@
+# Close an HapBlockR Backend and Release File Handles
+
+Closes any open file connections held by the backend. For in-memory
+backends (`"matrix"`, `"numeric"`, `"hapmap"`, `"vcf"`) this is a no-op.
+For `"gds"` backends it calls
+[`SNPRelate::snpgdsClose()`](https://rdrr.io/pkg/SNPRelate/man/snpgdsClose.html).
+For `"bed"` backends the memory-mapped file is released.
+
+## Usage
+
+``` r
+close_backend(backend)
+```
+
+## Arguments
+
+- backend:
+
+  An `"HapBlockR_backend"` object.
+
+## Value
+
+Invisibly `NULL`.

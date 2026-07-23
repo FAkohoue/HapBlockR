@@ -1,0 +1,151 @@
+# Genome-Wide LD Block Detection by Chromosome
+
+Applies
+[`Big_LD()`](https://FAkohoue.github.io/HapBlockR/reference/Big_LD.md)
+chromosome by chromosome, collects results and returns a single tidy
+data frame annotated with chromosome and block length. This is the
+recommended entry point for genome-wide analyses.
+
+## Usage
+
+``` r
+run_Big_LD_all_chr(
+  geno_matrix,
+  snp_info = NULL,
+  CLQcut = 0.5,
+  method = c("r2", "rV2"),
+  n_threads = 1L,
+  clstgap = 40000,
+  leng = 200,
+  subSegmSize = 1500,
+  MAFcut = 0.05,
+  appendrare = FALSE,
+  singleton_as_block = FALSE,
+  close_gaps_with_snps = TRUE,
+  gap_k_rep = 2L,
+  checkLargest = FALSE,
+  CLQmode = "Density",
+  kin_method = "chol",
+  split = FALSE,
+  digits = -1L,
+  seed = NULL,
+  min_snps_chr = 10L,
+  chr = NULL,
+  clean_malformed = FALSE,
+  max_bp_distance = 0L,
+  verbose = FALSE
+)
+```
+
+## Arguments
+
+- geno_matrix:
+
+  Numeric matrix (individuals x SNPs; values 0/1/2), spanning all
+  chromosomes.
+
+- snp_info:
+
+  Data frame with columns `CHR`, `SNP`, `POS`. Column order is flexible;
+  columns are matched by name.
+
+- CLQcut, clstgap, leng, subSegmSize, MAFcut, appendrare,
+  close_gaps_with_snps, gap_k_rep, checkLargest, CLQmode, kin_method,
+  split, digits, seed, verbose:
+
+  Forwarded to
+  [`Big_LD()`](https://FAkohoue.github.io/HapBlockR/reference/Big_LD.md).
+  See that function's documentation for details.
+
+- method:
+
+  Character. LD metric: `"r2"` (default, standard squared Pearson
+  correlation) or `"rV2"` (kinship-adjusted). See
+  [`Big_LD()`](https://FAkohoue.github.io/HapBlockR/reference/Big_LD.md)
+  for details.
+
+- n_threads:
+
+  Integer. Number of OpenMP threads for the C++ LD kernel. Default `1L`.
+  Increase for multi-core systems.
+
+- singleton_as_block:
+
+  Logical. If `TRUE`, SNPs that pass MAF filtering but are not assigned
+  to any clique are returned as single-SNP blocks (`start == end`,
+  `length_bp == 1`). Default `FALSE`. See
+  [`Big_LD()`](https://FAkohoue.github.io/HapBlockR/reference/Big_LD.md)
+  for details.
+
+- min_snps_chr:
+
+  Integer. Chromosomes with fewer SNPs than this after MAF filtering are
+  skipped. Default `10L`. Increase to skip small scaffolds in
+  whole-genome datasets.
+
+- chr:
+
+  Character vector or `NULL`. If supplied, only the named chromosomes
+  are processed. Labels must match the values in `snp_info$CHR` after
+  normalisation (no `chr` prefix). E.g. `chr = c("1","3","5")` or
+  `chr = "X"`. Default `NULL` processes all chromosomes.
+
+- clean_malformed:
+
+  Logical. If `TRUE`, stream-clean the input file before reading by
+  removing lines whose column count does not match the header. Only
+  relevant when `geno_matrix` is a file path wrapped into a backend.
+  Default `FALSE`.
+
+- max_bp_distance:
+
+  Integer. Maximum base-pair distance between a SNP pair for its r\\^2\\
+  to be computed. Pairs beyond this distance are set to zero in the
+  adjacency matrix (assumed to be in negligible LD). `0L` (default)
+  disables this and computes all pairs (original behaviour). Recommended
+  value for WGS panels: `500000L` (500 kb). Has no effect when `CLQmode`
+  is `"Louvain"` or `"Leiden"` and the window spans less than
+  `max_bp_distance`. Requires sorted SNP positions within each
+  sub-segment (guaranteed by `run_Big_LD_all_chr`).
+
+## Value
+
+A `data.frame` with columns: `start`, `end`, `start.rsID`, `end.rsID`,
+`start.bp`, `end.bp`, `CHR`, `length_bp`. Rows are sorted by `CHR` then
+`start.bp`.
+
+## See also
+
+[`Big_LD()`](https://FAkohoue.github.io/HapBlockR/reference/Big_LD.md),
+[`tune_LD_params`](https://FAkohoue.github.io/HapBlockR/reference/tune_LD_params.md),
+[`extract_haplotypes`](https://FAkohoue.github.io/HapBlockR/reference/extract_haplotypes.md)
+
+## Examples
+
+``` r
+# \donttest{
+# Use the package example data -- 120 individuals, 230 SNPs, 3 chromosomes,
+# 9 simulated LD blocks (3 per chromosome).
+data(ldx_geno,     package = "HapBlockR")
+data(ldx_snp_info, package = "HapBlockR")
+blocks <- run_Big_LD_all_chr(
+  ldx_geno, ldx_snp_info,
+  method = "r2", CLQcut = 0.55, leng = 15L,
+  subSegmSize = 100L, verbose = FALSE
+)
+head(blocks)
+#>   start end start.rsID end.rsID start.bp end.bp n_snps CHR length_bp
+#> 1     1  30     rs1001   rs1030     1000  80183     30   1     79184
+#> 2    31  50     rs1031   rs1050    81064  99022     20   1     17959
+#> 3    51  80     rs1051   rs1080   150109 179371     30   1     29263
+#> 4     1  35     rs2001   rs2035     1000  85240     35   2     84241
+#> 5    36  60     rs2036   rs2060    86236 160549     25   2     74314
+#> 6    61  80     rs2061   rs2080   161515 180473     20   2     18959
+summarise_blocks(blocks)
+#>      CHR n_blocks min_bp median_bp  mean_bp max_bp total_bp_covered
+#> 1      1        3  17959     29263 42135.33  79184           126406
+#> 2      2        3  18959     74314 59171.33  84241           177514
+#> 3      3        3  18730     71893 55165.33  74873           165496
+#> 4 GENOME        9  17959     71893 52157.33  84241           469416
+# }
+```

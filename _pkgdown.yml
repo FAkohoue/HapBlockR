@@ -1,0 +1,382 @@
+url: https://FAkohoue.github.io/HapBlockR/
+template:
+  bootstrap: 5
+  bootswatch: flatly
+  includes:
+    in_header: |
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+      <!-- Paste the HTML from pkgdown/assets/favicon.html below -->
+      <link rel="icon" href="favicon.ico">
+
+authors:
+  Félicien Akohoue:
+    href: https://github.com/FAkohoue
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fab fa-github fa-lg
+      href: https://github.com/FAkohoue/HapBlockR
+      aria-label: GitHub
+home:
+  title: "HapBlockR -- Genome-Wide LD Block Detection"
+  description: >
+    Fast, scalable LD block detection using r2 or kinship-adjusted rV2,
+    with C++/Armadillo acceleration, multi-format I/O, and a
+    never-full-genome memory model. WGS-scale acceleration via Louvain/Leiden
+    community detection (polynomial-time, no clique blowup), sparse LD
+    computation (max_bp_distance), and a bigmemory file-backed matrix store.
+    Complete downstream pipeline: haplotype analysis (phased and unphased),
+    diversity metrics, post-GWAS QTL mapping, single and multi-trait
+    haplotype-based genomic prediction (rrBLUP per trait, shared GRM),
+    three-evidence block ranking for haplotype stacking, and cross-population
+    effect concordance from haplotype association results (compare_block_effects)
+    or any external GWAS tool (compare_gwas_effects, with automatic SE derivation
+    from z-score and block_match = "position" for populations with different
+    LD block boundaries). Epistasis detection module: within-block pairwise SNP
+    interaction scan with Bonferroni and simpleM Sidak correction
+    (scan_block_epistasis), trans-haplotype between-block epistasis scan
+    (scan_block_by_block_epistasis), and single-block fine-mapping with pairwise
+    or LASSO dispatch (fine_map_epistasis_block).
+  links:
+    - text: Browse source code
+      href: https://github.com/FAkohoue/HapBlockR
+    - text: Report a bug
+      href: https://github.com/FAkohoue/HapBlockR/issues
+articles:
+  - title: "Getting started"
+    navbar: ~
+    contents:
+      - HapBlockR-intro
+  - title: "Methods"
+    navbar: "Methods"
+    contents:
+      - HapBlockR-ld-metrics
+      - HapBlockR-breeding-decisions
+  - title: "Advanced"
+    navbar: "Advanced"
+    contents:
+      - HapBlockR-large-scale
+      - HapBlockR-phasing
+      - HapBlockR-workflow
+
+reference:
+
+# ------------------------------------------------------------
+# Package overview
+# ------------------------------------------------------------
+
+  - title: "Package overview"
+    desc: >
+      Main documentation entry point for HapBlockR, and the standalone
+      Breeder's Guide covering all parent-selection and mate-allocation
+      strategies in narrative form.
+    contents:
+      - HapBlockR-package
+      - open_breeder_guide
+
+
+# ------------------------------------------------------------
+# Main workflows
+# ------------------------------------------------------------
+
+  - title: "Main workflows"
+    desc: >
+      High-level functions covering the full HapBlockR pipeline,
+      from genotype input to LD block detection, haplotype construction,
+      and genomic prediction.
+    contents:
+      - Big_LD
+      - run_ldx_pipeline
+      - run_Big_LD_all_chr
+      - tune_LD_params
+
+
+# ------------------------------------------------------------
+# Genotype input and backend management
+# ------------------------------------------------------------
+
+  - title: "Genotype input and backend"
+    desc: >
+      Import genotype data from multiple formats and manage the HapBlockR
+      memory-efficient backend for large genomic datasets.
+    contents:
+      - read_geno
+      - read_geno_bigmemory
+      - read_chunk
+      - prepare_geno
+      - close_backend
+      - print.HapBlockR_backend
+      - summary.HapBlockR_backend
+
+
+# ------------------------------------------------------------
+# LD computation and block detection
+# ------------------------------------------------------------
+
+  - title: "LD computation and block detection"
+    desc: >
+      Core algorithms for LD estimation, LD decay analysis, and
+      genome-wide LD block segmentation using clique-based and
+      community-detection approaches.
+    contents:
+      - compute_r2
+      - compute_rV2
+      - get_V_inv_sqrt
+      - compute_ld_decay
+      - plot_ld_decay
+      - summarise_blocks
+      - plot_ld_blocks
+
+
+# ------------------------------------------------------------
+# Phasing tools
+# ------------------------------------------------------------
+
+  - title: "Phasing tools"
+    desc: >
+      Functions for obtaining gametic phase from WGS data (Beagle)
+      or pre-phased VCF files.
+    contents:
+      - read_phased_vcf
+      - phase_with_beagle
+
+
+# ------------------------------------------------------------
+# Haplotype construction and diversity analysis
+# ------------------------------------------------------------
+
+  - title: "Haplotype construction and diversity"
+    desc: >
+      Extract haplotypes within LD blocks, decode nucleotide sequences,
+      compute haplotype diversity statistics, and construct genomic
+      prediction features.
+    contents:
+      - extract_haplotypes
+      - decode_haplotype_strings
+      - compute_haplotype_diversity
+      - build_haplotype_feature_matrix
+      - compute_haplotype_grm
+      - define_qtl_regions
+
+
+# ------------------------------------------------------------
+# Haplotype harmonisation and inference
+# ------------------------------------------------------------
+
+  - title: "Haplotype harmonisation"
+    desc: >
+      Harmonise haplotypes across populations, infer diplotypes,
+      and collapse rare alleles into biologically meaningful groups.
+    contents:
+      - infer_block_haplotypes
+      - collapse_haplotypes
+      - harmonize_haplotypes
+
+
+# ------------------------------------------------------------
+# Haplotype output writers
+# ------------------------------------------------------------
+
+  - title: "Haplotype export"
+    desc: >
+      Export haplotype dosage matrices and diversity summaries
+      for downstream statistical analyses.
+    contents:
+      - write_haplotype_numeric
+      - write_haplotype_character
+      - write_haplotype_diversity
+
+
+# ------------------------------------------------------------
+# Association and QTL interpretation
+# ------------------------------------------------------------
+
+  - title: "Association and QTL interpretation"
+    desc: >
+      Block-level association tests (Q+K mixed model with simpleM
+      multiple-testing correction), diplotype effect decomposition,
+      cross-population effect concordance from haplotype association results
+      (compare_block_effects) or external GWAS tools (compare_gwas_effects),
+      GWAS integration, and epistasis detection.
+    contents:
+      - test_block_haplotypes
+      - estimate_diplotype_effects
+      - compare_block_effects
+      - compare_gwas_effects
+      - integrate_gwas_haplotypes
+
+
+# ------------------------------------------------------------
+# Genomic prediction tools
+# ------------------------------------------------------------
+
+  - title: "Genomic prediction"
+    desc: >
+      Haplotype-based genomic prediction following Tong et al. (2024-2025),
+      including GBLUP integration, local GEBV estimation, and additive +
+      dominance GBLUP via the Vitezica et al. (2013) dominance relationship
+      matrix (compute_dominance_grm, paired with run_haplotype_prediction's
+      include_dominance = TRUE).
+    contents:
+      - prepare_gblup_inputs
+      - run_haplotype_prediction
+      - estimate_marker_effects
+      - compute_local_gebv
+      - backsolve_snp_effects
+      - compute_dominance_grm
+
+
+# ------------------------------------------------------------
+# Epistasis detection
+# ------------------------------------------------------------
+
+  - title: "Epistasis detection"
+    desc: >
+      Within-block pairwise SNP interaction scan (scan_block_epistasis),
+      trans-haplotype between-block epistasis scan
+      (scan_block_by_block_epistasis), and single-block fine-mapping with
+      pairwise or LASSO dispatch (fine_map_epistasis_block). All functions
+      operate on GRM-corrected REML residuals from test_block_haplotypes().
+    contents:
+      - scan_block_epistasis
+      - scan_block_by_block_epistasis
+      - fine_map_epistasis_block
+
+
+# ------------------------------------------------------------
+# Breeding decision tools
+# ------------------------------------------------------------
+
+  - title: "Breeding decision support"
+    desc: >
+      Identify favourable haplotypes and rank LD blocks for
+      haplotype stacking strategies.
+    contents:
+      - rank_haplotype_blocks
+      - select_top_blocks
+      - plot_block_funnel
+      - score_favorable_haplotypes
+      - summarize_parent_haplotypes
+
+
+# ------------------------------------------------------------
+# Parent selection (GA vs. truncation)
+# ------------------------------------------------------------
+
+  - title: "Parent selection and mate allocation"
+    desc: >
+      Genetic-algorithm founder-parent optimiser (select_parents_ga, via the
+      GA package) searching for the combination of individuals maximising
+      coverage of favourable local GEBV/haplotype values across target
+      blocks, under crossing-scheme constraints (no_selfing/selfing/OHS/
+      OPV/Haploid_OHS), with a truncation-selection baseline, a calibration
+      helper for its optional merit-weighted fitness (suggest_merit_weight),
+      and a PCA visualisation for comparing parent sets. Family- (or
+      genetic-cluster-) quota selection (select_parents_by_family): best-
+      performing groups first, then the best individual lines within each,
+      via four mutually exclusive rules for how many lines a group takes
+      (family_select_mode = count/percentage/sd_threshold/check_relative),
+      with an optional GBLUP-corrected group ranking and a within-group
+      haplotype-diversity tiebreak. Beyond founder-set selection: an
+      explicit merit-vs-diversity Pareto tradeoff frontier
+      (select_parents_pareto, pareto_front); true Optimal Contribution
+      Selection producing an actual contribution-and-mating plan
+      (select_parents_ocs, via the AlphaMate executable, optiSel, or
+      SimpleMating's planCross()/selectCrosses()); cross ranking by
+      predicted mid-parent value plus segregation variance across four
+      variance-prediction modes (usefulness_criterion); exact binary
+      integer linear programming validation of a heuristic mating plan's
+      optimality gap (validate_crosses_exact); and diversity-maximising
+      core-collection selection for germplasm-bank/founder-diversity use
+      cases (select_core_collection).
+    contents:
+      - select_parents_ga
+      - suggest_merit_weight
+      - truncation_selection
+      - select_parents_by_family
+      - plot_parent_selection_pca
+      - cluster_selection_groups
+      - plot_selection_clusters
+      - select_parents_pareto
+      - pareto_front
+      - select_parents_ocs
+      - usefulness_criterion
+      - validate_crosses_exact
+      - select_core_collection
+
+
+# ------------------------------------------------------------
+# Forward-in-time simulation
+# ------------------------------------------------------------
+
+  - title: "Forward-in-time simulation"
+    desc: >
+      Recurrent-selection simulator (ga_vs_ts_simulation), built as a
+      wrapper around the genomicSimulation package, comparing GA-selected
+      against truncation-selected founders over generations of realistic
+      meiosis and recombination, tracking realised mean/max breeding-
+      population GEBV per generation.
+    contents:
+      - ga_vs_ts_simulation
+      - plot_ga_vs_ts_simulation
+
+
+# ------------------------------------------------------------
+# Population comparison and stability analysis
+# ------------------------------------------------------------
+
+  - title: "Population and stability analysis"
+    desc: >
+      Compare haplotype distributions across populations and evaluate
+      stability across environments.
+    contents:
+      - compare_haplotype_populations
+      - run_haplotype_stability
+      - scan_diversity_windows
+      - decompose_block_effects
+      - export_candidate_regions
+
+
+# ------------------------------------------------------------
+# Cross-validation tools
+# ------------------------------------------------------------
+
+  - title: "Cross-validation"
+    desc: >
+      Evaluate predictive ability of haplotype-based genomic models.
+    contents:
+      - cv_haplotype_prediction
+
+
+# ------------------------------------------------------------
+# Visualisation tools
+# ------------------------------------------------------------
+
+  - title: "Visualisation"
+    desc: >
+      Plot LD structure and haplotype relationships.
+    contents:
+      - plot_haplotype_network
+
+
+# ------------------------------------------------------------
+# Example datasets
+# ------------------------------------------------------------
+
+  - title: "Example datasets"
+    desc: >
+      Simulated datasets for tutorials and reproducible examples.
+    contents:
+      - ldx_geno
+      - ldx_snp_info
+      - ldx_blocks
+      - ldx_gwas
+      - ldx_blues
+      - ldx_blues_list
+
