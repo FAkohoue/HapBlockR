@@ -13,11 +13,35 @@ that two SNPs sharing the same bp position (co-located multi-allelic
 sites, or an indel and a SNP at the same POS) are never conflated – each
 keeps its own distinct column index through the split, unlike an earlier
 version that tracked bp values alone and used match()/setdiff()
-against those values (ambiguous whenever a bp value isn't unique)."><meta property="og:image" content="https://FAkohoue.github.io/HapBlockR/logo.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&amp;display=swap" rel="stylesheet"><!-- Paste the HTML from pkgdown/assets/favicon.html below --><link rel="icon" href="favicon.ico"></head><body>
+against those values (ambiguous whenever a bp value isn't unique)."><meta property="og:image" content="https://FAkohoue.github.io/HapBlockR/logo.svg"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;600&amp;display=swap" rel="stylesheet"><!-- Paste the HTML from pkgdown/assets/favicon.html below --><link rel="icon" href="favicon.ico"><style>
+  .hapblockr-navbar-logo-link {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-right: 0.45rem;
+    text-decoration: none;
+  }
+
+  .hapblockr-navbar-logo {
+    display: block;
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+  }
+
+  @media (max-width: 575.98px) {
+    .hapblockr-navbar-logo {
+      width: 32px;
+      height: 32px;
+    }
+  }
+</style></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
     <nav class="navbar navbar-expand-lg fixed-top bg-primary" data-bs-theme="dark" aria-label="Site navigation"><div class="container">
+    <a class="hapblockr-navbar-logo-link" href="https://FAkohoue.github.io/HapBlockR/" aria-label="HapBlockR home">
+  <img class="hapblockr-navbar-logo" src="https://FAkohoue.github.io/HapBlockR/logo.svg" alt="HapBlockR logo"></a>
 
     <a class="navbar-brand me-2" href="../index.html">HapBlockR</a>
 

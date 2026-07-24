@@ -10,6 +10,39 @@ template:
       <!-- Paste the HTML from pkgdown/assets/favicon.html below -->
       <link rel="icon" href="favicon.ico">
 
+      <style>
+        .hapblockr-navbar-logo-link {
+          display: inline-flex;
+          align-items: center;
+          flex-shrink: 0;
+          margin-right: 0.45rem;
+          text-decoration: none;
+        }
+
+        .hapblockr-navbar-logo {
+          display: block;
+          width: 38px;
+          height: 38px;
+          object-fit: contain;
+        }
+
+        @media (max-width: 575.98px) {
+          .hapblockr-navbar-logo {
+            width: 32px;
+            height: 32px;
+          }
+        }
+      </style>
+
+    before_title: |
+      <a class="hapblockr-navbar-logo-link"
+         href="https://FAkohoue.github.io/HapBlockR/"
+         aria-label="HapBlockR home">
+        <img class="hapblockr-navbar-logo"
+             src="https://FAkohoue.github.io/HapBlockR/logo.svg"
+             alt="HapBlockR logo">
+      </a>
+
 authors:
   Félicien Akohoue:
     href: https://github.com/FAkohoue
