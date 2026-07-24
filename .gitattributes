@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts run by R CMD INSTALL/build: force LF unconditionally.
+# CRLF here breaks the #!/bin/sh shebang on Unix/macOS ("bad interpreter"),
+# regardless of what "text=auto" would otherwise guess -- these must never
+# be checked out with CRLF, even from a Windows client.
+configure     text eol=lf
+configure.win text eol=lf
+cleanup       text eol=lf
