@@ -146,15 +146,15 @@ conc <- compare_block_effects(
 conc$concordance[, c("block_id","n_shared_alleles",
                      "direction_agreement","meta_p","replicated")]
 #>                block_id n_shared_alleles direction_agreement    meta_p
-#> 1    block_1_1000_25027                7              0.4286 0.6136705
-#> 2   block_1_81064_99022                5              0.4000 0.6434358
-#> 3 block_1_155368_179371                7              0.4286 0.7210094
-#> 4    block_2_1000_30023                7              0.5714 0.5513697
-#> 5  block_2_86236_105290                7              0.4286 0.7482376
-#> 6 block_2_161515_180473                6              0.6667 0.9109957
-#> 7    block_3_1000_19068                7              0.8571 0.4226996
-#> 8   block_3_74532_93854                6              0.5000 0.9273071
-#> 9 block_3_149647_168376                8              0.5000 0.8587608
+#> 1    block_1_1000_25027                7              0.7143 0.6136705
+#> 2   block_1_81064_99022                5              0.6000 0.9759781
+#> 3 block_1_155368_179371                6              0.3333 0.3519688
+#> 4    block_2_1000_30023                6              0.6667 0.6480740
+#> 5  block_2_86236_105290                6              0.3333 0.6451110
+#> 6 block_2_161515_180473                5              0.0000 0.8842385
+#> 7    block_3_1000_19068                6              0.5000 0.1504627
+#> 8   block_3_74532_93854                5              0.6000 0.7514689
+#> 9 block_3_149647_168376                7              0.1429 0.9539897
 #>   replicated
 #> 1      FALSE
 #> 2      FALSE
@@ -162,7 +162,7 @@ conc$concordance[, c("block_id","n_shared_alleles",
 #> 4      FALSE
 #> 5      FALSE
 #> 6      FALSE
-#> 7       TRUE
+#> 7      FALSE
 #> 8      FALSE
 #> 9      FALSE
 # }

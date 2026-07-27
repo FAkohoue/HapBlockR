@@ -66,9 +66,10 @@
 #' @param n_core Integer. Size of the core collection to select.
 #' @param type Character, one of \code{"relationship"} (default) or
 #'   \code{"distance"}. If \code{"relationship"}, \code{G} is converted to a
-#'   genetic distance matrix via \eqn{D_{ij} = G_{ii} + G_{jj} - 2G_{ij}}
-#'   (the exact identity relating a Gram/relationship matrix to squared
-#'   Euclidean distance in the space it represents -- not an approximation).
+#'   genetic distance matrix via
+#'   \eqn{D_{ij} = \sqrt{G_{ii} + G_{jj} - 2G_{ij}}}. The expression inside
+#'   the square root is squared Euclidean distance; taking the square root is
+#'   necessary for the metric guarantee used by the maximin strategy.
 #'   If \code{"distance"}, \code{G} is used as a distance matrix directly.
 #' @param strategy Character, one of \code{"maximin"} (default) or
 #'   \code{"mean_distance"}. See Details above.
@@ -77,18 +78,25 @@
 #'   \code{min_sel_value} to pre-filter the candidate pool; does not
 #'   otherwise influence which individuals are chosen (this function
 #'   optimizes diversity, not merit, among whichever candidates remain
-#'   eligible).
+#'   eligible). Values must be directionally aligned so that larger always
+#'   means greater breeding merit; reverse lower-is-better traits before
+#'   constructing this vector.
 #' @param min_sel_value,min_sel_mode Optional merit floor applied to
 #'   \code{merit} before diversity selection, via the same
 #'   \code{.apply_merit_floor()} logic used by
-#'   \code{\link{truncation_selection}}/\code{\link{select_parents_ga}} --
+#'   \code{\link{truncation_selection}} and
+#'   \code{\link{select_parents_ga_ts}} --
 #'   \code{min_sel_mode} one of \code{"value"}, \code{"percentile"},
-#'   \code{"sd_below_mean"}. Both ignored if \code{merit} is \code{NULL}.
+#'   \code{"sd_above_mean"}, or \code{"relaxed_pool"}. Both ignored if
+#'   \code{merit} is \code{NULL}.
 #' @param seed Optional integer. Currently only relevant for the
 #'   degenerate \code{n_core = 1} case (no merit supplied), where the single
 #'   selected individual is otherwise chosen at random; included for
 #'   reproducibility and API consistency with this package's other
 #'   selection functions.
+#' @param metric_tolerance Numeric tolerance used for symmetry,
+#'   positive-semidefiniteness, zero-diagonal, and triangle-inequality
+#'   validation. Default \code{sqrt(.Machine$double.eps)}.
 #' @param verbose Logical, default \code{TRUE}.
 #'
 #' @return A list with \code{selected} (character vector of chosen
@@ -117,10 +125,14 @@ select_core_collection <- function(
     strategy      = c("maximin", "mean_distance"),
     merit         = NULL,
     min_sel_value = NULL,
-    min_sel_mode  = c("value", "percentile", "sd_below_mean"),
+    min_sel_mode  = c("value", "percentile", "sd_above_mean",
+                      "relaxed_pool",
+                      "sd_below_mean"),
     seed          = NULL,
+    metric_tolerance = sqrt(.Machine$double.eps),
     verbose       = TRUE
 ) {
+  result_call  <- match.call()
   type         <- match.arg(type)
   strategy     <- match.arg(strategy)
   min_sel_mode <- match.arg(min_sel_mode)
@@ -130,6 +142,16 @@ select_core_collection <- function(
          call. = FALSE)
   if (!identical(rownames(G), colnames(G)))
     stop("G must have identical row and column names.", call. = FALSE)
+  if (!is.numeric(G) || any(!is.finite(G)))
+    stop("G must contain only finite numeric values.", call. = FALSE)
+  if (length(metric_tolerance) != 1L || !is.finite(metric_tolerance) ||
+      metric_tolerance < 0)
+    stop("metric_tolerance must be a single non-negative finite number.",
+         call. = FALSE)
+  scale_G <- max(1, max(abs(G)))
+  if (max(abs(G - t(G))) > metric_tolerance * scale_G)
+    stop("G must be symmetric within metric_tolerance.", call. = FALSE)
+  G <- (G + t(G)) / 2
 
   ids <- rownames(G)
 
@@ -171,13 +193,42 @@ select_core_collection <- function(
 
   Gs <- G[ids, ids, drop = FALSE]
   D <- if (type == "relationship") {
+    eig_min <- min(eigen(Gs, symmetric = TRUE, only.values = TRUE)$values)
+    if (eig_min < -metric_tolerance * max(1, max(abs(diag(Gs)))))
+      stop("The relationship matrix is not positive semidefinite; Euclidean ",
+           "distance and its approximation guarantee are not valid.",
+           call. = FALSE)
     dg <- diag(Gs)
-    outer(dg, dg, "+") - 2 * Gs
+    sqrt(pmax(outer(dg, dg, "+") - 2 * Gs, 0))
   } else {
     Gs
   }
+  scale_D <- max(1, max(abs(D)))
+  if (any(D < -metric_tolerance * scale_D))
+    stop("Distance values must be non-negative.", call. = FALSE)
+  if (max(abs(D - t(D))) > metric_tolerance * scale_D)
+    stop("The distance matrix must be symmetric.", call. = FALSE)
+  if (max(abs(diag(D))) > metric_tolerance * scale_D)
+    stop("The distance matrix diagonal must be zero.", call. = FALSE)
+  D <- (D + t(D)) / 2
   D[D < 0] <- 0
   diag(D) <- 0
+
+  if (type == "distance" && nrow(D) > 2L) {
+    for (pivot in seq_len(nrow(D))) {
+      upper_bound <- outer(D[, pivot], D[pivot, ], "+")
+      violation <- which(D > upper_bound + metric_tolerance * scale_D,
+                         arr.ind = TRUE)
+      if (nrow(violation)) {
+        i <- violation[1L, 1L]
+        j <- violation[1L, 2L]
+        stop("The supplied distance matrix violates the triangle inequality ",
+             "for '", ids[i], "', '", ids[pivot], "', and '", ids[j],
+             "'. The maximin approximation guarantee is therefore invalid.",
+             call. = FALSE)
+      }
+    }
+  }
 
   if (max(D) <= .Machine$double.eps)
     stop("All pairwise distances are ~0 (every eligible individual is ",
@@ -189,14 +240,37 @@ select_core_collection <- function(
 
   if (n_core == 1L) {
     sel_idx <- if (!is.null(merit)) which.max(merit[ids]) else sample.int(n, 1L)
-    return(list(
+    result <- list(
       selected      = ids[sel_idx],
       n_core        = 1L,
       strategy      = strategy,
+      distance_type = "euclidean",
+      metric_validated = TRUE,
       mean_distance = NA_real_,
       min_distance  = NA_real_,
       trace         = data.frame(step = 1L, added = ids[sel_idx],
                                  criterion = NA_real_, stringsAsFactors = FALSE)
+    )
+    return(.add_hapblockr_contract(
+      result = result,
+      method = "select_core_collection",
+      call = result_call,
+      parameters = list(
+        n_core = n_core, type = type, strategy = strategy,
+        min_sel_value = min_sel_value, min_sel_mode = min_sel_mode,
+        metric_tolerance = metric_tolerance
+      ),
+      seed = seed,
+      sample_ids = ids,
+      inputs = list(distance_or_relationship_matrix = Gs),
+      quality_gates = c(
+        metric_validated = TRUE,
+        requested_size_met = length(result$selected) == n_core
+      ),
+      decision_table = data.frame(
+        id = result$selected, selection_order = 1L,
+        stringsAsFactors = FALSE
+      )
     ))
   }
 
@@ -240,12 +314,41 @@ select_core_collection <- function(
   offdiag   <- sub_final[upper.tri(sub_final)]
   rownames(trace) <- NULL
 
-  list(
+  result <- list(
     selected      = ids[sel],
     n_core        = n_core,
     strategy      = strategy,
+    distance_type = "euclidean",
+    metric_validated = TRUE,
     mean_distance = mean(offdiag),
     min_distance  = min(offdiag),
     trace         = trace
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "select_core_collection",
+    call = result_call,
+    parameters = list(
+      n_core = n_core, type = type, strategy = strategy,
+      min_sel_value = min_sel_value, min_sel_mode = min_sel_mode,
+      metric_tolerance = metric_tolerance
+    ),
+    seed = seed,
+    sample_ids = ids,
+    inputs = list(distance_or_relationship_matrix = Gs),
+    transformations = if (type == "relationship") {
+      "positive-semidefinite relationship matrix to Euclidean distance"
+    } else {
+      "validated metric distance matrix"
+    },
+    quality_gates = c(
+      metric_validated = TRUE,
+      requested_size_met = length(result$selected) == n_core
+    ),
+    decision_table = data.frame(
+      id = result$selected,
+      selection_order = seq_along(result$selected),
+      stringsAsFactors = FALSE
+    )
   )
 }

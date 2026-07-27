@@ -30,13 +30,15 @@ marker data: detecting linkage disequilibrium (LD) blocks, extracting
 haplotypes, measuring diversity. This one is about *using that structure to
 make a breeding decision*.
 
-The starting point here is deliberately downstream of where most genomic
-prediction guides stop: you already have a breeding value or selection index
-for every candidate parent — from a mixed model, Genomic Best Linear
-Unbiased Prediction (GBLUP), ASReml-R, or any other method of your choosing.
-HapBlockR does not replace that step. What it adds is everything between
-"here is a ranked list of candidates" and "here is the crossing block for
-next season," specifically:
+The starting point is a genotype-level estimate from a field-trial or genetic
+evaluation fitted outside HapBlockR. The package accepts adjusted means, Best
+Linear Unbiased Estimates (BLUEs), supported Best Linear Unbiased Predictions
+(BLUPs), breeding values, general combining ability and total genetic value
+through `prepare_breeding_targets()`. It rejects externally computed genomic
+predictions and selection-index values because it estimates marker,
+haplotype and block effects, and constructs the final index, internally. It then
+connects "here is a ranked list of candidates" to "here is the crossing block
+for next season," specifically:
 
 1. **Where** in the genome is that breeding value actually coming from
    (local GEBV, Genomic Estimated Breeding Value, per haplotype block, not
@@ -52,7 +54,7 @@ next season," specifically:
 5. **Which specific crosses**, contribution levels, and matings turn that
    parent set into an actual crossing block — with population-wide
    inbreeding under an explicit cap, not just a diversity check run
-   afterward?
+   afterwards?
 
 Each section below answers one of these questions, in order, ending with an
 actual list of parents (Sections 3-7) and then, building on that shortlist,
@@ -70,7 +72,7 @@ pre-detected `ldx_blocks` (9 LD blocks plus inter-block singleton SNPs), and
 `ldx_blues` (pre-adjusted BLUEs for two simulated traits, `YLD` and `RES`).
 See the *Introduction* vignette for how the blocks themselves were detected;
 this vignette starts one step later, from a genotyped, block-mapped panel
-with a breeding value already in hand.
+with externally analysed BLUEs ready for internal genomic modelling.
 
 To illustrate the family-balance check in Section 6, this vignette also adds
 a synthetic `Family` grouping — 12 illustrative families of 10 lines each.
@@ -84,12 +86,22 @@ names(family_id) <- rownames(ldx_geno)
 table(family_id)
 ```
 
-`YLD` stands in for a pre-computed selection index (higher = better):
+`YLD` is a simulated BLUE. The example assigns equal precision because the
+bundled teaching data do not contain standard errors:
 
 ```{r index}
-index_df <- ldx_blues[, c("id", "YLD")]
-names(index_df)[2] <- "SelectionIndex"
-head(index_df)
+target_data <- data.frame(
+  id = ldx_blues$id,
+  trait = "YLD",
+  value = ldx_blues$YLD,
+  precision = 1
+)
+targets <- prepare_breeding_targets(
+  target_data,
+  input_type = "BLUE",
+  precision_col = "precision"
+)
+head(targets$targets)
 ```
 
 ---
@@ -109,9 +121,7 @@ pred <- run_haplotype_prediction(
   geno_matrix = ldx_geno,
   snp_info    = ldx_snp_info,
   blocks      = ldx_blocks,
-  blues       = index_df,
-  id_col      = "id",
-  blue_col    = "SelectionIndex",
+  blues       = targets,
   marker_effect_method   = "gblup",
   complete_decomposition = TRUE,
   verbose     = FALSE
@@ -185,7 +195,7 @@ needs to beat, and if a smarter method can't beat it, that is itself
 important information.
 
 **When to reach for it.** Use `truncation_selection()` whenever you have one
-already-validated selection index and no open complementarity question --
+internally modelled and validated merit score and no open complementarity question --
 early-stage or small programmes without the infrastructure for a full
 haplotype-block workflow; time-pressured decisions (a release deadline, a
 seed increase) where a fast, transparent, easy-to-explain shortlist matters
@@ -203,8 +213,8 @@ worth stacking deliberately (Sections 3-4), truncation selection has no way
 to act on that information at all.
 
 **In practice.** One function call: `score` is whatever whole-genome
-value you already trust (GEBV, a selection index, a stacking index from
-`score_favorable_haplotypes()`), `n_founders` is your programme's crossing-
+value produced within the workflow (GEBV, an internal selection index, or a
+stacking index from `score_favorable_haplotypes()`), `n_founders` is your programme's crossing-
 block capacity. No relatedness matrix, no block data, no tuning. The output
 is a flat character vector of IDs (`$selected`) — usable immediately, or
 as the comparison arm for every other section below.
@@ -227,7 +237,10 @@ can guarantee, since the top-N by whole-genome value can easily be
 concentrated on the *same* favourable blocks while leaving others uncovered.
 
 `select_parents_ga()`'s `strategy` argument encodes how a block's value is
-"delivered" by the chosen set, mapped onto real crossing schemes:
+"delivered" by the chosen set, mapped onto real crossing schemes. Optimal
+Haplotype Selection (OHS) seeks complementary favourable haplotypes across
+selected parents. Optimal Population Value (OPV) evaluates the favourable
+value available from the selected population:
 
 | `strategy` | Breeding meaning |
 |---|---|
@@ -245,34 +258,33 @@ you are assembling a multi-parent founder population (MAGIC, NAM, a new
 recurrent-selection base) where joint complementarity matters more than any
 single individual's rank; or you need a specific crossing-scheme assumption
 (no_selfing, OHS, OPV, Haploid_OHS) enforced *during* the search rather than
-checked afterward.
+checked afterwards.
 
-**When to skip it (for now).** You need `local_gebv` from
-`run_haplotype_prediction()` first — there is no version of this tool that
-works from a single whole-genome score alone (that's Section 5.1). For very
-large candidate pools (thousands of individuals) without a `top_candidates`
-pre-filter, GA search time becomes a real cost worth budgeting for. And if
-Section 5.1's truncation list already looks complementary (Section 5.2's
-own overlap check, below, tells you this directly), the added workflow step
-may not change the outcome enough to justify it every cycle.
+**When the GA adds information.** The method uses a candidate-by-block
+`local_gebv` matrix from `run_haplotype_prediction()` or an equivalent
+block-value analysis. A single whole-genome score instead supports the
+truncation baseline in Section 5.1. For candidate pools containing thousands
+of individuals, `top_candidates` provides a documented pre-filter that keeps
+the search tractable. Comparing the GA and truncation selections shows whether
+block complementarity materially changes the parent decision in that cycle.
 
-**In practice.** You need `value_matrix` (candidates x target blocks, sliced
-straight from `local_gebv`), `n_founders`, `strategy`, and `block_weights`
-(typically each block's `var_scaled`). Always pair it with a `merit_score`/
-`min_sel_value` floor — without one, the search can select a genuinely poor
-overall performer purely for uniquely covering one block, since the fitness
-function itself has no whole-genome-merit term. Run with `n_reps >= 5` for
-a real analysis (Section 5.3 explains why) and always compare against
-`truncation_selection()`'s overlap, not GA output in isolation.
+**In practice.** Supply `value_matrix` (candidates x target blocks, usually
+sliced from `local_gebv`), `n_founders`, `strategy`, and `block_weights`
+(often each block's `var_scaled`). `select_parents_ga()` is deliberately the
+coverage-only tool. Its optional relationship controls are:
 
-Both functions also take a `min_sel_value`/`min_sel_mode` merit floor,
-applied to the candidate pool *before* ranking or searching. Without it,
-`select_parents_ga()` can select a genuinely poor overall performer purely
-because they uniquely cover one target block — its fitness function has no
-term for whole-genome merit at all (see `merit_score` below, which supplies
-the value the floor is evaluated against). `min_sel_mode = "percentile"`
-keeps the floor self-scaling: `0.5` keeps the top half of candidates by
-`merit_score`/`score`, regardless of what units or range that score is on.
+- `coancestry_weight` when mean relationship should be penalised; or
+- `target_degree` for a calibrated 0--90 gain-to-diversity specification.
+
+Use the separate `select_parents_ga_ts()` tool when whole-genome merit should
+contribute continuously or establish a hard eligibility floor. This
+separation makes the breeder's selection objective explicit and prevents a
+hybrid analysis from being mistaken for coverage-only GA.
+
+The package default `n_reps = 5` performs the replicated search and
+automatically returns the best feasible complete-objective solution. The
+breeder reviews its stability summary rather than inspecting or choosing
+among individual runs.
 
 ```{r ga-vs-ts}
 value_matrix <- pred$local_gebv[, top_blocks$block_id, drop = FALSE]
@@ -291,15 +303,11 @@ ga_sel <- select_parents_ga(
   penalty_weight = NULL,
   seed           = 1L,
   verbose        = FALSE,
-  merit_score    = pred$gebv,      # whole-genome value the floor is judged on
-  min_sel_value  = 0.5,            # keep the top 50% by merit_score
-  min_sel_mode   = "percentile",
   n_reps         = 2L              # reduced for vignette build speed; the
                                     # package default is 5 — see below
 )
 
-ts_sel <- truncation_selection(score = pred$gebv, n_founders = 20L,
-                               min_sel_value = 0.5, min_sel_mode = "percentile")
+ts_sel <- truncation_selection(score = pred$gebv, n_founders = 20L)
 
 length(intersect(ga_sel$selected, ts_sel$selected))   # parents both methods agree on
 sort(ga_sel$selected)
@@ -312,13 +320,15 @@ investigating further — it usually means the top-ranked individuals by
 whole-genome GEBV are concentrated on the *same* favourable blocks, leaving
 other important blocks uncovered by a plain top-N list.
 
-### 5.3 Is the GA's answer a stable optimum?
+### 5.3 How does the package establish GA stability?
 
-A single GA run says nothing about whether its answer is a robust optimum or
-one of several near-equally-good solutions a stochastic search happened to
-land on. `select_parents_ga()` addresses this directly: with `n_reps`
-independent replicates (package default `5`; `2` above only to keep this
-vignette fast to build), `$stability` reports how consistent the answer was:
+`select_parents_ga()` and `select_parents_ga_ts()` perform `n_reps`
+independent searches, calculate the complete objective for each feasible
+result and automatically return the replicate with the greatest objective.
+The coverage-only objective may include an optional coancestry term; the
+GA+TS objective also includes the active merit bonus. The package default is
+five replicates; two are used above only to keep the executable vignette
+quick to build. `$stability` summarises the searches:
 
 ```{r ga-stability}
 ga_sel$converged                          # did the winning replicate plateau?
@@ -326,39 +336,30 @@ ga_sel$stability$fitness_range            # best fitness, across replicates
 sort(ga_sel$stability$selection_freq, decreasing = TRUE)[1:10]
 ```
 
-`selection_freq` is the fraction of replicates that selected each individual
--- candidates at `1.0` are robustly supported regardless of the GA's random
-starting point; anyone selected in only one replicate out of several is
-borderline and worth a second look before committing to them. Increase
-`n_reps` for a real analysis; `2` here is a vignette-build-speed compromise,
-not a recommended value.
+`selection_freq` is the fraction of replicates that selected each individual.
+Candidates at `1.0` are supported across all starting populations. Lower
+frequencies identify alternative near-equivalent founder sets or a search
+that would benefit from larger `popSize`, `maxiter`, `run`, or `n_reps`.
+After rerunning, the package again selects the best feasible replicate
+automatically; the breeder evaluates the summary, not every run.
 
-### 5.4 What neither method does
+### 5.4 How the methods divide the decision
 
-Both methods answer a real question, but neither answers every question a
-finalised crossing plan needs. Specifically, **neither**:
+Truncation selection returns a merit-ranked parent set. Coverage-only GA
+returns a complementary parent set. Joint GA+TS simultaneously rewards
+complementary block coverage and whole-genome merit. Either GA tool can
+incorporate relationship control through `coancestry_weight` or
+`target_degree`. Family selection returns a group-representative parent set.
+These are alternative shortlist objectives.
 
-- **manages coancestry or inbreeding risk** in the chosen set — `select_top_blocks()`/
-  `select_parents_ga()`/`truncation_selection()` have no relatedness penalty.
-  The family-balance check in Step 4 below is a diagnostic you run
-  *afterward*, not a constraint the search itself respects;
-- **assigns differential contributions** — both return a flat set of
-  `n_founders` individuals with no notion that some parents should
-  contribute more crosses than others;
-- **decides who mates whom** — neither produces an actual cross list, only
-  a candidate/founder set.
-
-Dedicated optimal-contribution-selection (OCS) and mate-allocation tools
-(e.g. AlphaMate, Gorjanc lab) are built specifically to solve those three
-problems jointly — typically maximising expected genetic gain subject to an
-explicit group-coancestry constraint, then allocating differential
-contributions and actual matings across the constrained set. A practical
-combined workflow is to use `select_top_blocks()`/`select_parents_ga()` to
-identify *which candidates are worth considering* (i.e. those covering your
-programme's important haplotype blocks), then hand that shortlist to a
-dedicated OCS tool for the coancestry-managed contribution and mating
-decision, rather than treating HapBlockR's parent selection as a final
-mating plan on its own.
+A full crossing block adds two further decisions. `usefulness_criterion()`
+ranks candidate pairs by expected progeny performance, while
+`select_parents_ocs()` provides Optimal Contribution Selection (OCS) through
+integrated AlphaMate or optiSel engines, or discrete cross selection through
+SimpleMating. OCS assigns differential contributions and constructs a mating
+plan under a population-level relatedness policy. The shortlist and
+downstream tools can therefore be combined according to the programme's
+objective.
 
 ### 5.5 How the shortlist stage and the downstream stage actually relate
 
@@ -368,12 +369,12 @@ to misread it as a straight pipeline (truncation selection -> GA selection
 work:
 
 - **The shortlist layer** — `truncation_selection()`, `select_parents_ga()`,
-  and `select_parents_by_family()` — are *alternatives to each other*, not
-  a sequence. Each answers "who are my candidate parents" by different
-  logic (single-score ranking, block-coverage search, or group quotas). The
-  normal workflow is to run more than one and compare (Section 5.2's
-  overlap check, Section 6's family-balance check), not to feed one's
-  output into another.
+  `select_parents_ga_ts()`, and `select_parents_by_family()` — contains
+  alternatives, not a compulsory sequence. They respectively apply
+  single-score ranking, coverage-only GA, joint coverage-and-merit GA, or
+  group quotas. A programme may compare their outputs when it needs to
+  understand how those objectives change the shortlist; one tool's output
+  is not automatically fed into another.
 - **The downstream layer** — `usefulness_criterion()` (Section 8) and
   `select_parents_ocs()` (Section 9) — sits one stage further on, and
   neither builds its own candidate pool. Both are written to consume
@@ -385,16 +386,13 @@ work:
   hand-curated list all work identically, since neither downstream function
   inspects or cares which upstream tool (or process) produced its input.
 
-`usefulness_criterion()` and `select_parents_ocs()` are themselves siblings
-at that downstream layer, not a further sequence — cross ranking (Section
-8) scores candidate pairs independently, with no notion of an overall
-population-wide plan; `select_parents_ocs()` (Section 9) solves a
-genuinely different problem (contributions and matings under an explicit
-relatedness cap) directly from merit and `G`, and does not take
-`usefulness_criterion()`'s ranked-cross table as an input at all. You can
-use Section 8's ranking to eyeball which pairings look promising before
-committing to a Section 9 run, but that is a manual judgement call, not a
-data dependency between the two functions.
+`usefulness_criterion()` and `select_parents_ocs()` are siblings at that
+downstream layer, not a compulsory sequence. Cross ranking (Section 8)
+evaluates candidate pairs independently. `select_parents_ocs()` (Section 9)
+solves the population-level contribution and mating problem directly from
+merit and `G`. A programme may report UC alongside the OCS plan as additional
+pair-level evidence, but the OCS solver does not require the UC table as an
+input.
 
 **One important qualification to "downstream, consumes whatever you hand
 it."** That description is accurate for *where candidates come from* --
@@ -407,12 +405,13 @@ an explicit, deliberate step rather than an incidental one — and the three
 engines implement it very differently: AlphaMate enforces it *natively,
 inside* its evolutionary algorithm, jointly deciding which subset of your
 candidates contributes at all, how much, and who mates with whom, in one
-optimisation; `"optisel"` instead solves the continuous contribution optimum
-over your *entire* supplied list first, then, only as a post-hoc,
-non-re-optimised patch, zeros out every contribution below the
-`n_parents_max`-th largest (see *Engine differences* in Section 9); and
-`"simplemating"` does not support `n_parents_max` at all (ignored, with a
-message), though its own greedy cross selection can still leave some
+optimisation; `"optisel"` first solves the continuous contribution optimum,
+retains the leading contributors when `n_parents_max` is active, and
+re-solves OCS on that retained subset before constructing the discrete plan;
+and
+`"simplemating"` reports `n_parents_max` as unsupported because its interface
+has no corresponding control, although its own greedy cross selection can
+still leave some
 supplied candidates out of the final plan incidentally. So: the shortlist
 you hand `select_parents_ocs()` is a hard ceiling on who can appear in the
 mating plan, not a guarantee that everyone in it will.
@@ -425,33 +424,29 @@ mating plan, not a guarantee that everyone in it will.
 | "Are my best-by-value individuals actually covering my target haplotype blocks, or double-counting the same ones?" | `select_parents_ga()`, compared against `truncation_selection()` |
 | "Is one method clearly better here, or do they agree?" | Run both, check `intersect()` (Section 5.2) — low overlap means block coverage and whole-genome ranking disagree and both are worth a look |
 | "Which specific parents should I be most confident about?" | Parents both methods select (a high-overlap subset), and see Step 4 for whether that subset is family-balanced |
-| "I'm worried block-coverage search is selecting on noisy per-block estimates" | `select_parents_ga(merit_weight = ...)`, or the easier `merit_priority = ...` (0-100, auto-calibrated — see `suggest_merit_weight()`) — Section 5.8 |
+| "I want complementary block coverage and whole-genome merit in one parent-set objective" | `select_parents_ga_ts()` with the calibrated `merit_priority` control, or an advanced positive `merit_weight` — Section 5.8 |
 | "I want a relatedness cap on the GA's founder set, without guessing a raw `coancestry_weight`" | `select_parents_ga(target_degree = ...)` (0-90, same convention as `select_parents_ocs()`) — Section 5.8 |
 | "My programme's shortlist is naturally 'best few families, best few lines each'" | `select_parents_by_family()` — Section 5.8 |
 | "I need contribution numbers and an actual mating list, with inbreeding under control" | Neither — shortlist candidates here, then use a dedicated OCS/mate-allocation tool (Section 5.3) |
 
-### 5.8 Two further shortlist strategies: merit-weighted GA, and family quotas
+### 5.8 Two further shortlist strategies: joint GA+TS and family quotas
 
-Sections 5.1-5.2 leave two gaps a real programme's shortlist decision often
-runs into. First, `select_parents_ga()`'s block-coverage search (Section
-5.2) has no notion of whole-genome merit unless `min_sel_value` pre-filters
-the candidate pool — and even then, a candidate that barely clears the
-floor is treated identically to one that clears it by a wide margin. Since
-per-block local GEBV are themselves statistical estimates, not ground
-truth, a coverage-only search can end up leaning on a candidate whose
-apparent block coverage is partly a noisy artefact. Setting `merit_weight`
-adds a second, additive term to the same fitness function used in Section
-5.2 — whole-genome merit now competes with block coverage throughout the
-search, not just at the entry gate:
+Sections 5.1-5.2 define merit-only truncation selection and coverage-only GA.
+Many programmes require both signals in the same parent-set decision.
+`select_parents_ga_ts()` is the explicit joint tool: it retains the block
+coverage objective from Section 5.2 and adds the selected set's mean
+whole-genome merit as an active continuous term. It is not a sequential
+procedure that first performs truncation selection and then applies the GA.
+Both objectives are evaluated together for every candidate founder set:
 
 ```{r merit-weight-ga}
-ga_hybrid <- select_parents_ga(
+ga_hybrid <- select_parents_ga_ts(
   value_matrix   = value_matrix,
   n_founders     = 20L,
   strategy       = "no_selfing",
   block_weights  = top_blocks$var_scaled,
   merit_score    = pred$gebv,
-  merit_weight   = 0.5,            # tune against $fitness's typical scale
+  merit_weight   = 0.5,            # advanced raw multiplier
   min_sel_value  = 0.5,
   min_sel_mode   = "percentile",
   seed           = 1L,
@@ -463,15 +458,10 @@ ga_hybrid$mean_merit                       # realised mean merit_score of the ch
 mean(pred$gebv[ga_sel$selected])           # vs. Section 5.2's coverage-only run
 ```
 
-Compare `ga_hybrid$mean_merit` against the coverage-only `ga_sel` run from
-Section 5.2 (and against `truncation_selection()`'s own mean merit) to see
-the term's effect directly — there is no universal correct `merit_weight`,
-the same tuning approach as `coancestry_weight` (Section 5.2) applies.
-
-Guessing `merit_weight = 0.5` above and inspecting the result afterward
-works, but there is an easier way: `merit_priority` states how much you
-care about merit vs. coverage as a plain 0-100 percentage, and HapBlockR
-calibrates the matching `merit_weight` from your own data automatically.
+`merit_weight` is available for programmes with a justified raw scale.
+For routine use, `merit_priority` is the clearer control: it states the
+requested relative merit emphasis on a 0-100 scale, and HapBlockR calibrates
+the corresponding `merit_weight` from the analysed candidate pool.
 `suggest_merit_weight()` runs the exact same calibration standalone, so
 you can see the numbers first:
 
@@ -486,7 +476,7 @@ cal <- suggest_merit_weight(
 )
 cal$merit_span; cal$coverage_span; cal$suggested_merit_weight
 
-ga_dial <- select_parents_ga(
+ga_dial <- select_parents_ga_ts(
   value_matrix   = value_matrix,
   n_founders     = 20L,
   strategy       = "no_selfing",
@@ -508,11 +498,22 @@ What `suggest_merit_weight()` actually calibrates: for a group of size
 an unreachable per-block best-value sum), both floors trimmed against a
 single outlier candidate distorting the estimate. `merit_priority = 100`
 would scale merit's spread to match coverage's; `50` splits the difference.
-This is one reasonable, clearly-stated definition of "comparable" — not
-the only one — so treat the suggestion as an informed starting point, not
-a uniquely correct answer; `merit_weight` remains available whenever you
-want to fine-tune by hand instead. `merit_weight` and `merit_priority` are
-mutually exclusive on a single `select_parents_ga()` call — pick one.
+This defines the scale directly from attainable contrasts in the supplied
+candidate pool. `merit_weight` remains available when the programme has a
+justified raw multiplier. `merit_weight` and `merit_priority` are mutually
+exclusive in `select_parents_ga_ts()`. The hybrid function requires one
+positive merit contribution and therefore cannot silently become
+coverage-only GA; use `select_parents_ga()` for that objective.
+
+The optional `min_sel_value` is a separate hard eligibility rule applied
+before joint optimisation. Supply a directionally aligned `merit_score` for
+which larger always means better. With `min_sel_mode = "sd_above_mean"`,
+`min_sel_value = 0` retains candidates at or above the mean and `1` requires
+at least one SD superiority. `"percentile"` retains the specified top
+fraction. `"relaxed_pool"` deliberately admits candidates down to
+`mean(score) - k * sd(score)` when the programme wants a broader pool for
+complementarity or diversity. It does not mean that lower scores are
+preferred.
 
 `coancestry_weight` (introduced in Section 5.8/10) has the same scale
 problem, and `select_parents_ga()` has an easier alternative for it too:
@@ -543,9 +544,9 @@ ga_degree$relatedness_ceiling      # the ceiling target_degree = 30 resolved to
 ga_degree$mean_relationship        # the chosen set's actual realised relationship
 ```
 
-`coancestry_weight` and `target_degree` are mutually exclusive on a single
-`select_parents_ga()` call, exactly like `merit_weight`/`merit_priority` --
-pick one.
+`coancestry_weight` and `target_degree` are mutually exclusive in either GA
+tool. Within `select_parents_ga_ts()`, `merit_weight` and `merit_priority`
+are also mutually exclusive.
 
 Second, many programmes' real shortlist decision already has a different
 shape than either "top-n by value" or "GA-searched coverage set": pick the
@@ -769,7 +770,7 @@ on both sides; a cross between a strong parent and a complementary
 weaker-but-different one can out-rank two mediocre-but-similar strong
 parents, because it is predicted to segregate a better best-progeny tail.
 
-Four variance-prediction modes trade off data requirements against rigor
+Four variance-prediction modes trade off data requirements against rigour
 (see `?usefulness_criterion` for full detail):
 
 | `variance_model` | Requires | What it captures |
@@ -791,12 +792,11 @@ out-perform two similar elite parents as a cross, e.g. where the two parents
 carry different favourable haplotypes at the same blocks rather than the
 same one.
 
-**When to skip it.** If you only need a parent list, not a cross list --
-stop at Section 5, this adds nothing there. If you need actual contribution
-numbers and a full mating plan balanced across your *whole* set of crosses
-at once, with population-wide inbreeding under an explicit cap, this is not
-that tool either — UC ranks each candidate cross independently with no
-notion of the others, which is exactly the gap Section 9 closes next.
+**When UC is the appropriate endpoint.** Use Section 5 when the required
+deliverable is a parent list. Use UC when the deliverable is a ranked list of
+individual crosses. When the programme also requires differential
+contributions and a whole-population mating plan under an explicit
+relatedness cap, continue with Section 9's OCS tool.
 
 **In practice, choosing a `variance_model`.** Match the mode to data you
 already have rather than reaching for the most rigorous one by default:
@@ -857,31 +857,29 @@ individuals in the shortlist, that is UC doing its job: predicting that a
 complementary pairing will segregate a better best-progeny tail than the
 mid-parent value alone would suggest.
 
-Like Section 5, `usefulness_criterion()` still does not decide *how many*
-progeny to advance from each cross or manage population-wide inbreeding --
-that is Section 9's job.
+`usefulness_criterion()` supplies the pair-level ranking. Section 9 adds
+programme-wide contributions, progeny allocation and relatedness management
+when those are part of the objective.
 
 ---
 
 ## 9. Step 7: Turning the shortlist into an actual mating plan with inbreeding under control
 
-This is the gap Section 5.4 flagged explicitly: none of `select_parents_ga()`,
-`truncation_selection()`, or `select_parents_by_family()` assigns
-differential contributions or manages population-wide relatedness, and
-Section 8's UC ranking scores crosses independently, with no constraint
-tying them into a coherent whole-population plan. `select_parents_ocs()`
-solves the actual classical Optimal Contribution Selection problem
+Section 5 provides alternative parent-shortlisting objectives, and the GA can
+already include a relationship penalty or calibrated relationship ceiling.
+Section 8 adds independent cross ranking. `select_parents_ocs()` extends these
+decisions to the classical Optimal Contribution Selection problem
 (Meuwissen 1997): how much should each parent contribute, and which
 specific matings should be made, to maximise genetic merit subject to an
 explicit cap on the resulting population's relatedness. Like
 `usefulness_criterion()` in Section 8, it is a downstream consumer of a
 shortlist, not tied to any one shortlist-generating function: it takes
 `merit` and `G` for whichever parent set you supply (named to match), plus
-an optional `family` grouping, and does not itself take Section 8's UC
-ranking as an input (see Section 5.5).
+an optional `family` grouping. Section 8's UC ranking can be reported beside
+the final plan but is not an input required by the OCS calculation.
 
-This package does not implement an OCS solver itself — it wraps three
-mature external engines, chosen via `engine`. Two solve the actual OCS
+HapBlockR provides OCS and mate allocation through three mature engines
+integrated behind one documented interface. Two solve the actual OCS
 problem: the AlphaMate executable (full evolutionary-algorithm mate
 allocation, requires a separately-installed binary via `alphamate_exe`), and
 optiSel's own solver (`engine = "optisel"`, via `candes()`/`opticont()`/
@@ -926,14 +924,13 @@ a question with real consequences beyond the current cycle. It is also the
 right tool whenever you need an actual mating list with contribution
 numbers, not just a shortlist (Section 5) or a cross ranking (Section 8).
 
-**When to skip it.** For a handful of one-off biparental crosses in an
-early-generation line-development programme, Section 8's UC ranking is
-usually enough, and a formal population-wide inbreeding cap is not yet the
-binding constraint. If no engine's dependency is installed and installing
-one isn't practical right now, fall back to Section 5.8's
-`coancestry_weight`/`target_degree` arguments — a softer, already-in-package
-way to manage relatedness at the founder-selection step, without needing
-AlphaMate, optiSel, or SimpleMating at all. Note that this function's own
+**When UC or GA relationship control is sufficient.** For a small number of
+one-off biparental crosses, Section 8's UC ranking may be the complete
+deliverable. When the objective is relationship-aware founder selection
+rather than differential contributions and a mating plan, Section 5.8's
+`coancestry_weight` or `target_degree` provides that control within the GA.
+Use OCS when contributions and population-wide relatedness are themselves
+decision variables. Note that this function's own
 `target_degree` and `select_parents_ga()`'s `target_degree` (Section 5.8)
 share the same `[0, 90]` scale and direction by design, but are computed by
 genuinely different mechanisms — this function solves the real OCS
@@ -941,20 +938,20 @@ contribution problem at each frontier extreme; `select_parents_ga()`
 interpolates a relatedness ceiling for a penalty inside its GA. Re-tune if
 you switch between them.
 
-**In practice.** Supply `merit` (GEBV or any index you trust) and `G` (any
-relationship matrix you already trust — VanRaden, pedigree, blended H;
-this function does not build one for you). Start with `engine = "auto"`
+**In practice.** Supply `merit` (GEBV or the programme's validated index) and
+`G`. This can be a relationship matrix produced in the HapBlockR workflow or
+another aligned VanRaden, pedigree or blended-H matrix. Start with
+`engine = "auto"`
 (which resolves to `"alphamate"` if a working executable is supplied, else
 `"optisel"` — never silently to `"simplemating"`) and `target_degree = 30`
 as a first pass, then move `target_degree` toward 90 if the resulting
-`mating_plan`'s relatedness looks too high for your programme's tolerance, or
-toward 0 if it looks too conservative and you suspect merit is being left
-on the table. All three engines honour `max_contrib_per_parent` and
-guarantee a no-repeated-matings mating plan by construction; `n_parents_max`
-is approximated (post-hoc contribution truncation, with a message) under
-`"optisel"` and not supported at all (ignored, with a message) under
-`"simplemating"` — use `engine = "alphamate"` if you need that specific
-constraint enforced natively.
+`mating_plan`'s relatedness exceeds your programme's tolerance, or towards 0
+when the policy gives greater weight to gain. All three engines honour
+`max_contrib_per_parent` and guarantee a no-repeated-matings plan by
+construction. AlphaMate enforces `n_parents_max` natively. The optiSel route
+retains the leading solved contributors and re-solves OCS on that restricted
+set before constructing and checking the mating plan. SimpleMating has no
+`n_parents_max` control and reports that the argument is unsupported.
 
 ```{r ocs-check}
 have_ocs_optisel <- requireNamespace("optiSel", quietly = TRUE) &&
@@ -1016,19 +1013,19 @@ periodically even in an established programme, to check whether a
 previously-chosen weight still sits in a sensible place on the current
 cycle's frontier.
 
-**When to skip it.** If your programme already has institutional experience
-with a specific `coancestry_weight`/`target_degree` value that has worked
-well before, re-sweeping every single cycle has a real compute cost (each
-grid point is a full independent GA run) for limited added information --
-this is not a routine per-cycle step. Under time pressure, a single Section
-5.8 or Section 9 run with a sensible default is often good enough.
+**When a direct run is sufficient.** If the programme has an established,
+reviewed `coancestry_weight` or `target_degree` policy, a direct Section 5.8
+or Section 9 run applies it efficiently. Repeat the frontier sweep when the
+candidate population, trait priorities or diversity policy changes enough to
+justify reviewing that choice.
 
 **In practice.** Widen `coancestry_weights` well beyond the vignette's
 speed-constrained 3-point example — the package default of 6 points
 (`c(0, 0.25, 0.5, 1, 2, 4)`) is a better real-analysis starting grid, and a
 denser grid gives a more informative frontier shape at the cost of runtime.
-Once you've picked a frontier point by eye, pull the actual parent list
-from `pareto_res$runs[[...]]$selected`, as shown below.
+Apply the programme's declared gain and diversity policy to the frontier,
+then retrieve the corresponding parent list from
+`pareto_res$runs[[...]]$selected`, as shown below.
 
 ```{r pareto-sweep}
 pareto_res <- select_parents_pareto(
@@ -1059,27 +1056,22 @@ strictly dominated by another; with a narrow 3-point grid (for vignette build
 speed) most or all rows typically qualify — widen `coancestry_weights` in a
 real analysis for a genuinely informative frontier shape. `pareto_res$runs`
 holds the full `select_parents_ga()` output (including `$selected`) for
-every grid point, so once you've picked a point off the frontier by eye, the
-actual parent list is `pareto_res$runs[[pareto_res$frontier$run_index[i]]]$selected`.
+every grid point. Once policy has selected frontier row `i`, the parent list is
+`pareto_res$runs[[pareto_res$frontier$run_index[i]]]$selected`.
 
 ---
 
-## 11. Step 9: Sanity-checking a heuristic mating plan against the true optimum
+## 11. Step 9: Validating a discrete mating plan against an exact optimum
 
-Every mate-allocation tool used or wrapped in this package — the GA search,
-AlphaMate's evolutionary algorithm, optiSel's `opticont()`/`matings()`
-numerical solvers, SimpleMating's `planCross()`/`selectCrosses()` — is a
-**heuristic** in the sense that matters here: none is guaranteed to find the
-true best *discrete mating plan* (optiSel's continuous contribution-level
-optimum is exact for that sub-problem, but converting it to an actual
-discrete Sire x Dam list, and enforcing per-parent/no-repeat constraints
-alongside it, is still solved numerically, not exactly).
-`validate_crosses_exact()` solves the same core cross-selection problem
-exactly, via binary integer linear programming (`lpSolve`), so a heuristic
-plan can be checked against a genuine optimum on a small-enough candidate
-set. This is a validation tool, not a production replacement — integer
-programming does not scale to the size of a full candidate cross list the
-way a GA or greedy heuristic does (see `max_vars`).
+The GA, AlphaMate, optiSel and SimpleMating solve broader or differently
+formulated selection and mate-allocation problems. OptiSel, for example,
+obtains the continuous optimal-contribution solution before the discrete
+mating allocation. `validate_crosses_exact()` provides an additional,
+like-for-like quality check for a tractable *discrete cross-selection*
+problem. It uses binary integer linear programming (`lpSolve`) to calculate
+the best plan for the supplied candidate crosses, criterion and constraints,
+then reports the comparison with a submitted plan. `max_vars` keeps this
+exact check within a computationally appropriate problem size.
 
 **When to reach for it.** Use this when you want a documented, defensible
 answer to "how good is our heuristic mating plan, really?" — for internal
@@ -1091,20 +1083,20 @@ of crosses after any culling — see `max_vars`), and when you're deciding
 between two heuristic plans and want a common yardstick rather than
 comparing their own self-reported objectives.
 
-**When to skip it.** This is not a routine, cycle-to-cycle production step
--- for day-to-day mating-plan generation, use Section 9's engines directly.
-Don't reach for it on a large, unfiltered candidate set either; pre-filter
-first (a tighter `culling_pairwise_k`, or restrict to your top-ranked
-crosses by `criterion_col`) rather than raising `max_vars` to force a big
-problem through.
+**When exact validation adds value.** Use it for a tractable candidate table
+when the programme wants an independent optimality gap, when comparing
+settings, or when qualifying a new planning method. For routine large
+candidate sets, Section 9's engines generate the production plan; a declared
+`culling_pairwise_k` or criterion-based candidate filter can create a smaller
+problem for periodic exact validation.
 
 **In practice.** Feed it the same `usefulness_criterion()` output (or any
 cross table with a criterion column) you'd otherwise hand to a heuristic
 tool, matching whatever `max_cross`/`n_cross` constraints your real plan
-used, and compare `gap_pct`. A large gap is a signal to reconsider the
-heuristic tool or its settings — not necessarily a signal to switch to ILP
-as your production method, since this tool's scaling limits make that
-impractical for a full programme.
+used, and compare `gap_pct`. A large gap identifies scope to improve the
+candidate filter, settings or discrete allocation. A small gap confirms that
+the submitted plan captured most or all of the attainable criterion value for
+that declared problem.
 
 ```{r exact-check}
 have_lpsolve <- requireNamespace("lpSolve", quietly = TRUE)
@@ -1166,14 +1158,12 @@ diversity of the panel matters more than merit; or starting a new
 diversification or pre-breeding programme from a wide genetic base,
 deliberately before any selection pressure is applied.
 
-**When to skip it.** If you're choosing crossing parents for the *next*
-cycle of an active improvement programme, merit matters there and this tool
-optimises diversity alone — Sections 5, 8, and 9 are the merit-driven tools
-for that job (the `merit`/`min_sel_value` floor here only sets a minimum
-bar, it does not rank by merit above that bar). Also worth pausing on if
-your relationship matrix `G` is not yet trustworthy (poor marker density,
-wrong ploidy assumptions) — the maximin/mean-distance traversal is only as
-good as the distances it's given.
+**When to combine it with merit-driven tools.** For a next-cycle crossing
+shortlist, combine the diversity objective with `merit`/`min_sel_value` or
+evaluate the retained set with Sections 5, 8, and 9. The floor defines
+eligibility, while the traversal remains diversity-first. As with every
+relationship-based method, the selected representation reflects the marker
+density, ploidy specification and `G` supplied by the user.
 
 **In practice.** Choose `"maximin"` (default) if avoiding near-duplicate
 accessions is the priority; choose `"mean_distance"` if you want the
@@ -1202,11 +1192,10 @@ sort(core_res$selected)
 length(intersect(core_res$selected, ga_sel$selected))   # overlap with Section 5's block-coverage set
 ```
 
-A low overlap with `ga_sel$selected` is expected and informative, not a
-contradiction — Section 5's GA set is engineered for joint favourable-block
-coverage among above-average performers, while this set is engineered for
+A low overlap with `ga_sel$selected` shows that Section 5's GA set, engineered
+for joint favourable-block coverage, differs from the set engineered for
 spread across the whole genomic diversity space. They answer different
-questions and are not meant to converge on the same list.
+questions.
 
 ---
 
@@ -1216,7 +1205,7 @@ questions and are not meant to converge on the same list.
 |---|---|---|
 | "What's the simplest defensible parent shortlist?" | `truncation_selection()` | 5.1 |
 | "Which *set* of parents jointly covers my target haplotype blocks?" | `select_parents_ga()` | 5.2 |
-| "I want block coverage, but merit to keep pulling on the search too (noise-aware)" | `select_parents_ga(merit_weight = ...)` or `merit_priority = ...` (auto-calibrated, `suggest_merit_weight()`) | 5.8 |
+| "I want block coverage and whole-genome merit in one objective" | `select_parents_ga_ts()` with `merit_priority`, or an advanced positive `merit_weight` | 5.8 |
 | "I want a relatedness cap on the GA's founder set, without guessing a raw penalty weight" | `select_parents_ga(coancestry_weight = ...)` or `target_degree = ...` (same 0-90 dial as `select_parents_ocs()`) | 5.8 |
 | "My shortlist is naturally 'best few families, best few lines each'" | `select_parents_by_family()` | 5.8 |
 | "Which specific *crosses* among my shortlisted parents are worth making?" | `usefulness_criterion()` | 8 |
@@ -1225,14 +1214,13 @@ questions and are not meant to converge on the same list.
 | "How close is my heuristic mating plan to the true best achievable plan?" | `validate_crosses_exact()` | 11 |
 | "I want a diverse founder/reference panel, not a merit-ranked shortlist" | `select_core_collection()` | 12 |
 
-The three shortlist-generating functions among the rows above --
-`truncation_selection()`, `select_parents_ga()` (the merit- and
-relatedness-dial rows are variants of this same function, not separate
-tools), and `select_parents_by_family()` — are *alternatives to each
-other* for the same "who are my candidate parents" question, not a
+The four shortlist-generating functions among the rows above —
+`truncation_selection()`, `select_parents_ga()`, `select_parents_ga_ts()`,
+and `select_parents_by_family()` — provide alternative objectives for the
+same "who are my candidate parents" question. They are not a compulsory
 sequence. Every row from `usefulness_criterion()` onward is a downstream
-consumer of whichever shortlist you settled on from those three (or any
-other list you supply), not specifically the output of
+consumer of whichever shortlist you selected from those tools, or any other
+list you supply, not specifically the output of
 `select_parents_ga()` — see Section 5.5 for the full explanation of how
 these two layers relate.
 
@@ -1257,7 +1245,7 @@ cycle:
 ```{r final-shortlist}
 final_parents <- data.frame(
   Genotype       = ga_sel$selected,
-  SelectionIndex = index_df$SelectionIndex[match(ga_sel$selected, index_df$id)],
+  SelectionIndex = pred$gebv[ga_sel$selected],
   Family         = family_id[ga_sel$selected],
   WholeGenomeGEBV = pred$gebv[ga_sel$selected],
   stringsAsFactors = FALSE
@@ -1283,17 +1271,19 @@ table is the fastest way back to whichever of those you need next.
 
 ## 15. See also
 
-- **The HapBlockR Breeder's Guide** (`HapBlockR_Breeder_Guide.pdf`) — a
-  standalone, non-technical companion covering the same seven tools from
-  Sections 5 and 8-12 (what each is, when to reach for it, when to be
-  cautious, how it works in practice, plus a programme-shape decision guide
-  and glossary), with no R code, for breeders, programme managers, or
-  reviewers who won't run this vignette themselves. Distributed as a PDF
-  (not an editable Word document) so it reaches readers as a fixed
-  reference. A `.pdf` has no vignette engine, so it isn't indexed by
-  `vignette()` the way this document is — open it directly from the
-  package's GitHub repository, or, once the package is installed, run
-  `HapBlockR::open_breeder_guide()`.
+- **The HapBlockR Breeder's Guide** (`HapBlockR_Breeder_Guide.pdf` and
+  `HapBlockR_Breeder_Guide.docx`) — a
+  standalone, non-technical companion covering the same nine tools from
+  Sections 5 and 8-12 (what each is, when to reach for it, how to interpret
+  its output, a worked decision, uncertainty and feasibility gates, plus a
+  programme-shape decision guide, sign-off form, and glossary), with no R
+  code, for breeders, programme managers, or
+  reviewers who won't run this vignette themselves. It is distributed as a
+  tagged PDF and an editable Word document. Its source is version controlled
+  under `inst/guide/`. These standalone editions are not indexed by
+  `vignette()` the way this document is. Open either edition directly from
+  the package repository or run `HapBlockR::open_breeder_guide()` after
+  installation.
 - **Introduction to HapBlockR** — LD block detection itself, and the
   haplotype-stacking / association-testing tools (`score_favorable_haplotypes()`,
   `summarize_parent_haplotypes()`, `test_block_haplotypes()`) that sit
@@ -1311,6 +1301,6 @@ table is the fastest way back to whichever of those you need next.
   density.
 - `?usefulness_criterion`, `?select_parents_ocs`, `?select_parents_pareto`,
   `?validate_crosses_exact`, `?select_core_collection` — full argument
-  documentation, references, and (for `select_parents_ocs()`) the honest
-  verification-confidence notes on each external engine, for the five
-  functions introduced in Sections 8-12.
+  documentation, references, and (for `select_parents_ocs()`) engine-specific
+  constraint and verification details for the five functions introduced in
+  Sections 8-12.

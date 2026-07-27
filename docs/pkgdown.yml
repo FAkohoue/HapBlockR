@@ -3,12 +3,14 @@ pkgdown: 2.2.0
 pkgdown_sha: ~
 articles:
   HapBlockR-breeding-decisions: HapBlockR-breeding-decisions.html
+  HapBlockR-full-pipeline: HapBlockR-full-pipeline.html
   HapBlockR-intro: HapBlockR-intro.html
   HapBlockR-large-scale: HapBlockR-large-scale.html
   HapBlockR-ld-metrics: HapBlockR-ld-metrics.html
   HapBlockR-phasing: HapBlockR-phasing.html
+  HapBlockR-programme-operations: HapBlockR-programme-operations.html
   HapBlockR-workflow: HapBlockR-workflow.html
-last_built: 2026-07-24T14:59Z
+last_built: 2026-07-27T21:36Z
 urls:
   reference: https://FAkohoue.github.io/HapBlockR/reference
   article: https://FAkohoue.github.io/HapBlockR/articles

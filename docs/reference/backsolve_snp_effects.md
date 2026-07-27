@@ -39,7 +39,7 @@ backsolve_snp_effects(geno_matrix, gebv, G = NULL, ploidy = 2L)
   Integer \>= 2. Ploidy level of `geno_matrix`'s dosage encoding (2 =
   diploid 0/1/2, 4 = autotetraploid 0/1/2/3/4, etc.). Default `2L`
   (diploid, unchanged behaviour from previous releases). Generalises the
-  VanRaden (2008) centering/scaling from \\2p\\/\\2\sum p(1-p)\\ to
+  VanRaden (2008) centring/scaling from \\2p\\/\\2\sum p(1-p)\\ to
   \\\text{ploidy} \cdot p\\/\\\text{ploidy} \cdot \sum p(1-p)\\
   (Endelman et al. 2018-style dosage scaling). Only the dosage
   arithmetic generalises here – HapBlockR's phased haplotype

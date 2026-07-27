@@ -1,0 +1,214 @@
+---
+title: "Programme-Level Models, Feasibility, and Data Exchange"
+author: "HapBlockR Development Team"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Programme-Level Models, Feasibility, and Data Exchange}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+library(HapBlockR)
+set.seed(42)
+```
+
+# Externally analysed targets
+
+HapBlockR does not analyse raw plot records or fit replicate, block, row and
+column effects. Supply genotype-level estimates from the approved external
+analysis, with uncertainty. Units may be retained but are optional.
+
+```{r targets}
+external_values <- data.frame(
+  id = paste0("G", 1:4),
+  trait = "yield",
+  value = c(5.2, 4.8, 5.0, 4.6),
+  SE = c(0.20, 0.30, 0.25, 0.35)
+)
+
+targets <- prepare_breeding_targets(
+  external_values,
+  input_type = "BLUE",
+  se_col = "SE"
+)
+targets$targets[
+  , c("id", "value", "model_value", "precision_weight")
+]
+```
+
+Accepted types are `adjusted_mean`, `BLUE`, `BLUP_identity`, `PBLUP`, `BV`,
+`GCA` and `TGV`; `breeding_target_types()` gives their complete definitions.
+Random predictions are deregressed from reliability or prediction error
+variance. Pedigree BLUPs require the named numerator relationship matrix
+`A`. External genomic predictions and external selection-index values are
+rejected because HapBlockR estimates genomic effects and the final index
+internally.
+
+# Multi-trait index
+
+Improvement directions are model inputs. Trait units are optional metadata.
+
+```{r index}
+values <- cbind(
+  yield = c(5.2, 4.8, 5.0, 4.6),
+  disease = c(2.0, 1.0, 2.5, 0.8)
+)
+rownames(values) <- paste0("G", 1:4)
+G_trait <- matrix(
+  c(1.0, -0.2, -0.2, 0.7), 2, 2,
+  dimnames = list(colnames(values), colnames(values))
+)
+P_trait <- matrix(
+  c(1.5, -0.1, -0.1, 1.1), 2, 2,
+  dimnames = list(colnames(values), colnames(values))
+)
+
+index <- build_selection_index(
+  values,
+  genetic_cov = G_trait,
+  phenotypic_cov = P_trait,
+  economic_weights = c(yield = 1, disease = 0.5),
+  directions = c(yield = "increase", disease = "decrease"),
+  units = NULL,
+  method = "smith_hazel"
+)
+index$scores
+index$coefficients
+validate(index)
+```
+
+`build_selection_index()` also provides deterministic Pesek-Baker,
+Desired-Gain Selection Index (DGSI) and Quadratic Genomic Selection Index
+(QGSI) methods. DGSI and QGSI call DesiredGainR. DGSI runs independent
+optimisation replicates and automatically returns the one with the smallest
+desired-response objective; breeders review the compact stability tables
+rather than choosing a run manually. QGSI requires an explicit symmetric
+quadratic-weight matrix and returns candidate-specific linear, squared and
+cross-product contributions.
+
+Use `fit_multitrait_gblup()` when genetic and residual covariance must be
+estimated jointly. Use `fit_gxe_gblup()` with an environment kernel for
+reaction-norm predictions. Environment-specific predictions support
+environment-specific parent selection. The across-environment output is the
+internally estimated genomic main effect; HapBlockR does not combine
+environment predictions with breeder-specified environment weights.
+
+# Operational screening
+
+Parent 1 is the female and parent 2 the male in directed-cross screening.
+
+```{r screening}
+status <- data.frame(
+  id = c("G1", "G2", "G3", "G4"),
+  female_allowed = c(TRUE, TRUE, TRUE, FALSE),
+  male_allowed = c(TRUE, TRUE, FALSE, TRUE),
+  fertile = TRUE,
+  flowering_start = c(5, 6, 7, 7),
+  flowering_end = c(7, 8, 9, 9),
+  heterotic_group = c("H1", "H2", "H1", "H2"),
+  subpopulation = c("S1", "S1", "S2", "S2"),
+  female_capacity = c(30, 20, 20, 0),
+  male_capacity = c(20, 30, 0, 20),
+  total_capacity = c(30, 30, 20, 20),
+  seed_available = c(30, 20, 20, 0),
+  pollen_available = c(20, 30, 0, 20)
+)
+
+screen_candidate_crosses(
+  rbind(c("G1", "G2"), c("G1", "G3"), c("G4", "G1")),
+  status,
+  require_different_heterotic_groups = TRUE
+)
+```
+
+# Feasibility certificate
+
+```{r certificate}
+plan <- data.frame(
+  female = c("G1", "G3"),
+  male = c("G2", "G4"),
+  family_size = c(20, 20),
+  period = "P1"
+)
+certificate <- certify_mating_plan(
+  plan,
+  status,
+  min_family_size = 20,
+  required_pairs = data.frame(parent1 = "G1", parent2 = "G2"),
+  subpopulation_quotas = data.frame(
+    subpopulation = c("S1", "S2"),
+    min_contribution = c(40, 40)
+  ),
+  require_different_heterotic_groups = TRUE
+)
+certificate$certificate
+certificate$binding_constraints
+validate(certificate)
+```
+
+The certificate must pass before the plan is signed. Keep the violations and
+binding constraints even when the plan is feasible.
+
+# Standards-oriented exchange
+
+Remote breeding databases should remain outside the modelling functions.
+HapBlockR exports stable tables and mappings that a programme integration
+layer can send to BrAPI or align with MIAPPE.
+
+```{r exchange}
+bundle <- build_breeding_exchange(
+  index,
+  breeding_program_id = "BP1",
+  study_id = "STUDY1",
+  trial_id = "TRIAL1",
+  environment_id = "ENV1",
+  trait_id = "SELECTION_INDEX",
+  unit = "index unit",
+  ontology_id = "CO_321:0000012"
+)
+bundle$recommendations
+bundle$field_mapping
+
+exchange_path <- tempfile("hapblockr-exchange-")
+write_breeding_exchange(bundle, exchange_path)
+verified <- read_breeding_exchange(exchange_path)
+stopifnot(
+  identical(
+    verified$recommendations$recommendation_id,
+    bundle$recommendations$recommendation_id
+  )
+)
+```
+
+# Sensitivity
+
+Refit the intended threshold, leave-one-environment, or leave-one-population
+scenarios explicitly, then compare their result objects:
+
+```{r sensitivity, eval=FALSE}
+stability <- assess_decision_stability(
+  list(
+    baseline = baseline_result,
+    leave_E1_out = leave_E1_result,
+    leave_E2_out = leave_E2_result
+  ),
+  top_n = 10,
+  minimum_selection_frequency = 0.67
+)
+```
+
+```{r session}
+packageVersion("HapBlockR")
+sessionInfo()
+```

@@ -9,6 +9,7 @@ compute_local_gebv(
   snp_info,
   blocks,
   snp_effects,
+  snp_effect_se = NULL,
   scale = TRUE,
   complete_decomposition = TRUE,
   importance_threshold = 0.9,
@@ -25,6 +26,10 @@ compute_local_gebv(
 \item{snp_effects}{Named numeric vector of per-SNP additive effects from
 \code{\link{backsolve_snp_effects}}, \code{\link{estimate_marker_effects}},
 or from a marker model directly.}
+
+\item{snp_effect_se}{Optional named non-negative numeric vector of
+per-SNP effect standard errors. When supplied, local GEBV standard
+errors are propagated under an independent-marker-error approximation.}
 
 \item{scale}{Logical. If \code{TRUE} (default), scale \code{Var(local GEBV)}
 to [0,1] so blocks are comparable across traits and datasets.}
@@ -44,7 +49,7 @@ cumulative-variance selection instead of a fixed cutoff.}
 
 \item{ploidy}{Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 encoding. Default \code{2L} (diploid, unchanged from previous releases).
-Generalises the \eqn{2p_t} centering above to \eqn{\text{ploidy} \cdot
+Generalises the \eqn{2p_t} centring above to \eqn{\text{ploidy} \cdot
 p_t}; must match the \code{ploidy} used to derive \code{snp_effects}
 (via \code{\link{backsolve_snp_effects}} or
 \code{\link{estimate_marker_effects}}) for local GEBVs to sum correctly
@@ -56,6 +61,9 @@ A list with two elements:
   \item{\code{local_gebv}}{Numeric matrix (individuals x blocks) of per-block
     local GEBV values. Includes singleton pseudo-block columns when
     \code{complete_decomposition = TRUE} and any exist.}
+  \item{\code{local_gebv_se}}{Numeric matrix of propagated local GEBV
+    standard errors, or \code{NULL} when \code{snp_effect_se} is not
+    supplied.}
   \item{\code{block_importance}}{Data frame with one row per block: block_id,
     CHR, start_bp, end_bp, n_snps, var_local_gebv, var_scaled, important
     (logical: scaled variance >= \code{importance_threshold}), and
@@ -72,7 +80,7 @@ carry within the block:
 
 where \eqn{x_t} is the allele dosage (0/1/2) at SNP \eqn{t}, \eqn{p_t} is
 the SNP's own population allele frequency, and \eqn{\alpha_t} is its
-additive effect. Centering at \eqn{2p_t} (rather than at the heterozygote
+additive effect. Centring at \eqn{2p_t} (rather than at the heterozygote
 midpoint, dosage = 1) matches the convention used by
 \code{\link{backsolve_snp_effects}} to derive \code{alpha} in the first
 place (\eqn{\text{GEBV} = M\alpha} with \eqn{M} centred at \eqn{2p}), so
@@ -82,7 +90,7 @@ reconstructs that individual's overall backsolved GEBV.
 Blocks are ranked by \code{Var(local GEBV)} -- blocks with high variance
 contribute strongly to trait differences among individuals and likely
 harbour causal loci (Tong et al. 2025). This ranking is unaffected by the
-choice of centering point (variance is shift-invariant), but the absolute
+choice of centring point (variance is shift-invariant), but the absolute
 \code{local_gebv} values are only meaningful -- i.e. only summable back to
 the genome-wide GEBV -- under the \eqn{2p_t} convention used here.
 }

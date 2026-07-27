@@ -23,6 +23,10 @@ cv_haplotype_prediction(
   blue_col = "blue",
   blue_cols = NULL,
   seed = 42L,
+  validation = c("random", "grouped", "forward"),
+  groups = NULL,
+  time = NULL,
+  on_fit_error = c("error", "record"),
   verbose = TRUE
 )
 ```
@@ -92,6 +96,31 @@ cv_haplotype_prediction(
 
   Integer. RNG seed for reproducible fold assignment. Default `42L`.
 
+- validation:
+
+  Validation design. `"random"` assigns individuals to balanced folds;
+  `"grouped"` keeps all individuals in the same group in one test fold;
+  `"forward"` trains only on earlier time points. Default `"random"`.
+
+- groups:
+
+  Named vector mapping individual identifiers to groups. Required when
+  `validation = "grouped"`.
+
+- time:
+
+  Named numeric or ordered vector mapping individual identifiers to
+  breeding cycles, years, or other ordered time points. Required when
+  `validation = "forward"`.
+
+- on_fit_error:
+
+  Behaviour when
+  [`rrBLUP::kin.blup()`](https://rdrr.io/pkg/rrBLUP/man/kin.blup.html)
+  fails. `"error"` stops with trait, repetition, and fold context;
+  `"record"` retains the failed fold with missing predictions and an
+  explicit error message. Default `"error"`.
+
 - verbose:
 
   Logical. Print progress. Default `TRUE`.
@@ -103,17 +132,25 @@ A named list of class `HapBlockR_cv`:
 - `pa_summary`:
 
   Data frame: `trait`, `rep`, `fold`, `n_train`, `n_test`, `PA` (Pearson
-  r), `RMSE`.
+  r), `RMSE`, fit status, and any fit error.
+
+- `pa_pooled`:
+
+  One row per trait and repetition, calculated from the complete pooled
+  out-of-fold predictions: predictive ability, root mean squared error,
+  mean absolute error, bias, and calibration slope.
 
 - `pa_mean`:
 
-  Data frame: mean PA and RMSE per trait across all folds and
-  replications.
+  Mean pooled predictive ability and root mean squared error per trait
+  across replications.
 
 - `gebv_all`:
 
-  Data frame of out-of-fold GEBVs for all individuals and traits (one
-  row per individual x trait).
+  Out-of-fold predictions for every tested individual, trait, and
+  repetition. `gebv` is the predicted phenotype on the BLUE scale;
+  `breeding_value` is the centred random genetic deviation returned by
+  `kin.blup()`.
 
 - `k`:
 
@@ -122,6 +159,10 @@ A named list of class `HapBlockR_cv`:
 - `n_rep`:
 
   Number of replications.
+
+- `validation`:
+
+  Validation design used.
 
 ## See also
 
@@ -143,8 +184,8 @@ cv <- cv_haplotype_prediction(
   verbose     = FALSE
 )
 cv$pa_mean
-#>   trait        PA      RMSE     PA_sd    RMSE_sd
-#> 1   RES 0.3208779 0.9430814 0.1538289 0.07182249
-#> 2   YLD 0.1742259 1.0030557 0.1953338 0.09088870
+#>   trait          PA      RMSE PA_sd RMSE_sd
+#> 1   RES  0.32163303 0.9464001    NA      NA
+#> 2   YLD -0.06058831 1.0222290    NA      NA
 # }
 ```

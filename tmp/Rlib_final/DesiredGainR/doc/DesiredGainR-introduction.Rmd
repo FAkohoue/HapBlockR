@@ -1,0 +1,153 @@
+---
+title: "DesiredGainR: DGSI and QGSI Workflows"
+author: "Félicien Akohoue"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{DesiredGainR: DGSI and QGSI Workflows}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(DesiredGainR)
+set.seed(42)
+```
+
+# Scope
+
+DesiredGainR constructs multi-trait selection indices from genotype-level
+trait values and covariance information produced by an upstream genetic
+analysis. It provides: (i) a replicated, optimised Desired-Gain Selection
+Index (DGSI), and (ii) a Quadratic Genomic Selection Index (QGSI) with
+explicit linear and quadratic weights.
+
+DGSI calibrates a linear score to breeder-specified desired responses. QGSI
+scores nonlinear combinations of genomic estimated breeding values (GEBVs).
+The package does not infer trait GEBVs or replace the upstream mixed model.
+
+```{r data}
+traits <- c("yield", "protein", "disease")
+n <- 60
+candidates <- data.frame(
+  GenoID = paste0("G", seq_len(n)),
+  Family = rep(paste0("F", 1:6), each = 10),
+  yield = rnorm(n),
+  protein = rnorm(n),
+  disease = rnorm(n)
+)
+G <- cov(candidates[traits])
+dimnames(G) <- list(traits, traits)
+```
+
+# DGSI
+
+The genetic covariance matrix `G` is mandatory. Candidate covariance is never
+silently described as genetic covariance. The phenotypic or index-variable
+matrix `P` may be supplied directly. When omitted, an empirical working
+covariance is estimated and labelled accordingly in
+`covariance_provenance`.
+
+```{r dgsi}
+dgsi <- run_dgsi(
+  init_data = candidates[c("GenoID", "Family")],
+  cand_data = candidates,
+  trait_cols = traits,
+  dg = c(yield = 0.6, protein = 0.3, disease = 0.4),
+  G = G,
+  lower_is_better = "disease",
+  n_select = 10,
+  n_iter = 100,
+  n_rep = 5,
+  seed = 42
+)
+
+dgsi$best_replicate
+dgsi$replicate_diagnostics
+head(dgsi$ranked_geno)
+```
+
+All replicates are run internally. DesiredGainR selects the replicate with the
+smallest objective automatically. The breeder reviews summary diagnostics,
+including coefficient variation, score-rank correlation and selected-set
+agreement; no manual run selection is required.
+
+## Thresholds as eligibility
+
+Threshold mode first determines which candidates satisfy every favourable-
+direction threshold. It then ranks the eligible pool by the optimised index
+and retains at most `n_select`.
+
+```{r thresholds}
+threshold_result <- run_dgsi(
+  init_data = candidates[c("GenoID", "Family")],
+  cand_data = candidates,
+  trait_cols = traits,
+  dg = c(yield = 0.6, protein = 0.3, disease = 0.4),
+  G = G,
+  lower_is_better = "disease",
+  select_mode = "eligible_top_n",
+  trait_min = c(yield = -0.8, protein = -0.8, disease = -0.8),
+  n_select = 10,
+  n_iter = 100,
+  n_rep = 5,
+  seed = 42
+)
+threshold_result$eligibility
+```
+
+Missing values stop the analysis by default. Complete-case filtering or mean
+imputation must be requested explicitly and is retained in `missing_data`.
+Independent validation values can be passed through `validation_data`; they
+are evaluated after optimisation and do not leak into replicate choice.
+
+# QGSI
+
+QGSI uses `w' gamma + gamma' W gamma`. The breeder supplies the linear vector
+`w` and a symmetric squared/cross-product matrix `W` in the transformed trait
+space. DesiredGainR does not construct `W` from desired gains because squared
+terms can otherwise reward large deviations in the wrong biological
+direction.
+
+```{r qgsi}
+W <- matrix(
+  c(
+    0.10, 0.02, -0.01,
+    0.02, 0.05,  0.00,
+   -0.01, 0.00,  0.08
+  ),
+  3,
+  dimnames = list(traits, traits)
+)
+
+qgsi <- run_qgsi(
+  init_data = candidates[c("GenoID", "Family")],
+  gebv_data = candidates,
+  trait_cols = traits,
+  linear_weights = c(yield = 1, protein = 0.5, disease = 0.7),
+  W = W,
+  lower_is_better = "disease"
+)
+
+head(qgsi$ranked_geno)
+head(qgsi$linear_contributions)
+head(qgsi$quadratic_contributions)
+```
+
+The contribution tables preserve each candidate's linear, squared and
+cross-product terms. Hence, the nonlinear score can be interpreted without
+claiming that one global additive marker-effect vector explains every
+candidate.
+
+# Reproducible reporting
+
+Report the upstream trait model, covariance provenance, directions,
+transformations, desired gains or economic weights, selection size, random
+seed, optimisation diagnostics and selected-set agreement. For QGSI, also
+report the complete `W` matrix and the scientific or economic rationale for
+its diagonal and cross-product entries.
+
+```{r session}
+packageVersion("DesiredGainR")
+sessionInfo()
+```

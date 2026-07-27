@@ -1,9 +1,10 @@
 ## tests/testthat/test-parent-selection.R
 ## -----------------------------------------------------------------------------
 ## Tests for R/parent_selection.R (HapSelect gap-analysis, part 2):
-##   truncation_selection(), select_parents_ga(), plot_parent_selection_pca()
+##   truncation_selection(), select_parents_ga(), select_parents_ga_ts(),
+##   plot_parent_selection_pca()
 ##
-## select_parents_ga()/plot_parent_selection_pca() tests are individually
+## GA parent-selection/plot_parent_selection_pca() tests are individually
 ## skipped when GA/ggplot2 are unavailable; truncation_selection() has no
 ## dependency and always runs.
 ## -----------------------------------------------------------------------------
@@ -68,15 +69,47 @@ test_that("truncation_selection(): min_sel_mode = 'percentile' keeps the top fra
   expect_equal(length(res$selected), 3L)  # top 30% of 10 = 3
 })
 
-test_that("truncation_selection(): min_sel_mode = 'sd_below_mean' matches the hand-computed cutoff", {
+test_that("truncation_selection(): relaxed_pool matches the broad-pool cutoff", {
   score <- setNames(1:10, paste0("ind", 1:10))  # mean = 5.5, sd = ~3.0277
   res <- suppressWarnings(truncation_selection(
-    score, n_founders = 10L, min_sel_value = 1, min_sel_mode = "sd_below_mean"
+    score, n_founders = 10L, min_sel_value = 1, min_sel_mode = "relaxed_pool"
   ))
   cutoff <- mean(score) - 1 * sd(score)
   # expect_setequal(), not sort() + expect_equal() -- see the lexicographic-
   # sort note in the min_sel_mode = 'value' test above.
   expect_setequal(res$selected, paste0("ind", which(score >= cutoff)))
+})
+
+test_that("truncation_selection(): sd_above_mean retains superior directional scores", {
+  score <- setNames(1:10, paste0("ind", 1:10))
+  res <- suppressWarnings(truncation_selection(
+    score, n_founders = 10L, min_sel_value = 1,
+    min_sel_mode = "sd_above_mean"
+  ))
+  cutoff <- mean(score) + sd(score)
+  expect_equal(res$cutoff, cutoff)
+  expect_setequal(res$selected, names(score)[score >= cutoff])
+
+  lower_is_better <- setNames(10:1, paste0("ind", 1:10))
+  directional_merit <- -lower_is_better
+  res_directional <- suppressWarnings(truncation_selection(
+    directional_merit, n_founders = 10L, min_sel_value = 0,
+    min_sel_mode = "sd_above_mean"
+  ))
+  expect_true(all(
+    lower_is_better[res_directional$selected] <= mean(lower_is_better)
+  ))
+})
+
+test_that("truncation_selection(): sd_above_mean requires a non-negative SD distance", {
+  score <- setNames(1:10, paste0("ind", 1:10))
+  expect_error(
+    truncation_selection(
+      score, n_founders = 5L, min_sel_value = -1,
+      min_sel_mode = "sd_above_mean"
+    ),
+    "non-negative"
+  )
 })
 
 test_that("truncation_selection(): min_sel_value with no candidates clearing the floor errors", {
@@ -99,6 +132,19 @@ make_vmat <- function(n = 12, p = 5, seed = 1L) {
   m
 }
 
+test_that("GA and GA+TS public APIs expose distinct objective arguments", {
+  base_args <- names(formals(select_parents_ga))
+  hybrid_args <- names(formals(select_parents_ga_ts))
+  merit_args <- c(
+    "merit_score", "merit_priority", "merit_weight",
+    "min_sel_value", "min_sel_mode"
+  )
+
+  expect_false(any(merit_args %in% base_args))
+  expect_true(all(merit_args %in% hybrid_args))
+  expect_lt(length(base_args), length(hybrid_args))
+})
+
 test_that("select_parents_ga(): requires GA and errors with a clear message when absent", {
   skip_if(requireNamespace("GA", quietly = TRUE),
          "GA is installed; this test targets the absent-dependency error path only")
@@ -118,6 +164,20 @@ test_that("select_parents_ga(): runs and returns the documented structure", {
   expect_true(all(c("block_id", "best_value", "contributor_1", "contributor_2") %in%
                  names(res$per_block)))
   expect_equal(res$strategy, "no_selfing")
+  expect_identical(res$selection_method, "select_parents_ga")
+  expect_identical(res$result_contract$method, "select_parents_ga")
+  expect_true(is.na(res$mean_merit))
+  expect_equal(res$merit_weight, 0)
+})
+
+test_that("select_parents_ga(): public API does not accept hybrid merit arguments", {
+  skip_if_not_installed("GA")
+  vmat <- make_vmat()
+  merit <- setNames(rnorm(nrow(vmat)), rownames(vmat))
+  expect_error(
+    select_parents_ga(vmat, n_founders = 4, merit_score = merit),
+    "unused argument"
+  )
 })
 
 test_that("select_parents_ga(): all five strategies run without error", {
@@ -195,36 +255,41 @@ test_that("select_parents_ga(): top_candidates prefilters the candidate pool", {
   expect_true(all(res$selected %in% top8))
 })
 
-# -- min_sel_value / min_sel_mode (merit_score floor) ------------------------
+# ==============================================================================
+# select_parents_ga_ts()
+# ==============================================================================
 
-test_that("select_parents_ga(): min_sel_value without merit_score errors", {
+# -- min_sel_value / min_sel_mode (merit_score floor) -------------------------
+
+test_that("select_parents_ga_ts(): merit_score is required", {
   skip_if_not_installed("GA")
   vmat <- make_vmat()
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, min_sel_value = 0.5,
-                      min_sel_mode = "percentile"),
+    select_parents_ga_ts(vmat, n_founders = 4),
     "merit_score"
   )
 })
 
-test_that("select_parents_ga(): min_sel_value restricts selection to candidates clearing the floor", {
+test_that("select_parents_ga_ts(): min_sel_value restricts selection to candidates clearing the floor", {
   skip_if_not_installed("GA")
   vmat <- make_vmat(n = 16)
   merit <- setNames(seq_len(16), rownames(vmat))  # ind1 lowest merit .. ind16 highest
-  res <- select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                           min_sel_value = 0.5, min_sel_mode = "percentile",
-                           popSize = 20, maxiter = 15, run = 10, seed = 1)
+  res <- select_parents_ga_ts(
+    vmat, n_founders = 4, merit_score = merit,
+    min_sel_value = 0.5, min_sel_mode = "percentile",
+    popSize = 20, maxiter = 15, run = 10, seed = 1
+  )
   top8 <- names(sort(merit, decreasing = TRUE))[1:8]  # top 50% by merit
   expect_true(all(res$selected %in% top8))
 })
 
-test_that("select_parents_ga(): min_sel_value with no candidates clearing the floor errors", {
+test_that("select_parents_ga_ts(): min_sel_value with no candidates clearing the floor errors", {
   skip_if_not_installed("GA")
   vmat <- make_vmat()
   merit <- setNames(rep(1, nrow(vmat)), rownames(vmat))
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                      min_sel_value = 100, min_sel_mode = "value"),
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit,
+                         min_sel_value = 100, min_sel_mode = "value"),
     "min_sel_value"
   )
 })
@@ -270,7 +335,7 @@ test_that("select_parents_ga(): mean_relationship is reported (non-NA) whenever 
   expect_true(is.na(res_no_G$mean_relationship))
 })
 
-test_that("select_parents_ga(): a strong coancestry_weight overrides an otherwise-flat merit landscape to minimise relatedness", {
+test_that("select_parents_ga(): a strong coancestry_weight overrides a flat coverage landscape to minimise relatedness", {
   skip_if_not_installed("GA")
   # 12 candidates in two tight clusters (ind1-6 highly related to each other,
   # ind7-12 highly related to each other, the two clusters nearly unrelated
@@ -300,43 +365,45 @@ test_that("select_parents_ga(): a strong coancestry_weight overrides an otherwis
 
 # -- merit_weight (GA+TS hybrid) ----------------------------------------------
 
-test_that("select_parents_ga(): merit_weight > 0 without merit_score errors", {
+test_that("select_parents_ga_ts(): merit_weight > 0 without merit_score errors", {
   skip_if_not_installed("GA")
   vmat <- make_vmat()
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_weight = 1),
-    "merit_weight"
-  )
-})
-
-test_that("select_parents_ga(): merit_weight > 0 with merit_score missing candidates errors", {
-  skip_if_not_installed("GA")
-  vmat <- make_vmat(n = 6)
-  merit <- setNames(1:4, rownames(vmat)[1:4])  # missing ind5/ind6
-  expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                      merit_weight = 1),
+    select_parents_ga_ts(vmat, n_founders = 4, merit_weight = 1),
     "merit_score"
   )
 })
 
-test_that("select_parents_ga(): mean_merit is reported (non-NA) whenever merit_score is supplied", {
+test_that("select_parents_ga_ts(): merit_score missing candidates errors", {
+  skip_if_not_installed("GA")
+  vmat <- make_vmat(n = 6)
+  merit <- setNames(1:4, rownames(vmat)[1:4])  # missing ind5/ind6
+  expect_error(
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit,
+                         merit_weight = 1),
+    "merit_score"
+  )
+})
+
+test_that("select_parents_ga_ts(): mean_merit and method are reported", {
   skip_if_not_installed("GA")
   vmat  <- make_vmat(n = 10)
   merit <- setNames(rnorm(10), rownames(vmat))
 
-  res_no_weight <- select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                                     merit_weight = 0,
-                                     popSize = 20, maxiter = 15, run = 10, seed = 1)
-  expect_false(is.na(res_no_weight$mean_merit))
-  expect_equal(res_no_weight$merit_weight, 0)
-
-  res_no_merit <- select_parents_ga(vmat, n_founders = 4,
-                                    popSize = 20, maxiter = 15, run = 10, seed = 1)
-  expect_true(is.na(res_no_merit$mean_merit))
+  res <- select_parents_ga_ts(
+    vmat, n_founders = 4, merit_score = merit, merit_priority = 50,
+    popSize = 20, maxiter = 15, run = 10, seed = 1
+  )
+  expect_false(is.na(res$mean_merit))
+  expect_gt(res$merit_weight, 0)
+  expect_identical(res$selection_method, "select_parents_ga_ts")
+  expect_identical(
+    res$result_contract$method,
+    "select_parents_ga_ts"
+  )
 })
 
-test_that("select_parents_ga(): a strong merit_weight overrides an otherwise-flat block-coverage landscape to prefer high merit", {
+test_that("select_parents_ga_ts(): a strong merit_weight prefers high merit on a flat coverage landscape", {
   skip_if_not_installed("GA")
   # 12 candidates with NEAR-IDENTICAL block values (flat coverage landscape,
   # so raw block coverage gives the GA no reason to prefer one candidate over
@@ -352,9 +419,11 @@ test_that("select_parents_ga(): a strong merit_weight overrides an otherwise-fla
                 dimnames = list(ids, paste0("blk", 1:3)))
   merit <- setNames(c(rep(0, 6), rep(100, 6)), ids)
 
-  res <- select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                           merit_weight = 50, popSize = 60, maxiter = 60,
-                           run = 30, seed = 3, n_reps = 1)
+  res <- select_parents_ga_ts(
+    vmat, n_founders = 4, merit_score = merit,
+    merit_weight = 50, popSize = 60, maxiter = 60,
+    run = 30, seed = 3, n_reps = 1
+  )
   expect_true(all(res$selected %in% ids[7:12]))
   expect_gt(res$mean_merit, 50)
 })
@@ -464,53 +533,62 @@ test_that("suggest_merit_weight(): missing merit_score entries error clearly", {
   )
 })
 
-test_that("select_parents_ga(): merit_priority and explicit merit_weight together errors", {
+test_that("select_parents_ga_ts(): merit_priority and merit_weight together errors", {
   skip_if_not_installed("GA")
   vmat <- make_vmat()
   merit <- setNames(rnorm(nrow(vmat)), rownames(vmat))
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                      merit_weight = 1, merit_priority = 50),
-    "merit_weight or merit_priority"
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit,
+                         merit_weight = 1, merit_priority = 50),
+    "exactly one"
   )
 })
 
-test_that("select_parents_ga(): merit_priority outside [0, 100] errors", {
+test_that("select_parents_ga_ts(): merit_priority outside (0, 100] errors", {
   skip_if_not_installed("GA")
   vmat <- make_vmat()
   merit <- setNames(rnorm(nrow(vmat)), rownames(vmat))
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                      merit_priority = 200),
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit,
+                         merit_priority = 200),
     "merit_priority"
+  )
+  expect_error(
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit,
+                         merit_priority = 0),
+    "coverage-only"
   )
 })
 
-test_that("select_parents_ga(): merit_priority without merit_score errors", {
+test_that("select_parents_ga_ts(): non-finite merit_score errors", {
   skip_if_not_installed("GA")
   vmat <- make_vmat()
+  merit <- setNames(rnorm(nrow(vmat)), rownames(vmat))
+  merit[1] <- NA_real_
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_priority = 50),
-    "merit_priority"
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit),
+    "finite"
   )
 })
 
-test_that("select_parents_ga(): merit_priority with merit_score missing candidates errors before calibration runs", {
+test_that("select_parents_ga_ts(): merit_score must cover candidates before calibration", {
   skip_if_not_installed("GA")
   vmat <- make_vmat(n = 6)
   merit <- setNames(1:4, rownames(vmat)[1:4])  # missing ind5/ind6
   expect_error(
-    select_parents_ga(vmat, n_founders = 4, merit_score = merit,
-                      merit_priority = 50),
+    select_parents_ga_ts(vmat, n_founders = 4, merit_score = merit,
+                         merit_priority = 50),
     "merit_score"
   )
 })
 
-test_that("select_parents_ga(): merit_priority end-to-end matches suggest_merit_weight()'s own calibration", {
+test_that("select_parents_ga_ts(): merit_priority matches suggest_merit_weight() calibration", {
   skip_if_not_installed("GA")
-  res <- select_parents_ga(.calib_vmat, n_founders = 2, strategy = "OPV",
-                           merit_score = .calib_merit, merit_priority = 50,
-                           popSize = 20, maxiter = 15, run = 10, seed = 1)
+  res <- select_parents_ga_ts(
+    .calib_vmat, n_founders = 2, strategy = "OPV",
+    merit_score = .calib_merit, merit_priority = 50,
+    popSize = 20, maxiter = 15, run = 10, seed = 1
+  )
   expect_equal(res$merit_priority, 50)
   # The calibration itself is deterministic (independent of the GA's own
   # stochastic search), so the merit_weight actually used must match
@@ -518,12 +596,17 @@ test_that("select_parents_ga(): merit_priority end-to-end matches suggest_merit_
   expect_equal(res$merit_weight, 0.1, tolerance = 1e-8)
 })
 
-test_that("select_parents_ga(): merit_priority = 0 is equivalent to merit_weight = 0", {
+test_that("select_parents_ga_ts(): flat merit cannot silently become coverage-only GA", {
   skip_if_not_installed("GA")
-  res <- select_parents_ga(.calib_vmat, n_founders = 2, strategy = "OPV",
-                           merit_score = .calib_merit, merit_priority = 0,
-                           popSize = 20, maxiter = 15, run = 10, seed = 1)
-  expect_equal(res$merit_weight, 0)
+  flat_merit <- setNames(rep(1, nrow(.calib_vmat)), rownames(.calib_vmat))
+  expect_error(
+    select_parents_ga_ts(
+      .calib_vmat, n_founders = 2, strategy = "OPV",
+      merit_score = flat_merit,
+      popSize = 20, maxiter = 15, run = 10, seed = 1
+    ),
+    "cannot be calibrated"
+  )
 })
 
 # -- target_degree (easy alternative to coancestry_weight) --------------------
@@ -651,6 +734,44 @@ test_that("select_parents_ga(): target_degree end-to-end matches the hand-comput
                              G = .calib_G, target_degree = 45,
                              popSize = 20, maxiter = 15, run = 10, seed = 1)
   expect_equal(res45$relatedness_ceiling, 0.1, tolerance = 1e-8)
+})
+
+test_that("select_parents_ga(): founder count and target_degree ceiling are hard constraints", {
+  skip_if_not_installed("GA")
+  res <- select_parents_ga(
+    .calib_vmat, n_founders = 2, strategy = "OPV",
+    G = .calib_G, target_degree = 90,
+    popSize = 10, maxiter = 3, run = 2, seed = 11, n_reps = 3
+  )
+
+  expect_length(res$selected, 2L)
+  expect_true(res$feasible)
+  expect_equal(unname(res$constraint_violations[["founder_count"]]), 0)
+  expect_lte(res$mean_relationship, res$relatedness_ceiling + 1e-10)
+  expect_lte(unname(res$constraint_violations[["relatedness_excess"]]), 1e-10)
+  expect_true(all(res$stability$feasible))
+})
+
+test_that("select_parents_ga_ts(): repeated runs are ranked by the complete objective", {
+  skip_if_not_installed("GA")
+  merit <- setNames(c(10, 9, 1, 0, -1, -2), rownames(.calib_vmat))
+  res <- select_parents_ga_ts(
+    .calib_vmat, n_founders = 2, strategy = "OPV",
+    G = .calib_G, coancestry_weight = 0.75,
+    merit_score = merit, merit_weight = 1.5,
+    popSize = 12, maxiter = 5, run = 3, seed = 21, n_reps = 4
+  )
+
+  expect_equal(res$fitness, max(res$stability$fitness_values))
+  expect_equal(unname(res$objective_components[["total"]]), res$fitness)
+  expect_equal(
+    unname(res$objective_components[["total"]]),
+    unname(res$objective_components[["coverage"]]) +
+      unname(res$objective_components[["merit_bonus"]]) -
+      unname(res$objective_components[["coancestry_penalty"]]),
+    tolerance = 1e-12
+  )
+  expect_equal(res$run_id, res$stability$best_rep)
 })
 
 # -- n_reps / $stability / $converged -----------------------------------------

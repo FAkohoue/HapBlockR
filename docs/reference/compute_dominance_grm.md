@@ -63,20 +63,13 @@ unrounded dosage for a less biased estimate.
 This function computes `D` only – it does not itself fit a dual-kernel
 (\\G_A + G_D\\) mixed model.
 [`rrBLUP::kin.blup()`](https://rdrr.io/pkg/rrBLUP/man/kin.blup.html),
-the solver
+the default single-kernel solver only accepts one relationship matrix.
+However,
 [`run_haplotype_prediction`](https://FAkohoue.github.io/HapBlockR/reference/run_haplotype_prediction.md)
-uses for its default GBLUP path, only accepts a single relationship
-matrix and cannot fit \\G_A\\ and \\G_D\\ simultaneously. Pair the
-output of this function with the output of
-[`compute_haplotype_grm`](https://FAkohoue.github.io/HapBlockR/reference/compute_haplotype_grm.md)
-(or
-[`prepare_gblup_inputs`](https://FAkohoue.github.io/HapBlockR/reference/prepare_gblup_inputs.md)`()$G`)
-and fit both as random effects in
-[`sommer::mmer()`](https://rdrr.io/pkg/sommer/man/mmer.html), ASReml, or
-another dual-kernel-capable solver – mirroring how
-[`prepare_gblup_inputs`](https://FAkohoue.github.io/HapBlockR/reference/prepare_gblup_inputs.md)
-already hands off a single `G` matrix for external GBLUP fitting rather
-than fitting the model itself.
+fits this dominance kernel jointly with the additive haplotype kernel
+through its `include_dominance = TRUE` BGLR pathway. The two matrices
+may also be passed to another dual-kernel-capable solver when a
+programme requires a different model specification.
 
 Diploid only (`ploidy = 2`): the dominance coding below is specific to
 biallelic diploid loci. Computed from the raw per-SNP genotype matrix

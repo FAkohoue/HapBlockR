@@ -46,8 +46,9 @@ select_parents_ocs(
   from
   [`compute_haplotype_grm`](https://FAkohoue.github.io/HapBlockR/reference/compute_haplotype_grm.md),
   or your own VanRaden/IBS/blended-H/pedigree-A matrix built however you
-  already build it. This function does not construct `G` for you – pass
-  in whatever relationship matrix you trust.
+  already build it. Supply the relationship matrix produced by the
+  HapBlockR workflow or another aligned relationship analysis
+  appropriate to the programme.
 
 - family:
 
@@ -72,11 +73,11 @@ select_parents_ocs(
 
   Optional integer. Maximum number of distinct parents to use.
   AlphaMate: `NumberOfParents`, a native constraint enforced during
-  allocation. `engine = "optisel"`: approximated by zeroing all but the
-  `n_parents_max` largest solved contributions after `opticont()` solves
-  – not a re-optimised constrained solution (with a message). Ignored
-  entirely (with a message) under `engine = "simplemating"` –
-  `selectCrosses()` does not expose this control at all.
+  allocation. `engine = "optisel"`: uses the `n_parents_max` leading
+  contributors to define a restricted candidate subset, then re-solves
+  the OCS frontier and constrained optimum within that subset before
+  mating allocation. `engine = "simplemating"`: reported as unsupported
+  because `selectCrosses()` does not expose this control.
 
 - max_contrib_per_parent:
 
@@ -180,7 +181,7 @@ matters, not just which is "better":
 
   **True OCS.**
   [`optiSel::candes()`](https://rdrr.io/pkg/optiSel/man/candes.html) +
-  `opticont()` (Wellmann 2019) – optiSel's own continuous- optimization
+  `opticont()` (Wellmann 2019) – optiSel's own continuous- optimisation
   solver for Meuwissen's (1997) formal OCS problem: optimal
   per-candidate contributions subject to an explicit upper bound on the
   next generation's mean kinship. `target_degree` is mapped onto that
@@ -232,7 +233,7 @@ AlphaMate executable" below.
 ## Engine differences – read before choosing
 
 `"alphamate"` and `"optisel"` both solve the actual OCS problem
-(continuous contribution optimization under a relatedness constraint)
+(continuous contribution optimisation under a relatedness constraint)
 via genuinely different solvers – AlphaMate's own evolutionary algorithm
 vs. optiSel's `candes()`/`opticont()`/`matings()`. Both are controlled
 by the same `target_degree` lever using the same direction convention (0
@@ -267,11 +268,11 @@ approximation of the same lever, not an equivalent algorithm; re-tune if
 you switch engines.
 
 Beyond that: AlphaMate lets you cap the parent count (`n_parents_max`)
-as a native constraint during allocation; the `"optisel"` engine
-approximates it by zeroing all but the `n_parents_max` largest solved
-contributions *after* solving (not a re-optimised constrained solution –
-see `.run_optisel_ocs()`); the `"simplemating"` engine does not support
-it at all – ignored (with a message). `max_contrib_per_parent` IS
+as a native constraint during allocation. The `"optisel"` engine uses
+the leading solved contributors to define the permitted subset, then
+re-solves the OCS frontier and constrained optimum within that subset
+before allocating matings. The `"simplemating"` engine does not expose
+this control and reports it as unsupported. `max_contrib_per_parent` is
 honoured directly by all three engines (AlphaMate's own cap;
 `selectCrosses()`'s `max.cross` argument under `"simplemating"`;
 [`optiSel::matings()`](https://rdrr.io/pkg/optiSel/man/matings.html)'s
@@ -304,50 +305,16 @@ dependency) or `engine = "simplemating"` (cross prediction/selection)
 both require no external executable at all – only R packages – and are
 the more portable, drop-in choices.
 
-## Verification status (read this)
+## Engine integration
 
-The AlphaMate wrapper is a direct translation of a working, production
-AlphaMate driver script (same file formats, same call sequence) and is
-implemented with high confidence.
-
-The `"simplemating"` engine went through two revisions after real
-[`devtools::test()`](https://devtools.r-lib.org/reference/test.html)
-failures against an actually-installed SimpleMating: a hand-written
-[`optiSel::candes()`](https://rdrr.io/pkg/optiSel/man/candes.html)/`opticont()`
-call with real argument-name mismatches, replaced by a wrapper around
-`SimpleMating::GOCS()` after reading its actual source – which itself
-then failed because a real, freshly-reinstalled SimpleMating 0.2.1 does
-not export `GOCS()` despite it being present in the GitHub repository's
-checked-in source/NAMESPACE (unresolved discrepancy; possibly a stale
-NAMESPACE line). This engine now wraps `planCross()` + `selectCrosses()`
-instead, specifically because both are confirmed present in a real,
-current SimpleMating 0.2.1 installation's own help index AND their exact
-current source was read directly before writing this
-(`Resende-Lab/SimpleMating`, `planCross.R` and `selectCrosses.R`). If
-`engine = "simplemating"` errors with what looks like an argument-name
-mismatch, SimpleMating's own API may have moved again since this wrapper
-was written – check
-[`?SimpleMating::planCross`](https://rdrr.io/pkg/SimpleMating/man/planCross.html)/
-[`?SimpleMating::selectCrosses`](https://rdrr.io/pkg/SimpleMating/man/selectCrosses.html)
-against your installed version.
-
-The `"optisel"` engine is written directly against optiSel's own
-`candes()`/`opticont()`/`matings()`/`noffspring()` documentation. The
-specific assumptions most likely to matter if you hit an argument-name
-or return-shape mismatch: (1)
-[`optiSel::noffspring()`](https://rdrr.io/pkg/optiSel/man/noffspring.html)'s
-exact first positional argument and return shape (assumed to accept the
-`opticont()` `$parent` data frame directly and return a list with a
-`$parent$n` column); (2)
-[`optiSel::matings()`](https://rdrr.io/pkg/optiSel/man/matings.html)'s
-`ub.n` argument being an upper bound on repeated matings of the same
-Sire x Dam pair (used here to enforce `allow_repeated_matings = FALSE`
-natively rather than by post-hoc filtering). Check
-[`?optiSel::candes`](https://rdrr.io/pkg/optiSel/man/candes.html),
-[`?optiSel::opticont`](https://rdrr.io/pkg/optiSel/man/opticont.html),
-[`?optiSel::matings`](https://rdrr.io/pkg/optiSel/man/matings.html), and
-[`?optiSel::noffspring`](https://rdrr.io/pkg/optiSel/man/noffspring.html)
-against your installed version.
+The AlphaMate wrapper follows the programme's documented file formats
+and execution sequence. The `"optisel"` engine calls `candes()` and
+`opticont()` for the continuous OCS problem and uses HapBlockR's
+hard-constrained discrete allocator for the mating plan. The
+`"simplemating"` engine uses the exported `planCross()` and
+`selectCrosses()` interface. HapBlockR checks required exports and
+returned constraints so that an incompatible optional dependency fails
+explicitly with the installed version and function name.
 
 ## References
 

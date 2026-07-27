@@ -29,6 +29,11 @@ usefulness_criterion(
   generation = 1L,
   n_threads = 1L,
   n_sim_linked = 2000L,
+  gebv_se = NULL,
+  gebv_reliability = NULL,
+  phasing_reliability = NULL,
+  downside_quantile = 0.1,
+  min_reliability = 0.3,
   verbose = TRUE
 )
 }
@@ -195,6 +200,31 @@ once per candidate cross -- a large value here scales with the number
 of crosses being scored, unlike \code{n_sim}. \code{seed}, if supplied,
 is reused for both Monte Carlo procedures.}
 
+\item{gebv_se}{Optional named numeric vector of GEBV standard errors.
+When supplied, the function propagates parental uncertainty to
+\code{mid_parent_SE} and the 95 percent UC interval.}
+
+\item{gebv_reliability}{Optional named numeric vector in [0, 1], for
+example the \code{reliability} column returned by
+\code{\link{run_haplotype_prediction}}. Cross reliability is the
+conservative minimum of its two parental reliabilities.}
+
+\item{phasing_reliability}{Optional named numeric vector in [0, 1].
+For \code{variance_model = "phased"} or \code{"linked"} -- both build
+progeny variance from phased haplotype blocks and depend equally on
+phasing accuracy -- each cross uses the conservative minimum of
+parental prediction and phasing reliability. Missing phasing
+reliability therefore cannot pass the recommendation gate in either
+mode.}
+
+\item{downside_quantile}{Numeric in (0, 0.5). Progeny-distribution
+quantile reported as \code{downside_value}. Default \code{0.10}.}
+
+\item{min_reliability}{Numeric in [0, 1]. A cross is marked
+\code{recommendation_eligible} only when its two-parent reliability
+meets this threshold. Missing reliability never passes the gate.
+Default \code{0.30}.}
+
 \item{verbose}{Logical, default \code{TRUE}. Print progress and a summary
 of how many candidate crosses could not be scored (e.g. due to missing
 genotype or phase data at target blocks).}
@@ -215,6 +245,16 @@ A data frame, one row per candidate cross, sorted by descending
       sqrt(predicted_variance)}. \code{NA} if the cross could not be
       scored.}
     \item{\code{rank}}{Rank by descending UC (\code{NA} rows sort last).}
+    \item{\code{downside_value}}{The requested lower progeny-distribution
+      quantile, showing downside risk alongside expected selected gain.}
+    \item{\code{mid_parent_SE}, \code{UC_SE}, \code{UC_lower_95},
+      \code{UC_upper_95}}{Propagated uncertainty when \code{gebv_se} is
+      supplied; the finite-progeny contribution is included when
+      \code{n_progeny} is supplied.}
+    \item{\code{prediction_reliability},
+      \code{phasing_reliability}, \code{cross_reliability},
+      \code{recommendation_eligible}, \code{eligibility_reason}}{Explicit
+      reliability gate for promoting a ranked cross to a recommendation.}
   }
 }
 \description{

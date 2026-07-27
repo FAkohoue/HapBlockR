@@ -13,6 +13,7 @@ read_geno(
   na_strings = c("NA", "N", "NN", "./.", ".", ""),
   gds_cache = NULL,
   clean_malformed = FALSE,
+  multiallelic = c("error", "drop", "first_alt"),
   verbose = FALSE
 )
 }
@@ -31,7 +32,8 @@ when \code{format = "matrix"}.}
 \item{sample_ids}{Character vector. Override sample IDs extracted from the
 file. Length must equal number of samples.}
 
-\item{sep}{Character. Field separator for \code{"numeric"} format.}
+\item{sep}{Character. Field separator for \code{"numeric"} format. Default
+\code{","}.}
 
 \item{na_strings}{Character vector. Strings treated as NA. Default
 \code{c("NA", "N", "NN", "./.", ".", "")}.}
@@ -42,8 +44,7 @@ If \code{NULL} (default), the GDS file is placed next to the VCF with a
 \code{.gds} extension. Set to \code{FALSE} to disable auto-conversion
 and read the VCF fully into memory instead. When the cache file already
 exists it is reused without re-converting (fast subsequent calls).
-Ignored for all non-VCF formats.
-Default \code{","}.}
+Ignored for all non-VCF formats.}
 
 \item{clean_malformed}{Logical. If \code{TRUE}, the input file is
 stream-cleaned before reading: any line whose delimiter-separated column
@@ -52,6 +53,12 @@ streaming pass over the file but is required for files produced by some
 variant callers (e.g. NGSEP) that embed extra characters in FORMAT fields.
 Applies to numeric dosage CSV, HapMap, and VCF formats. Default
 \code{FALSE}.}
+
+\item{multiallelic}{Character. Policy for VCF records with more than one
+alternative allele: \code{"error"} (default) rejects the input,
+\code{"drop"} excludes those records, and \code{"first_alt"} retains only
+the first alternative allele while treating other allele indices as
+missing. The selected policy is recorded in the import report.}
 
 \item{verbose}{Logical. Print progress messages.}
 }
@@ -79,8 +86,9 @@ The format is auto-detected from the file extension unless overridden with
     columns with two-character nucleotide calls (\code{AA}, \code{AT},
     \code{NN} for missing). Extension: \code{.hmp.txt}.}
   \item{\code{"vcf"}}{VCF v4.2. Both phased (\code{0|1}) and unphased
-    (\code{0/1}) GT fields are accepted. Multi-allelic sites use first ALT.
-    Missing (\code{./.}) becomes \code{NA}. Extension: \code{.vcf},
+    (\code{0/1}) GT fields are accepted. Multiallelic sites are rejected,
+    dropped, or reduced to the first alternative allele according to
+    \code{multiallelic}. Missing (\code{./.}) becomes \code{NA}. Extension: \code{.vcf},
     \code{.vcf.gz}.}
   \item{\code{"gds"}}{SNPRelate GDS file. Requires
     \code{BiocManager::install("SNPRelate")}. Extension: \code{.gds}.}

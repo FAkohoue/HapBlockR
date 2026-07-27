@@ -1,0 +1,18 @@
+HapBlockR does not distribute the external Beagle or AlphaMate executables.
+
+Beagle
+  Project: https://faculty.washington.edu/browning/beagle/beagle.html
+  Authors: Brian L. Browning and Sharon R. Browning
+  Licence: GNU General Public License, version 3 or later, as stated by the
+  upstream project.
+  Use: Optional external statistical-phasing process configured by the user.
+
+AlphaMate
+  Project: https://github.com/AlphaGenes/AlphaMate
+  Authors and licence: See the upstream source repository.
+  Use: Optional external optimum-contribution and mate-allocation process
+  configured by the user.
+
+Optional R packages retain their own copyright and licence notices. Their
+presence in Suggests or an integration workflow does not redistribute them as
+part of HapBlockR.

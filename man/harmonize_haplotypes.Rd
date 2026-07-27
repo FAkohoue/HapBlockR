@@ -2,7 +2,7 @@
 % Please edit documentation in R/haplotype_inference.R
 \name{harmonize_haplotypes}
 \alias{harmonize_haplotypes}
-\title{Harmonize Haplotype Allele Labels Across Panels or Analysis Runs}
+\title{Harmonise Haplotype Allele Labels Across Panels or Analysis Runs}
 \usage{
 harmonize_haplotypes(
   haplotypes_target,
@@ -14,7 +14,7 @@ harmonize_haplotypes(
 }
 \arguments{
 \item{haplotypes_target}{Named list from \code{\link{extract_haplotypes}}
-(the panel to harmonize - validation set, new environment, etc.).}
+(the panel to harmonise - validation set, new environment, etc.).}
 
 \item{haplotypes_ref}{Named list from \code{\link{extract_haplotypes}}
 (the reference panel - training set, base population, etc.).

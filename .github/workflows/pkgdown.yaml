@@ -21,18 +21,18 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Pandoc
-        uses: r-lib/actions/setup-pandoc@v2
+        uses: r-lib/actions/setup-pandoc@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           pandoc-version: "3.1.11"
 
       - name: Install R
-        uses: r-lib/actions/setup-r@v2
+        uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           r-version: "release"
           use-public-rspm: true
@@ -60,7 +60,7 @@ jobs:
             BiocManager::install(to_install, ask = FALSE, update = FALSE)
 
       - name: Install R package dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           extra-packages: any::pkgdown
           needs: website
@@ -97,11 +97,20 @@ jobs:
             install     = FALSE
           )
 
+      - name: Publish Breeder's Guide alongside the pkgdown site
+        # inst/extdata/HapBlockR_Breeder_Guide.{html,pdf} are pre-built,
+        # version-controlled artifacts (see tools/build_breeder_guide_accessible.cjs);
+        # pkgdown does not know about them, so copy them into docs/ under the
+        # fixed name the navbar "guide" component links to.
+        run: |
+          cp inst/extdata/HapBlockR_Breeder_Guide.html docs/breeder-guide.html
+          cp inst/extdata/HapBlockR_Breeder_Guide.pdf  docs/breeder-guide.pdf
+
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: docs
 
@@ -114,4 +123,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id:   deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

@@ -60,7 +60,7 @@ useful for auditing coverage and for single-SNP feature engineering.}
 separated only by unassigned SNPs are expanded so that every SNP passing
 MAF filtering is assigned to a block. Gap SNPs are allocated to the
 flanking LD blocks using an LD-informed boundary rule based on their
-relative correlation with representative SNPs from each neighboring
+relative correlation with representative SNPs from each neighbouring
 block. Physical gaps without SNPs remain unchanged. Default
 \code{TRUE}.}
 
@@ -68,7 +68,7 @@ block. Physical gaps without SNPs remain unchanged. Default
 side of an inter-block gap when \code{close_gaps_with_snps = TRUE}.
 Representatives are chosen closest to the gap boundary and are used to
 evaluate whether each gap SNP is more strongly associated with the left
-or right neighboring block. Larger values provide more stable boundary
+or right neighbouring block. Larger values provide more stable boundary
 assignment at increased computational cost. Default \code{2L}.}
 
 \item{checkLargest}{Logical. Dense-core pre-pass for large windows. Default FALSE.}
@@ -112,7 +112,7 @@ Core per-chromosome LD block detection. Two LD metrics are supported:
 By default, SNP-index gaps between adjacent LD blocks are resolved using
 an LD-informed boundary assignment procedure. This ensures that every SNP
 passing quality-control filters is assigned to exactly one LD block,
-preventing unassigned markers between neighboring blocks while preserving
+preventing unassigned markers between neighbouring blocks while preserving
 biologically meaningful physical gaps where no SNPs are present.
 
 For genome-wide analyses use \code{\link{run_Big_LD_all_chr}}.

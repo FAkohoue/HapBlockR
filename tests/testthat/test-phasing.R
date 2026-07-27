@@ -31,13 +31,23 @@
 library(testthat)
 library(HapBlockR)
 
+# Integration tests request the structured provenance/QC result explicitly.
+.phase_with_beagle <- HapBlockR::phase_with_beagle
+phase_with_beagle <- function(...) {
+  .phase_with_beagle(..., return_details = TRUE)
+}
+
 data(ldx_geno,     package = "HapBlockR")
 data(ldx_snp_info, package = "HapBlockR")
 data(ldx_blocks,   package = "HapBlockR")
 
 # -- Helper: locate beagle.jar -------------------------------------------------
 .beagle_jar_path <- function() {
-  system.file("extdata", "beagle.jar", package = "HapBlockR")
+  configured <- getOption(
+    "HapBlockR.beagle_jar",
+    Sys.getenv("HAPBLOCKR_BEAGLE_JAR", unset = "")
+  )
+  if (nzchar(configured)) configured else ""
 }
 .beagle_available <- function() {
   j <- .beagle_jar_path()
@@ -96,13 +106,18 @@ data(ldx_blocks,   package = "HapBlockR")
         verbose    = FALSE
       )
     )
-    ok <- is.list(result) && file.exists(result$out_vcf)
+    ok <- is.list(result) && file.exists(result$output_vcf)
   }, error = function(e) {
     ok <<- FALSE
   })
   .beagle_works_cache <<- ok
   ok
 }
+
+test_that("configured Beagle integration lane cannot silently skip", {
+  if (identical(tolower(Sys.getenv("HAPBLOCKR_BEAGLE_REQUIRED")), "true"))
+    expect_true(.beagle_works())
+})
 
 # -- Shared small dataset (30 SNPs, chr 1) -------------------------------------
 # Use a 30-SNP subset of ldx_geno chr1 for fast tests.
@@ -292,6 +307,187 @@ test_that("phase_with_beagle: missing beagle_jar with no fallback errors", {
   unlink(tmp_vcf); unlink(out_dir, recursive = TRUE)
 })
 
+test_that("phase_with_beagle: rejects more than two threads", {
+  tmp_vcf <- tempfile(fileext = ".vcf")
+  writeLines(c(
+    "##fileformat=VCFv4.2",
+    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tind1"
+  ), tmp_vcf)
+  expect_error(
+    phase_with_beagle(
+      input_vcf = tmp_vcf, out_prefix = tempfile(),
+      beagle_jar = tmp_vcf, nthreads = 3L
+    ),
+    "1 or 2"
+  )
+  unlink(tmp_vcf)
+})
+
+test_that("Beagle version parsing ignores dates embedded in JAR names", {
+  expect_equal(
+    HapBlockR:::.parse_beagle_version(
+      "beagle.27Feb25.75f.jar (version 5.5)"
+    ),
+    "5.5"
+  )
+  expect_equal(
+    HapBlockR:::.parse_beagle_version("Beagle 5.4"),
+    "5.4"
+  )
+  expect_true(is.na(
+    HapBlockR:::.parse_beagle_version("Using beagle.27Feb25.75f.jar")
+  ))
+})
+
+test_that("Beagle VCF QC reports identity, concordance, and imputation", {
+  input <- tempfile(fileext = ".vcf")
+  output <- tempfile(fileext = ".vcf")
+  header <- c(
+    "##fileformat=VCFv4.2",
+    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\ts1\ts2"
+  )
+  writeLines(c(
+    header,
+    "1\t100\trs1\tA\tT\t.\tPASS\t.\tGT\t0/1\t./."
+  ), input)
+  writeLines(c(
+    header,
+    "1\t100\trs1\tA\tT\t.\tPASS\t.\tGT\t0|1\t1|1"
+  ), output)
+  qc <- HapBlockR:::.compare_beagle_vcfs(input, output)
+  expect_true(qc$sample_identity)
+  expect_true(qc$variant_identity)
+  expect_equal(qc$genotype_concordance, 1)
+  expect_equal(qc$imputation_rate, 1)
+  expect_equal(qc$missing_before, 1L)
+  expect_equal(qc$missing_after, 0L)
+  unlink(c(input, output))
+})
+
+test_that("Beagle VCF QC detects allele-identity changes", {
+  input <- tempfile(fileext = ".vcf")
+  output <- tempfile(fileext = ".vcf")
+  header <- c(
+    "##fileformat=VCFv4.2",
+    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\ts1"
+  )
+  writeLines(c(header, "1\t100\trs1\tA\tT\t.\tPASS\t.\tGT\t0/1"), input)
+  writeLines(c(header, "1\t100\trs1\tA\tG\t.\tPASS\t.\tGT\t0|1"), output)
+  qc <- HapBlockR:::.compare_beagle_vcfs(input, output)
+  expect_false(qc$variant_identity)
+  unlink(c(input, output))
+})
+
+test_that("assess_phasing_accuracy reports truth-set switch and dosage metrics", {
+  variant_ids <- paste0("s", 1:5)
+  sample_ids <- c("P1", "P2")
+  truth_h1 <- matrix(
+    0,
+    nrow = 5,
+    ncol = 2,
+    dimnames = list(variant_ids, sample_ids)
+  )
+  truth_h2 <- 1 - truth_h1
+  truth <- list(
+    hap1 = truth_h1,
+    hap2 = truth_h2,
+    snp_info = data.frame(
+      SNP = variant_ids,
+      CHR = "1",
+      POS = seq_len(5),
+      REF = "A",
+      ALT = "G",
+      stringsAsFactors = FALSE
+    )
+  )
+  estimate_h1 <- truth_h1
+  estimate_h2 <- truth_h2
+  estimate_h1[3:5, "P1"] <- 1
+  estimate_h2[3:5, "P1"] <- 0
+  estimate_h1[, "P2"] <- 1
+  estimate_h2[, "P2"] <- 0
+  estimate <- truth
+  estimate$hap1 <- estimate_h1
+  estimate$hap2 <- estimate_h2
+
+  accuracy <- assess_phasing_accuracy(
+    truth,
+    estimate,
+    max_switch_error_rate = 0.2,
+    min_dosage_accuracy = 1,
+    min_allele_concordance = 0.8,
+    min_call_rate = 1
+  )
+
+  expect_s3_class(accuracy, "HapBlockR_phasing_accuracy")
+  expect_s3_class(accuracy, "hapblockr_result")
+  expect_equal(accuracy$metrics$switches, 1)
+  expect_equal(accuracy$metrics$transitions, 8)
+  expect_equal(accuracy$metrics$switch_error_rate, 0.125)
+  expect_equal(accuracy$metrics$dosage_accuracy, 1)
+  expect_equal(accuracy$metrics$allele_concordance, 0.8)
+  expect_true(all(accuracy$quality_control$passed))
+  expect_silent(validate(accuracy))
+})
+
+test_that("assess_phasing_accuracy aligns identities and enforces gates", {
+  variant_ids <- paste0("v", 1:4)
+  sample_ids <- c("A", "B")
+  hap1 <- matrix(
+    c(0, 0, 1, 1, 1, 0, 1, 0),
+    nrow = 4,
+    dimnames = list(variant_ids, sample_ids)
+  )
+  truth <- list(
+    hap1 = hap1,
+    hap2 = 1 - hap1,
+    snp_info = data.frame(
+      SNP = variant_ids, CHR = "2", POS = 11:14,
+      REF = "C", ALT = "T", stringsAsFactors = FALSE
+    )
+  )
+  estimate <- truth
+  estimate$hap1[3:4, "A"] <- 1 - estimate$hap1[3:4, "A"]
+  estimate$hap2[3:4, "A"] <- 1 - estimate$hap2[3:4, "A"]
+  estimate$hap1 <- estimate$hap1[4:1, 2:1, drop = FALSE]
+  estimate$hap2 <- estimate$hap2[4:1, 2:1, drop = FALSE]
+  estimate$snp_info <- estimate$snp_info[4:1, , drop = FALSE]
+
+  report <- assess_phasing_accuracy(
+    truth,
+    estimate,
+    max_switch_error_rate = 0,
+    strict = FALSE
+  )
+  expect_false(report$metrics$sample_order_identity)
+  expect_false(report$metrics$variant_order_identity)
+  expect_false(report$quality_control$passed[
+    report$quality_control$gate == "switch_error_rate"
+  ])
+  expect_error(
+    assess_phasing_accuracy(
+      truth,
+      estimate,
+      max_switch_error_rate = 0
+    ),
+    "switch_error_rate"
+  )
+})
+
+test_that("phase_with_beagle validates a truth set before execution", {
+  expect_error(
+    phase_with_beagle(
+      input_vcf = system.file(
+        "extdata", "example_genotypes.vcf", package = "HapBlockR"
+      ),
+      out_prefix = tempfile("truth-validation-"),
+      truth_vcf = tempfile("missing-truth-", fileext = ".vcf"),
+      beagle_jar = tempfile("missing-beagle-", fileext = ".jar")
+    ),
+    "truth_vcf not found"
+  )
+})
+
 # ==============================================================================
 # Section 3: phase_with_beagle() + read_phased_vcf() - beagle.jar required
 # ==============================================================================
@@ -315,9 +511,9 @@ test_that("phase_with_beagle: produces phased VCF.gz output file", {
   )
 
   expect_type(result, "list")
-  expect_true("out_vcf" %in% names(result))
-  expect_true(file.exists(result$out_vcf))
-  expect_true(grepl("\\.vcf\\.gz$", result$out_vcf))
+  expect_true("output_vcf" %in% names(result))
+  expect_true(file.exists(result$output_vcf))
+  expect_true(grepl("\\.vcf\\.gz$", result$output_vcf))
 })
 
 test_that("phase_with_beagle: output VCF contains phased GTs (| separator)", {
@@ -336,7 +532,7 @@ test_that("phase_with_beagle: output VCF contains phased GTs (| separator)", {
     verbose    = FALSE
   )
 
-  con <- gzcon(file(result$out_vcf, "rb"))
+  con <- gzcon(file(result$output_vcf, "rb"))
   lines <- readLines(con, n = 50L)
   close(con)
   data_lines <- lines[!startsWith(lines, "#")]
@@ -363,7 +559,7 @@ test_that("phase_with_beagle: same SNP count in output as input", {
     verbose    = FALSE
   )
 
-  con <- gzcon(file(result$out_vcf, "rb"))
+  con <- gzcon(file(result$output_vcf, "rb"))
   lines <- readLines(con)
   close(con)
   n_data <- sum(!startsWith(lines, "#"))
@@ -387,7 +583,7 @@ test_that("phase_with_beagle then read_phased_vcf: returns valid phased list", {
     verbose    = FALSE
   )
 
-  phased <- read_phased_vcf(result$out_vcf, verbose = FALSE)
+  phased <- read_phased_vcf(result$output_vcf, verbose = FALSE)
 
   expect_type(phased, "list")
   expect_true(all(c("hap1","hap2","dosage","sample_ids","phased") %in% names(phased)))
@@ -413,7 +609,7 @@ test_that("read_phased_vcf: hap1 + hap2 == dosage for all non-missing entries", 
     verbose    = FALSE
   )
 
-  phased <- read_phased_vcf(result$out_vcf, verbose = FALSE)
+  phased <- read_phased_vcf(result$output_vcf, verbose = FALSE)
 
   # hap1 and hap2 are 0/1 matrices (gamete alleles); dosage = hap1 + hap2
   non_na <- !is.na(phased$hap1) & !is.na(phased$hap2) & !is.na(phased$dosage)
@@ -439,7 +635,7 @@ test_that("read_phased_vcf then extract_haplotypes: produces phased strings", {
     verbose    = FALSE
   )
 
-  phased <- read_phased_vcf(result$out_vcf, verbose = FALSE)
+  phased <- read_phased_vcf(result$output_vcf, verbose = FALSE)
   blk1   <- ldx_blocks[ldx_blocks$CHR == "1", ][1, ]
 
   haps_phased <- extract_haplotypes(phased, .si30, blk1, min_snps = 3L)
@@ -468,8 +664,8 @@ test_that("phase_with_beagle: seed argument produces reproducible output", {
                           nthreads = 1L, seed = 42L, verbose = FALSE)
 
   # Read both phased VCFs and compare dosage matrices
-  p1 <- read_phased_vcf(r1$out_vcf, verbose = FALSE)
-  p2 <- read_phased_vcf(r2$out_vcf, verbose = FALSE)
+  p1 <- read_phased_vcf(r1$output_vcf, verbose = FALSE)
+  p2 <- read_phased_vcf(r2$output_vcf, verbose = FALSE)
   expect_equal(p1$hap1,    p2$hap1,    label = "hap1 reproducible with same seed")
   expect_equal(p1$hap2,    p2$hap2,    label = "hap2 reproducible with same seed")
   expect_equal(p1$dosage,  p2$dosage,  label = "dosage reproducible with same seed")

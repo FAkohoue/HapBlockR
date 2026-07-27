@@ -7,13 +7,17 @@ in marker data: detecting linkage disequilibrium (LD) blocks, extracting
 haplotypes, measuring diversity. This one is about *using that structure
 to make a breeding decision*.
 
-The starting point here is deliberately downstream of where most genomic
-prediction guides stop: you already have a breeding value or selection
-index for every candidate parent — from a mixed model, Genomic Best
-Linear Unbiased Prediction (GBLUP), ASReml-R, or any other method of
-your choosing. HapBlockR does not replace that step. What it adds is
-everything between “here is a ranked list of candidates” and “here is
-the crossing block for next season,” specifically:
+The starting point is a genotype-level estimate from a field-trial or
+genetic evaluation fitted outside HapBlockR. The package accepts
+adjusted means, Best Linear Unbiased Estimates (BLUEs), supported Best
+Linear Unbiased Predictions (BLUPs), breeding values, general combining
+ability and total genetic value through
+[`prepare_breeding_targets()`](https://FAkohoue.github.io/HapBlockR/reference/prepare_breeding_targets.md).
+It rejects externally computed genomic predictions and selection-index
+values because it estimates marker, haplotype and block effects, and
+constructs the final index, internally. It then connects “here is a
+ranked list of candidates” to “here is the crossing block for next
+season,” specifically:
 
 1.  **Where** in the genome is that breeding value actually coming from
     (local GEBV, Genomic Estimated Breeding Value, per haplotype block,
@@ -29,7 +33,7 @@ the crossing block for next season,” specifically:
 5.  **Which specific crosses**, contribution levels, and matings turn
     that parent set into an actual crossing block — with population-wide
     inbreeding under an explicit cap, not just a diversity check run
-    afterward?
+    afterwards?
 
 Each section below answers one of these questions, in order, ending with
 an actual list of parents (Sections 3-7) and then, building on that
@@ -47,7 +51,8 @@ pre-detected `ldx_blocks` (9 LD blocks plus inter-block singleton SNPs),
 and `ldx_blues` (pre-adjusted BLUEs for two simulated traits, `YLD` and
 `RES`). See the *Introduction* vignette for how the blocks themselves
 were detected; this vignette starts one step later, from a genotyped,
-block-mapped panel with a breeding value already in hand.
+block-mapped panel with externally analysed BLUEs ready for internal
+genomic modelling.
 
 To illustrate the family-balance check in Section 6, this vignette also
 adds a synthetic `Family` grouping — 12 illustrative families of 10
@@ -64,19 +69,43 @@ table(family_id)
 #>    10    10    10    10    10    10    10    10    10    10    10    10
 ```
 
-`YLD` stands in for a pre-computed selection index (higher = better):
+`YLD` is a simulated BLUE. The example assigns equal precision because
+the bundled teaching data do not contain standard errors:
 
 ``` r
-index_df <- ldx_blues[, c("id", "YLD")]
-names(index_df)[2] <- "SelectionIndex"
-head(index_df)
-#>       id SelectionIndex
-#> 1 ind001        -0.5175
-#> 2 ind002         0.7635
-#> 3 ind003        -1.3093
-#> 4 ind004        -1.1162
-#> 5 ind005         1.1343
-#> 6 ind006         0.9307
+target_data <- data.frame(
+  id = ldx_blues$id,
+  trait = "YLD",
+  value = ldx_blues$YLD,
+  precision = 1
+)
+targets <- prepare_breeding_targets(
+  target_data,
+  input_type = "BLUE",
+  precision_col = "precision"
+)
+head(targets$targets)
+#>       id trait environment unit   value          record_key reliability PEV
+#> 1 ind001   YLD        <NA> <NA> -0.5175 ind001::YLD::ACROSS          NA  NA
+#> 2 ind002   YLD        <NA> <NA>  0.7635 ind002::YLD::ACROSS          NA  NA
+#> 3 ind003   YLD        <NA> <NA> -1.3093 ind003::YLD::ACROSS          NA  NA
+#> 4 ind004   YLD        <NA> <NA> -1.1162 ind004::YLD::ACROSS          NA  NA
+#> 5 ind005   YLD        <NA> <NA>  1.1343 ind005::YLD::ACROSS          NA  NA
+#> 6 ind006   YLD        <NA> <NA>  0.9307 ind006::YLD::ACROSS          NA  NA
+#>   precision_raw deregressed_value precision_weight direction model_value
+#> 1             1           -0.5175                1         1     -0.5175
+#> 2             1            0.7635                1         1      0.7635
+#> 3             1           -1.3093                1         1     -1.3093
+#> 4             1           -1.1162                1         1     -1.1162
+#> 5             1            1.1343                1         1      1.1343
+#> 6             1            0.9307                1         1      0.9307
+#>   input_type                  estimand estimation_basis
+#> 1       BLUE model-adjusted entry mean            fixed
+#> 2       BLUE model-adjusted entry mean            fixed
+#> 3       BLUE model-adjusted entry mean            fixed
+#> 4       BLUE model-adjusted entry mean            fixed
+#> 5       BLUE model-adjusted entry mean            fixed
+#> 6       BLUE model-adjusted entry mean            fixed
 ```
 
 ------------------------------------------------------------------------
@@ -98,9 +127,7 @@ pred <- run_haplotype_prediction(
   geno_matrix = ldx_geno,
   snp_info    = ldx_snp_info,
   blocks      = ldx_blocks,
-  blues       = index_df,
-  id_col      = "id",
-  blue_col    = "SelectionIndex",
+  blues       = targets,
   marker_effect_method   = "gblup",
   complete_decomposition = TRUE,
   verbose     = FALSE
@@ -197,15 +224,15 @@ can’t beat it, that is itself important information.
 
 **When to reach for it.** Use
 [`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)
-whenever you have one already-validated selection index and no open
-complementarity question – early-stage or small programmes without the
-infrastructure for a full haplotype-block workflow; time-pressured
-decisions (a release deadline, a seed increase) where a fast,
-transparent, easy-to-explain shortlist matters more than incremental
-optimisation; and, always, as the mandatory baseline you run *every
-time* alongside a smarter method (Section 5.2 onward), so you have
-evidence for whether the extra machinery actually earned its keep on
-this panel.
+whenever you have one internally modelled and validated merit score and
+no open complementarity question – early-stage or small programmes
+without the infrastructure for a full haplotype-block workflow;
+time-pressured decisions (a release deadline, a seed increase) where a
+fast, transparent, easy-to-explain shortlist matters more than
+incremental optimisation; and, always, as the mandatory baseline you run
+*every time* alongside a smarter method (Section 5.2 onward), so you
+have evidence for whether the extra machinery actually earned its keep
+on this panel.
 
 **When to look further instead.** If your elite candidates cluster
 tightly on a handful of pedigrees, a top-N-by-value list is likely to
@@ -216,7 +243,8 @@ favourable haplotype blocks worth stacking deliberately (Sections 3-4),
 truncation selection has no way to act on that information at all.
 
 **In practice.** One function call: `score` is whatever whole-genome
-value you already trust (GEBV, a selection index, a stacking index from
+value produced within the workflow (GEBV, an internal selection index,
+or a stacking index from
 [`score_favorable_haplotypes()`](https://FAkohoue.github.io/HapBlockR/reference/score_favorable_haplotypes.md)),
 `n_founders` is your programme’s crossing- block capacity. No
 relatedness matrix, no block data, no tuning. The output is a flat
@@ -244,7 +272,10 @@ blocks while leaving others uncovered.
 
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)’s
 `strategy` argument encodes how a block’s value is “delivered” by the
-chosen set, mapped onto real crossing schemes:
+chosen set, mapped onto real crossing schemes. Optimal Haplotype
+Selection (OHS) seeks complementary favourable haplotypes across
+selected parents. Optimal Population Value (OPV) evaluates the
+favourable value available from the selected population:
 
 | `strategy` | Breeding meaning |
 |----|----|
@@ -264,39 +295,39 @@ multi-parent founder population (MAGIC, NAM, a new recurrent-selection
 base) where joint complementarity matters more than any single
 individual’s rank; or you need a specific crossing-scheme assumption
 (no_selfing, OHS, OPV, Haploid_OHS) enforced *during* the search rather
-than checked afterward.
+than checked afterwards.
 
-**When to skip it (for now).** You need `local_gebv` from
+**When the GA adds information.** The method uses a candidate-by-block
+`local_gebv` matrix from
 [`run_haplotype_prediction()`](https://FAkohoue.github.io/HapBlockR/reference/run_haplotype_prediction.md)
-first — there is no version of this tool that works from a single
-whole-genome score alone (that’s Section 5.1). For very large candidate
-pools (thousands of individuals) without a `top_candidates` pre-filter,
-GA search time becomes a real cost worth budgeting for. And if Section
-5.1’s truncation list already looks complementary (Section 5.2’s own
-overlap check, below, tells you this directly), the added workflow step
-may not change the outcome enough to justify it every cycle.
+or an equivalent block-value analysis. A single whole-genome score
+instead supports the truncation baseline in Section 5.1. For candidate
+pools containing thousands of individuals, `top_candidates` provides a
+documented pre-filter that keeps the search tractable. Comparing the GA
+and truncation selections shows whether block complementarity materially
+changes the parent decision in that cycle.
 
-**In practice.** You need `value_matrix` (candidates x target blocks,
-sliced straight from `local_gebv`), `n_founders`, `strategy`, and
-`block_weights` (typically each block’s `var_scaled`). Always pair it
-with a `merit_score`/ `min_sel_value` floor — without one, the search
-can select a genuinely poor overall performer purely for uniquely
-covering one block, since the fitness function itself has no
-whole-genome-merit term. Run with `n_reps >= 5` for a real analysis
-(Section 5.3 explains why) and always compare against
-[`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)’s
-overlap, not GA output in isolation.
-
-Both functions also take a `min_sel_value`/`min_sel_mode` merit floor,
-applied to the candidate pool *before* ranking or searching. Without it,
+**In practice.** Supply `value_matrix` (candidates x target blocks,
+usually sliced from `local_gebv`), `n_founders`, `strategy`, and
+`block_weights` (often each block’s `var_scaled`).
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-can select a genuinely poor overall performer purely because they
-uniquely cover one target block — its fitness function has no term for
-whole-genome merit at all (see `merit_score` below, which supplies the
-value the floor is evaluated against). `min_sel_mode = "percentile"`
-keeps the floor self-scaling: `0.5` keeps the top half of candidates by
-`merit_score`/`score`, regardless of what units or range that score is
-on.
+is deliberately the coverage-only tool. Its optional relationship
+controls are:
+
+- `coancestry_weight` when mean relationship should be penalised; or
+- `target_degree` for a calibrated 0–90 gain-to-diversity specification.
+
+Use the separate
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+tool when whole-genome merit should contribute continuously or establish
+a hard eligibility floor. This separation makes the breeder’s selection
+objective explicit and prevents a hybrid analysis from being mistaken
+for coverage-only GA.
+
+The package default `n_reps = 5` performs the replicated search and
+automatically returns the best feasible complete-objective solution. The
+breeder reviews its stability summary rather than inspecting or choosing
+among individual runs.
 
 ``` r
 value_matrix <- pred$local_gebv[, top_blocks$block_id, drop = FALSE]
@@ -315,22 +346,18 @@ ga_sel <- select_parents_ga(
   penalty_weight = NULL,
   seed           = 1L,
   verbose        = FALSE,
-  merit_score    = pred$gebv,      # whole-genome value the floor is judged on
-  min_sel_value  = 0.5,            # keep the top 50% by merit_score
-  min_sel_mode   = "percentile",
   n_reps         = 2L              # reduced for vignette build speed; the
                                     # package default is 5 — see below
 )
 
-ts_sel <- truncation_selection(score = pred$gebv, n_founders = 20L,
-                               min_sel_value = 0.5, min_sel_mode = "percentile")
+ts_sel <- truncation_selection(score = pred$gebv, n_founders = 20L)
 
 length(intersect(ga_sel$selected, ts_sel$selected))   # parents both methods agree on
 #> [1] 7
 sort(ga_sel$selected)
-#>  [1] "ind002" "ind007" "ind016" "ind025" "ind032" "ind035" "ind040" "ind049"
-#>  [9] "ind054" "ind061" "ind064" "ind072" "ind076" "ind077" "ind078" "ind081"
-#> [17] "ind088" "ind094" "ind104" "ind110"
+#>  [1] "ind027" "ind044" "ind049" "ind051" "ind063" "ind064" "ind070" "ind076"
+#>  [9] "ind082" "ind093" "ind095" "ind096" "ind102" "ind103" "ind104" "ind105"
+#> [17] "ind106" "ind107" "ind108" "ind111"
 ```
 
 The overlap count is informative on its own: a high overlap means
@@ -341,62 +368,56 @@ top-ranked individuals by whole-genome GEBV are concentrated on the
 *same* favourable blocks, leaving other important blocks uncovered by a
 plain top-N list.
 
-### 5.3 Is the GA’s answer a stable optimum?
+### 5.3 How does the package establish GA stability?
 
-A single GA run says nothing about whether its answer is a robust
-optimum or one of several near-equally-good solutions a stochastic
-search happened to land on.
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-addresses this directly: with `n_reps` independent replicates (package
-default `5`; `2` above only to keep this vignette fast to build),
-`$stability` reports how consistent the answer was:
+and
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+perform `n_reps` independent searches, calculate the complete objective
+for each feasible result and automatically return the replicate with the
+greatest objective. The coverage-only objective may include an optional
+coancestry term; the GA+TS objective also includes the active merit
+bonus. The package default is five replicates; two are used above only
+to keep the executable vignette quick to build. `$stability` summarises
+the searches:
 
 ``` r
 ga_sel$converged                          # did the winning replicate plateau?
 #> [1] TRUE
 ga_sel$stability$fitness_range            # best fitness, across replicates
-#> [1] 1.07095 1.07095
+#> [1] 1.071815 1.071815
 sort(ga_sel$stability$selection_freq, decreasing = TRUE)[1:10]
-#> ind007 ind032 ind049 ind061 ind076 ind078 ind081 ind094 ind104 ind002 
-#>    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    1.0    0.5
+#> ind044 ind049 ind063 ind076 ind104 ind106 ind108 ind027 ind051 ind064 
+#>    1.0    1.0    1.0    1.0    1.0    1.0    1.0    0.5    0.5    0.5
 ```
 
 `selection_freq` is the fraction of replicates that selected each
-individual – candidates at `1.0` are robustly supported regardless of
-the GA’s random starting point; anyone selected in only one replicate
-out of several is borderline and worth a second look before committing
-to them. Increase `n_reps` for a real analysis; `2` here is a
-vignette-build-speed compromise, not a recommended value.
+individual. Candidates at `1.0` are supported across all starting
+populations. Lower frequencies identify alternative near-equivalent
+founder sets or a search that would benefit from larger `popSize`,
+`maxiter`, `run`, or `n_reps`. After rerunning, the package again
+selects the best feasible replicate automatically; the breeder evaluates
+the summary, not every run.
 
-### 5.4 What neither method does
+### 5.4 How the methods divide the decision
 
-Both methods answer a real question, but neither answers every question
-a finalised crossing plan needs. Specifically, **neither**:
+Truncation selection returns a merit-ranked parent set. Coverage-only GA
+returns a complementary parent set. Joint GA+TS simultaneously rewards
+complementary block coverage and whole-genome merit. Either GA tool can
+incorporate relationship control through `coancestry_weight` or
+`target_degree`. Family selection returns a group-representative parent
+set. These are alternative shortlist objectives.
 
-- **manages coancestry or inbreeding risk** in the chosen set —
-  [`select_top_blocks()`](https://FAkohoue.github.io/HapBlockR/reference/select_top_blocks.md)/
-  [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)/[`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)
-  have no relatedness penalty. The family-balance check in Step 4 below
-  is a diagnostic you run *afterward*, not a constraint the search
-  itself respects;
-- **assigns differential contributions** — both return a flat set of
-  `n_founders` individuals with no notion that some parents should
-  contribute more crosses than others;
-- **decides who mates whom** — neither produces an actual cross list,
-  only a candidate/founder set.
-
-Dedicated optimal-contribution-selection (OCS) and mate-allocation tools
-(e.g. AlphaMate, Gorjanc lab) are built specifically to solve those
-three problems jointly — typically maximising expected genetic gain
-subject to an explicit group-coancestry constraint, then allocating
-differential contributions and actual matings across the constrained
-set. A practical combined workflow is to use
-[`select_top_blocks()`](https://FAkohoue.github.io/HapBlockR/reference/select_top_blocks.md)/[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-to identify *which candidates are worth considering* (i.e. those
-covering your programme’s important haplotype blocks), then hand that
-shortlist to a dedicated OCS tool for the coancestry-managed
-contribution and mating decision, rather than treating HapBlockR’s
-parent selection as a final mating plan on its own.
+A full crossing block adds two further decisions.
+[`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
+ranks candidate pairs by expected progeny performance, while
+[`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)
+provides Optimal Contribution Selection (OCS) through integrated
+AlphaMate or optiSel engines, or discrete cross selection through
+SimpleMating. OCS assigns differential contributions and constructs a
+mating plan under a population-level relatedness policy. The shortlist
+and downstream tools can therefore be combined according to the
+programme’s objective.
 
 ### 5.5 How the shortlist stage and the downstream stage actually relate
 
@@ -408,13 +429,14 @@ layers are at work:
 - **The shortlist layer** —
   [`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md),
   [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md),
+  [`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md),
   and
   [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md)
-  — are *alternatives to each other*, not a sequence. Each answers “who
-  are my candidate parents” by different logic (single-score ranking,
-  block-coverage search, or group quotas). The normal workflow is to run
-  more than one and compare (Section 5.2’s overlap check, Section 6’s
-  family-balance check), not to feed one’s output into another.
+  — contains alternatives, not a compulsory sequence. They respectively
+  apply single-score ranking, coverage-only GA, joint coverage-and-merit
+  GA, or group quotas. A programme may compare their outputs when it
+  needs to understand how those objectives change the shortlist; one
+  tool’s output is not automatically fed into another.
 - **The downstream layer** —
   [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
   (Section 8) and
@@ -434,18 +456,13 @@ layers are at work:
 [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
 and
 [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)
-are themselves siblings at that downstream layer, not a further sequence
-— cross ranking (Section 8) scores candidate pairs independently, with
-no notion of an overall population-wide plan;
+are siblings at that downstream layer, not a compulsory sequence. Cross
+ranking (Section 8) evaluates candidate pairs independently.
 [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)
-(Section 9) solves a genuinely different problem (contributions and
-matings under an explicit relatedness cap) directly from merit and `G`,
-and does not take
-[`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)’s
-ranked-cross table as an input at all. You can use Section 8’s ranking
-to eyeball which pairings look promising before committing to a Section
-9 run, but that is a manual judgement call, not a data dependency
-between the two functions.
+(Section 9) solves the population-level contribution and mating problem
+directly from merit and `G`. A programme may report UC alongside the OCS
+plan as additional pair-level evidence, but the OCS solver does not
+require the UC table as an input.
 
 **One important qualification to “downstream, consumes whatever you hand
 it.”** That description is accurate for *where candidates come from* –
@@ -459,14 +476,14 @@ explicit, deliberate step rather than an incidental one — and the three
 engines implement it very differently: AlphaMate enforces it *natively,
 inside* its evolutionary algorithm, jointly deciding which subset of
 your candidates contributes at all, how much, and who mates with whom,
-in one optimisation; `"optisel"` instead solves the continuous
-contribution optimum over your *entire* supplied list first, then, only
-as a post-hoc, non-re-optimised patch, zeros out every contribution
-below the `n_parents_max`-th largest (see *Engine differences* in
-Section 9); and `"simplemating"` does not support `n_parents_max` at all
-(ignored, with a message), though its own greedy cross selection can
-still leave some supplied candidates out of the final plan incidentally.
-So: the shortlist you hand
+in one optimisation; `"optisel"` first solves the continuous
+contribution optimum, retains the leading contributors when
+`n_parents_max` is active, and re-solves OCS on that retained subset
+before constructing the discrete plan; and `"simplemating"` reports
+`n_parents_max` as unsupported because its interface has no
+corresponding control, although its own greedy cross selection can still
+leave some supplied candidates out of the final plan incidentally. So:
+the shortlist you hand
 [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)
 is a hard ceiling on who can appear in the mating plan, not a guarantee
 that everyone in it will.
@@ -479,35 +496,31 @@ that everyone in it will.
 | “Are my best-by-value individuals actually covering my target haplotype blocks, or double-counting the same ones?” | [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md), compared against [`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md) |
 | “Is one method clearly better here, or do they agree?” | Run both, check [`intersect()`](https://rdrr.io/r/base/sets.html) (Section 5.2) — low overlap means block coverage and whole-genome ranking disagree and both are worth a look |
 | “Which specific parents should I be most confident about?” | Parents both methods select (a high-overlap subset), and see Step 4 for whether that subset is family-balanced |
-| “I’m worried block-coverage search is selecting on noisy per-block estimates” | `select_parents_ga(merit_weight = ...)`, or the easier `merit_priority = ...` (0-100, auto-calibrated — see [`suggest_merit_weight()`](https://FAkohoue.github.io/HapBlockR/reference/suggest_merit_weight.md)) — Section 5.8 |
+| “I want complementary block coverage and whole-genome merit in one parent-set objective” | [`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md) with the calibrated `merit_priority` control, or an advanced positive `merit_weight` — Section 5.8 |
 | “I want a relatedness cap on the GA’s founder set, without guessing a raw `coancestry_weight`” | `select_parents_ga(target_degree = ...)` (0-90, same convention as [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)) — Section 5.8 |
 | “My programme’s shortlist is naturally ‘best few families, best few lines each’” | [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md) — Section 5.8 |
 | “I need contribution numbers and an actual mating list, with inbreeding under control” | Neither — shortlist candidates here, then use a dedicated OCS/mate-allocation tool (Section 5.3) |
 
-### 5.8 Two further shortlist strategies: merit-weighted GA, and family quotas
+### 5.8 Two further shortlist strategies: joint GA+TS and family quotas
 
-Sections 5.1-5.2 leave two gaps a real programme’s shortlist decision
-often runs into. First,
-[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)’s
-block-coverage search (Section 5.2) has no notion of whole-genome merit
-unless `min_sel_value` pre-filters the candidate pool — and even then, a
-candidate that barely clears the floor is treated identically to one
-that clears it by a wide margin. Since per-block local GEBV are
-themselves statistical estimates, not ground truth, a coverage-only
-search can end up leaning on a candidate whose apparent block coverage
-is partly a noisy artefact. Setting `merit_weight` adds a second,
-additive term to the same fitness function used in Section 5.2 —
-whole-genome merit now competes with block coverage throughout the
-search, not just at the entry gate:
+Sections 5.1-5.2 define merit-only truncation selection and
+coverage-only GA. Many programmes require both signals in the same
+parent-set decision.
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+is the explicit joint tool: it retains the block coverage objective from
+Section 5.2 and adds the selected set’s mean whole-genome merit as an
+active continuous term. It is not a sequential procedure that first
+performs truncation selection and then applies the GA. Both objectives
+are evaluated together for every candidate founder set:
 
 ``` r
-ga_hybrid <- select_parents_ga(
+ga_hybrid <- select_parents_ga_ts(
   value_matrix   = value_matrix,
   n_founders     = 20L,
   strategy       = "no_selfing",
   block_weights  = top_blocks$var_scaled,
   merit_score    = pred$gebv,
-  merit_weight   = 0.5,            # tune against $fitness's typical scale
+  merit_weight   = 0.5,            # advanced raw multiplier
   min_sel_value  = 0.5,
   min_sel_mode   = "percentile",
   seed           = 1L,
@@ -516,22 +529,16 @@ ga_hybrid <- select_parents_ga(
 )
 
 ga_hybrid$mean_merit                       # realised mean merit_score of the chosen set
-#> [1] 0.2114205
+#> [1] 0.2138661
 mean(pred$gebv[ga_sel$selected])           # vs. Section 5.2's coverage-only run
-#> [1] 0.1392832
+#> [1] 0.06773311
 ```
 
-Compare `ga_hybrid$mean_merit` against the coverage-only `ga_sel` run
-from Section 5.2 (and against
-[`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)’s
-own mean merit) to see the term’s effect directly — there is no
-universal correct `merit_weight`, the same tuning approach as
-`coancestry_weight` (Section 5.2) applies.
-
-Guessing `merit_weight = 0.5` above and inspecting the result afterward
-works, but there is an easier way: `merit_priority` states how much you
-care about merit vs. coverage as a plain 0-100 percentage, and HapBlockR
-calibrates the matching `merit_weight` from your own data automatically.
+`merit_weight` is available for programmes with a justified raw scale.
+For routine use, `merit_priority` is the clearer control: it states the
+requested relative merit emphasis on a 0-100 scale, and HapBlockR
+calibrates the corresponding `merit_weight` from the analysed candidate
+pool.
 [`suggest_merit_weight()`](https://FAkohoue.github.io/HapBlockR/reference/suggest_merit_weight.md)
 runs the exact same calibration standalone, so you can see the numbers
 first:
@@ -550,7 +557,7 @@ cal$merit_span; cal$coverage_span; cal$suggested_merit_weight
 #> [1] 1.060747
 #> [1] 1.291864
 
-ga_dial <- select_parents_ga(
+ga_dial <- select_parents_ga_ts(
   value_matrix   = value_matrix,
   n_founders     = 20L,
   strategy       = "no_selfing",
@@ -574,14 +581,26 @@ best-vs-worst achievable *spread* of each term – coverage’s ceiling
 built via a real, feasible greedy-selected group (not an unreachable
 per-block best-value sum), both floors trimmed against a single outlier
 candidate distorting the estimate. `merit_priority = 100` would scale
-merit’s spread to match coverage’s; `50` splits the difference. This is
-one reasonable, clearly-stated definition of “comparable” — not the only
-one — so treat the suggestion as an informed starting point, not a
-uniquely correct answer; `merit_weight` remains available whenever you
-want to fine-tune by hand instead. `merit_weight` and `merit_priority`
-are mutually exclusive on a single
+merit’s spread to match coverage’s; `50` splits the difference. This
+defines the scale directly from attainable contrasts in the supplied
+candidate pool. `merit_weight` remains available when the programme has
+a justified raw multiplier. `merit_weight` and `merit_priority` are
+mutually exclusive in
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md).
+The hybrid function requires one positive merit contribution and
+therefore cannot silently become coverage-only GA; use
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-call — pick one.
+for that objective.
+
+The optional `min_sel_value` is a separate hard eligibility rule applied
+before joint optimisation. Supply a directionally aligned `merit_score`
+for which larger always means better. With
+`min_sel_mode = "sd_above_mean"`, `min_sel_value = 0` retains candidates
+at or above the mean and `1` requires at least one SD superiority.
+`"percentile"` retains the specified top fraction. `"relaxed_pool"`
+deliberately admits candidates down to `mean(score) - k * sd(score)`
+when the programme wants a broader pool for complementarity or
+diversity. It does not mean that lower scores are preferred.
 
 `coancestry_weight` (introduced in Section 5.8/10) has the same scale
 problem, and
@@ -614,15 +633,15 @@ ga_degree <- select_parents_ga(
   n_reps         = 2L
 )
 ga_degree$relatedness_ceiling      # the ceiling target_degree = 30 resolved to
-#> [1] -0.005495706
+#> [1] -0.005767447
 ga_degree$mean_relationship        # the chosen set's actual realised relationship
-#> [1] -0.01119809
+#> [1] -0.008598782
 ```
 
-`coancestry_weight` and `target_degree` are mutually exclusive on a
-single
-[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-call, exactly like `merit_weight`/`merit_priority` – pick one.
+`coancestry_weight` and `target_degree` are mutually exclusive in either
+GA tool. Within
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md),
+`merit_weight` and `merit_priority` are also mutually exclusive.
 
 Second, many programmes’ real shortlist decision already has a different
 shape than either “top-n by value” or “GA-searched coverage set”: pick
@@ -666,18 +685,18 @@ fam_sel <- select_parents_by_family(
 
 fam_sel$family_ranking[, c("family", "topk_mean", "shrinkage_weight", "rank_score", "n_members", "rank", "selected")]
 #>    family topk_mean shrinkage_weight rank_score n_members rank selected
-#> 8   Fam10 0.3257396        0.1858037  0.1626909        10    1     TRUE
-#> 12  Fam12 0.2384607        0.1858037  0.1464742        10    2     TRUE
-#> 5   Fam05 0.1814653        0.1858037  0.1358842        10    3     TRUE
-#> 9   Fam03 0.1708208        0.1858037  0.1339064        10    4     TRUE
-#> 6   Fam02 0.1642355        0.1858037  0.1326829        10    5     TRUE
-#> 7   Fam06 0.1506903        0.1858037  0.1301661        10    6     TRUE
-#> 10  Fam11 0.1498803        0.1858037  0.1300156        10    7    FALSE
-#> 1   Fam07 0.1451764        0.1858037  0.1291416        10    8    FALSE
-#> 3   Fam01 0.1259161        0.1858037  0.1255630        10    9    FALSE
-#> 2   Fam04 0.1254606        0.1858037  0.1254783        10   10    FALSE
-#> 11  Fam08 0.1188236        0.1858037  0.1242452        10   11    FALSE
-#> 4   Fam09 0.1090953        0.1858037  0.1224376        10   12    FALSE
+#> 8   Fam10 0.3257396        0.1858038  0.1626909        10    1     TRUE
+#> 12  Fam12 0.2384607        0.1858038  0.1464742        10    2     TRUE
+#> 5   Fam05 0.1814653        0.1858038  0.1358842        10    3     TRUE
+#> 9   Fam03 0.1708208        0.1858038  0.1339064        10    4     TRUE
+#> 6   Fam02 0.1642355        0.1858038  0.1326829        10    5     TRUE
+#> 7   Fam06 0.1506903        0.1858038  0.1301661        10    6     TRUE
+#> 10  Fam11 0.1498803        0.1858038  0.1300156        10    7    FALSE
+#> 1   Fam07 0.1451764        0.1858038  0.1291416        10    8    FALSE
+#> 3   Fam01 0.1259161        0.1858038  0.1255630        10    9    FALSE
+#> 2   Fam04 0.1254606        0.1858038  0.1254783        10   10    FALSE
+#> 11  Fam08 0.1188236        0.1858038  0.1242452        10   11    FALSE
+#> 4   Fam09 0.1090953        0.1858038  0.1224376        10   12    FALSE
 fam_sel$by_family[, c("family", "individual", "score", "dominant_block", "collision")]
 #>    family individual       score        dominant_block collision
 #> 1   Fam10     ind108  0.38442895    block_2_1000_30023     FALSE
@@ -766,10 +785,10 @@ family_summary <- function(selected_ids, label) {
 }
 
 family_summary(ga_sel$selected, "GA selection")
-#> GA selection -- top family: Fam02 with 20 % of selected parents
+#> GA selection -- top family: Fam10 with 20 % of selected parents
 #> 
-#> Fam02 Fam04 Fam10 Fam01 Fam03 Fam08 Fam11 Fam12 
-#>     4     3     3     2     2     2     2     2
+#> Fam10 Fam08 Fam12 Fam01 Fam05 Fam02 Fam03 Fam04 Fam06 Fam07 Fam11 
+#>     4     3     3     2     2     1     1     1     1     1     1
 family_summary(ts_sel$selected, "Truncation selection")
 #> Truncation selection -- top family: Fam10 with 20 % of selected parents
 #> 
@@ -914,8 +933,8 @@ complementary weaker-but-different one can out-rank two
 mediocre-but-similar strong parents, because it is predicted to
 segregate a better best-progeny tail.
 
-Four variance-prediction modes trade off data requirements against rigor
-(see
+Four variance-prediction modes trade off data requirements against
+rigour (see
 [`?usefulness_criterion`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
 for full detail):
 
@@ -939,13 +958,11 @@ complementary-but-moderate pairing might out-perform two similar elite
 parents as a cross, e.g. where the two parents carry different
 favourable haplotypes at the same blocks rather than the same one.
 
-**When to skip it.** If you only need a parent list, not a cross list –
-stop at Section 5, this adds nothing there. If you need actual
-contribution numbers and a full mating plan balanced across your *whole*
-set of crosses at once, with population-wide inbreeding under an
-explicit cap, this is not that tool either — UC ranks each candidate
-cross independently with no notion of the others, which is exactly the
-gap Section 9 closes next.
+**When UC is the appropriate endpoint.** Use Section 5 when the required
+deliverable is a parent list. Use UC when the deliverable is a ranked
+list of individual crosses. When the programme also requires
+differential contributions and a whole-population mating plan under an
+explicit relatedness cap, continue with Section 9’s OCS tool.
 
 **In practice, choosing a `variance_model`.** Match the mode to data you
 already have rather than reaching for the most rigorous one by default:
@@ -980,17 +997,17 @@ nrow(uc)                                        # one row per candidate pair
 #> [1] 190
 head(uc[, c("parent1", "parent2", "mid_parent_gebv",
             "predicted_variance", "UC", "rank")], 10L)
-#>    parent1 parent2 mid_parent_gebv predicted_variance       UC rank
-#> 1   ind076  ind110      0.04903800          0.5141915 1.307486    1
-#> 2   ind049  ind110      0.11446139          0.4445476 1.284586    2
-#> 3   ind025  ind110      0.20714284          0.3516281 1.247817    3
-#> 4   ind035  ind110      0.07349405          0.4447239 1.243851    4
-#> 5   ind032  ind076      0.11860671          0.3009608 1.081389    5
-#> 6   ind104  ind110      0.14790689          0.2769197 1.071435    6
-#> 7   ind076  ind088      0.16740280          0.2491445 1.043392    7
-#> 8   ind078  ind110      0.10627491          0.2840356 1.041593    8
-#> 9   ind049  ind077      0.14244493          0.2503289 1.020514    9
-#> 10  ind035  ind088      0.19185885          0.2178229 1.010936   10
+#>    parent1 parent2 mid_parent_gebv predicted_variance        UC rank
+#> 1   ind044  ind076      0.10785816          0.2917926 1.0558620    1
+#> 2   ind063  ind076      0.01791723          0.3076336 0.9913140    2
+#> 3   ind027  ind076      0.07204213          0.2636051 0.9730943    3
+#> 4   ind064  ind076      0.11453927          0.2212704 0.9400727    4
+#> 5   ind044  ind102      0.12701273          0.2060055 0.9235616    5
+#> 6   ind027  ind049      0.13746552          0.1966916 0.9157992    6
+#> 7   ind076  ind096     -0.01047133          0.2721193 0.9050167    7
+#> 8   ind044  ind049      0.17328155          0.1644845 0.8850446    8
+#> 9   ind044  ind111      0.20999884          0.1433950 0.8745678    9
+#> 10  ind044  ind103      0.13710446          0.1759178 0.8731893   10
 ```
 
 `selected_proportion` is the fraction of each cross’s progeny you would
@@ -1011,12 +1028,12 @@ something more complementary?
 top_cross <- uc[uc$rank == 1L, ]
 top_cross[, c("parent1", "parent2", "mid_parent_gebv", "predicted_variance", "UC")]
 #>   parent1 parent2 mid_parent_gebv predicted_variance       UC
-#> 1  ind076  ind110        0.049038          0.5141915 1.307486
+#> 1  ind044  ind076       0.1078582          0.2917926 1.055862
 pred$gebv[c(top_cross$parent1, top_cross$parent2)]      # their individual GEBVs
-#>     ind076     ind110 
-#> 0.03942122 0.05865479
+#>     ind044     ind076 
+#> 0.17629511 0.03942122
 range(pred$gebv[ga_sel$selected])                        # vs. the full shortlist's range
-#> [1] 0.03033822 0.35563090
+#> [1] -0.1638485  0.3844290
 ```
 
 If the top-ranked cross’s parents are not simply the two highest-GEBV
@@ -1024,37 +1041,32 @@ individuals in the shortlist, that is UC doing its job: predicting that
 a complementary pairing will segregate a better best-progeny tail than
 the mid-parent value alone would suggest.
 
-Like Section 5,
 [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
-still does not decide *how many* progeny to advance from each cross or
-manage population-wide inbreeding – that is Section 9’s job.
+supplies the pair-level ranking. Section 9 adds programme-wide
+contributions, progeny allocation and relatedness management when those
+are part of the objective.
 
 ------------------------------------------------------------------------
 
 ## 9. Step 7: Turning the shortlist into an actual mating plan with inbreeding under control
 
-This is the gap Section 5.4 flagged explicitly: none of
-[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md),
-[`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md),
-or
-[`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md)
-assigns differential contributions or manages population-wide
-relatedness, and Section 8’s UC ranking scores crosses independently,
-with no constraint tying them into a coherent whole-population plan.
+Section 5 provides alternative parent-shortlisting objectives, and the
+GA can already include a relationship penalty or calibrated relationship
+ceiling. Section 8 adds independent cross ranking.
 [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)
-solves the actual classical Optimal Contribution Selection problem
-(Meuwissen 1997): how much should each parent contribute, and which
-specific matings should be made, to maximise genetic merit subject to an
-explicit cap on the resulting population’s relatedness. Like
+extends these decisions to the classical Optimal Contribution Selection
+problem (Meuwissen 1997): how much should each parent contribute, and
+which specific matings should be made, to maximise genetic merit subject
+to an explicit cap on the resulting population’s relatedness. Like
 [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
 in Section 8, it is a downstream consumer of a shortlist, not tied to
 any one shortlist-generating function: it takes `merit` and `G` for
 whichever parent set you supply (named to match), plus an optional
-`family` grouping, and does not itself take Section 8’s UC ranking as an
-input (see Section 5.5).
+`family` grouping. Section 8’s UC ranking can be reported beside the
+final plan but is not an input required by the OCS calculation.
 
-This package does not implement an OCS solver itself — it wraps three
-mature external engines, chosen via `engine`. Two solve the actual OCS
+HapBlockR provides OCS and mate allocation through three mature engines
+integrated behind one documented interface. Two solve the actual OCS
 problem: the AlphaMate executable (full evolutionary-algorithm mate
 allocation, requires a separately-installed binary via `alphamate_exe`),
 and optiSel’s own solver (`engine = "optisel"`, via
@@ -1105,15 +1117,14 @@ consequences beyond the current cycle. It is also the right tool
 whenever you need an actual mating list with contribution numbers, not
 just a shortlist (Section 5) or a cross ranking (Section 8).
 
-**When to skip it.** For a handful of one-off biparental crosses in an
-early-generation line-development programme, Section 8’s UC ranking is
-usually enough, and a formal population-wide inbreeding cap is not yet
-the binding constraint. If no engine’s dependency is installed and
-installing one isn’t practical right now, fall back to Section 5.8’s
-`coancestry_weight`/`target_degree` arguments — a softer,
-already-in-package way to manage relatedness at the founder-selection
-step, without needing AlphaMate, optiSel, or SimpleMating at all. Note
-that this function’s own `target_degree` and
+**When UC or GA relationship control is sufficient.** For a small number
+of one-off biparental crosses, Section 8’s UC ranking may be the
+complete deliverable. When the objective is relationship-aware founder
+selection rather than differential contributions and a mating plan,
+Section 5.8’s `coancestry_weight` or `target_degree` provides that
+control within the GA. Use OCS when contributions and population-wide
+relatedness are themselves decision variables. Note that this function’s
+own `target_degree` and
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)’s
 `target_degree` (Section 5.8) share the same `[0, 90]` scale and
 direction by design, but are computed by genuinely different mechanisms
@@ -1123,21 +1134,21 @@ frontier extreme;
 interpolates a relatedness ceiling for a penalty inside its GA. Re-tune
 if you switch between them.
 
-**In practice.** Supply `merit` (GEBV or any index you trust) and `G`
-(any relationship matrix you already trust — VanRaden, pedigree, blended
-H; this function does not build one for you). Start with
-`engine = "auto"` (which resolves to `"alphamate"` if a working
-executable is supplied, else `"optisel"` — never silently to
+**In practice.** Supply `merit` (GEBV or the programme’s validated
+index) and `G`. This can be a relationship matrix produced in the
+HapBlockR workflow or another aligned VanRaden, pedigree or blended-H
+matrix. Start with `engine = "auto"` (which resolves to `"alphamate"` if
+a working executable is supplied, else `"optisel"` — never silently to
 `"simplemating"`) and `target_degree = 30` as a first pass, then move
 `target_degree` toward 90 if the resulting `mating_plan`’s relatedness
-looks too high for your programme’s tolerance, or toward 0 if it looks
-too conservative and you suspect merit is being left on the table. All
-three engines honour `max_contrib_per_parent` and guarantee a
-no-repeated-matings mating plan by construction; `n_parents_max` is
-approximated (post-hoc contribution truncation, with a message) under
-`"optisel"` and not supported at all (ignored, with a message) under
-`"simplemating"` — use `engine = "alphamate"` if you need that specific
-constraint enforced natively.
+exceeds your programme’s tolerance, or towards 0 when the policy gives
+greater weight to gain. All three engines honour
+`max_contrib_per_parent` and guarantee a no-repeated-matings plan by
+construction. AlphaMate enforces `n_parents_max` natively. The optiSel
+route retains the leading solved contributors and re-solves OCS on that
+restricted set before constructing and checking the mating plan.
+SimpleMating has no `n_parents_max` control and reports that the
+argument is unsupported.
 
 ``` r
 have_ocs_optisel <- requireNamespace("optiSel", quietly = TRUE) &&
@@ -1166,18 +1177,23 @@ ocs_res <- select_parents_ocs(
 ocs_res$engine_used
 #> [1] "optisel"
 ocs_res$ok                                       # constraints satisfied?
-#> [1] FALSE
+#> [1] TRUE
 head(ocs_res$mating_plan)
-#> [1] parent1           parent2           mean_relationship
-#> <0 rows> (or 0-length row.names)
+#>   parent1 parent2 mean_relationship
+#> 1  ind027  ind049        -0.1603891
+#> 2  ind027  ind051        -0.1639721
+#> 3  ind027  ind070        -0.1938304
+#> 4  ind076  ind082        -0.1484457
+#> 5  ind044  ind102        -0.1544174
+#> 6  ind027  ind104        -0.1376967
 head(ocs_res$contributors[order(-ocs_res$contributors$contribution), ])
 #>        id contribution family
-#> 4  ind025 7.511085e-01  Fam10
-#> 17 ind088 2.183811e-01  Fam12
-#> 19 ind104 3.048776e-02  Fam10
-#> 5  ind032 6.059285e-06  Fam11
-#> 11 ind064 2.614099e-06  Fam08
-#> 15 ind078 1.943321e-06  Fam01
+#> 19 ind108 8.290025e-01  Fam10
+#> 15 ind104 1.204264e-01  Fam10
+#> 20 ind111 5.055490e-02  Fam12
+#> 6  ind064 6.247857e-06  Fam08
+#> 11 ind095 2.274614e-06  Fam10
+#> 3  ind049 2.212687e-06  Fam04
 ```
 
 `target_degree` is the one knob worth exploring manually — raise it
@@ -1215,20 +1231,19 @@ useful periodically even in an established programme, to check whether a
 previously-chosen weight still sits in a sensible place on the current
 cycle’s frontier.
 
-**When to skip it.** If your programme already has institutional
-experience with a specific `coancestry_weight`/`target_degree` value
-that has worked well before, re-sweeping every single cycle has a real
-compute cost (each grid point is a full independent GA run) for limited
-added information – this is not a routine per-cycle step. Under time
-pressure, a single Section 5.8 or Section 9 run with a sensible default
-is often good enough.
+**When a direct run is sufficient.** If the programme has an
+established, reviewed `coancestry_weight` or `target_degree` policy, a
+direct Section 5.8 or Section 9 run applies it efficiently. Repeat the
+frontier sweep when the candidate population, trait priorities or
+diversity policy changes enough to justify reviewing that choice.
 
 **In practice.** Widen `coancestry_weights` well beyond the vignette’s
 speed-constrained 3-point example — the package default of 6 points
 (`c(0, 0.25, 0.5, 1, 2, 4)`) is a better real-analysis starting grid,
 and a denser grid gives a more informative frontier shape at the cost of
-runtime. Once you’ve picked a frontier point by eye, pull the actual
-parent list from `pareto_res$runs[[...]]$selected`, as shown below.
+runtime. Apply the programme’s declared gain and diversity policy to the
+frontier, then retrieve the corresponding parent list from
+`pareto_res$runs[[...]]$selected`, as shown below.
 
 ``` r
 pareto_res <- select_parents_pareto(
@@ -1252,10 +1267,10 @@ pareto_res <- select_parents_pareto(
 
 pareto_res$frontier[, c("coancestry_weight", "mean_merit",
                         "mean_relationship", "pareto_optimal")]
-#>   coancestry_weight   mean_merit mean_relationship pareto_optimal
-#> 1                 0 0.0915585244      -0.007037315           TRUE
-#> 2                 1 0.0170493859      -0.018682473           TRUE
-#> 3                 4 0.0009153423      -0.018503751          FALSE
+#>   coancestry_weight mean_merit mean_relationship pareto_optimal
+#> 1                 0 0.06773311      -0.002616294           TRUE
+#> 2                 4 0.03151422      -0.019039917           TRUE
+#> 3                 1 0.04256270      -0.018917634           TRUE
 ```
 
 Every row is Pareto-optimal by construction here only if no grid point
@@ -1264,30 +1279,25 @@ vignette build speed) most or all rows typically qualify — widen
 `coancestry_weights` in a real analysis for a genuinely informative
 frontier shape. `pareto_res$runs` holds the full
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-output (including `$selected`) for every grid point, so once you’ve
-picked a point off the frontier by eye, the actual parent list is
+output (including `$selected`) for every grid point. Once policy has
+selected frontier row `i`, the parent list is
 `pareto_res$runs[[pareto_res$frontier$run_index[i]]]$selected`.
 
 ------------------------------------------------------------------------
 
-## 11. Step 9: Sanity-checking a heuristic mating plan against the true optimum
+## 11. Step 9: Validating a discrete mating plan against an exact optimum
 
-Every mate-allocation tool used or wrapped in this package — the GA
-search, AlphaMate’s evolutionary algorithm, optiSel’s
-`opticont()`/`matings()` numerical solvers, SimpleMating’s
-`planCross()`/`selectCrosses()` — is a **heuristic** in the sense that
-matters here: none is guaranteed to find the true best *discrete mating
-plan* (optiSel’s continuous contribution-level optimum is exact for that
-sub-problem, but converting it to an actual discrete Sire x Dam list,
-and enforcing per-parent/no-repeat constraints alongside it, is still
-solved numerically, not exactly).
+The GA, AlphaMate, optiSel and SimpleMating solve broader or differently
+formulated selection and mate-allocation problems. OptiSel, for example,
+obtains the continuous optimal-contribution solution before the discrete
+mating allocation.
 [`validate_crosses_exact()`](https://FAkohoue.github.io/HapBlockR/reference/validate_crosses_exact.md)
-solves the same core cross-selection problem exactly, via binary integer
-linear programming (`lpSolve`), so a heuristic plan can be checked
-against a genuine optimum on a small-enough candidate set. This is a
-validation tool, not a production replacement — integer programming does
-not scale to the size of a full candidate cross list the way a GA or
-greedy heuristic does (see `max_vars`).
+provides an additional, like-for-like quality check for a tractable
+*discrete cross-selection* problem. It uses binary integer linear
+programming (`lpSolve`) to calculate the best plan for the supplied
+candidate crosses, criterion and constraints, then reports the
+comparison with a submitted plan. `max_vars` keeps this exact check
+within a computationally appropriate problem size.
 
 **When to reach for it.** Use this when you want a documented,
 defensible answer to “how good is our heuristic mating plan, really?” —
@@ -1299,21 +1309,22 @@ any culling — see `max_vars`), and when you’re deciding between two
 heuristic plans and want a common yardstick rather than comparing their
 own self-reported objectives.
 
-**When to skip it.** This is not a routine, cycle-to-cycle production
-step – for day-to-day mating-plan generation, use Section 9’s engines
-directly. Don’t reach for it on a large, unfiltered candidate set
-either; pre-filter first (a tighter `culling_pairwise_k`, or restrict to
-your top-ranked crosses by `criterion_col`) rather than raising
-`max_vars` to force a big problem through.
+**When exact validation adds value.** Use it for a tractable candidate
+table when the programme wants an independent optimality gap, when
+comparing settings, or when qualifying a new planning method. For
+routine large candidate sets, Section 9’s engines generate the
+production plan; a declared `culling_pairwise_k` or criterion-based
+candidate filter can create a smaller problem for periodic exact
+validation.
 
 **In practice.** Feed it the same
 [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
 output (or any cross table with a criterion column) you’d otherwise hand
 to a heuristic tool, matching whatever `max_cross`/`n_cross` constraints
-your real plan used, and compare `gap_pct`. A large gap is a signal to
-reconsider the heuristic tool or its settings — not necessarily a signal
-to switch to ILP as your production method, since this tool’s scaling
-limits make that impractical for a full programme.
+your real plan used, and compare `gap_pct`. A large gap identifies scope
+to improve the candidate filter, settings or discrete allocation. A
+small gap confirms that the submitted plan captured most or all of the
+attainable criterion value for that declared problem.
 
 ``` r
 have_lpsolve <- requireNamespace("lpSolve", quietly = TRUE)
@@ -1338,11 +1349,11 @@ exact_res <- validate_crosses_exact(
 )
 
 exact_res$exact_objective
-#> [1] 15.06278
+#> [1] 12.99078
 exact_res$heuristic_objective
-#> [1] 16.25578
+#> [1] 13.63014
 exact_res$gap_pct
-#> [1] -7.92014
+#> [1] -4.921633
 ```
 
 This is exactly why the check exists: “take the top 15 crosses by UC”
@@ -1380,15 +1391,13 @@ representing the full diversity of the panel matters more than merit; or
 starting a new diversification or pre-breeding programme from a wide
 genetic base, deliberately before any selection pressure is applied.
 
-**When to skip it.** If you’re choosing crossing parents for the *next*
-cycle of an active improvement programme, merit matters there and this
-tool optimises diversity alone — Sections 5, 8, and 9 are the
-merit-driven tools for that job (the `merit`/`min_sel_value` floor here
-only sets a minimum bar, it does not rank by merit above that bar). Also
-worth pausing on if your relationship matrix `G` is not yet trustworthy
-(poor marker density, wrong ploidy assumptions) — the
-maximin/mean-distance traversal is only as good as the distances it’s
-given.
+**When to combine it with merit-driven tools.** For a next-cycle
+crossing shortlist, combine the diversity objective with
+`merit`/`min_sel_value` or evaluate the retained set with Sections 5, 8,
+and 9. The floor defines eligibility, while the traversal remains
+diversity-first. As with every relationship-based method, the selected
+representation reflects the marker density, ploidy specification and `G`
+supplied by the user.
 
 **In practice.** Choose `"maximin"` (default) if avoiding near-duplicate
 accessions is the priority; choose `"mean_distance"` if you want the
@@ -1412,22 +1421,20 @@ core_res <- select_core_collection(
 )
 
 core_res$mean_distance
-#> [1] 1.133566
+#> [1] 1.060864
 core_res$min_distance
-#> [1] 0.9313551
+#> [1] 0.9650674
 sort(core_res$selected)
-#>  [1] "ind015" "ind026" "ind035" "ind039" "ind045" "ind049" "ind061" "ind067"
-#>  [9] "ind072" "ind084" "ind086" "ind088" "ind093" "ind095" "ind113"
+#>  [1] "ind005" "ind015" "ind025" "ind026" "ind035" "ind045" "ind049" "ind055"
+#>  [9] "ind061" "ind072" "ind084" "ind086" "ind093" "ind095" "ind113"
 length(intersect(core_res$selected, ga_sel$selected))   # overlap with Section 5's block-coverage set
-#> [1] 5
+#> [1] 3
 ```
 
-A low overlap with `ga_sel$selected` is expected and informative, not a
-contradiction — Section 5’s GA set is engineered for joint
-favourable-block coverage among above-average performers, while this set
-is engineered for spread across the whole genomic diversity space. They
-answer different questions and are not meant to converge on the same
-list.
+A low overlap with `ga_sel$selected` shows that Section 5’s GA set,
+engineered for joint favourable-block coverage, differs from the set
+engineered for spread across the whole genomic diversity space. They
+answer different questions.
 
 ------------------------------------------------------------------------
 
@@ -1437,7 +1444,7 @@ list.
 |----|----|----|
 | “What’s the simplest defensible parent shortlist?” | [`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md) | 5.1 |
 | “Which *set* of parents jointly covers my target haplotype blocks?” | [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md) | 5.2 |
-| “I want block coverage, but merit to keep pulling on the search too (noise-aware)” | `select_parents_ga(merit_weight = ...)` or `merit_priority = ...` (auto-calibrated, [`suggest_merit_weight()`](https://FAkohoue.github.io/HapBlockR/reference/suggest_merit_weight.md)) | 5.8 |
+| “I want block coverage and whole-genome merit in one objective” | [`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md) with `merit_priority`, or an advanced positive `merit_weight` | 5.8 |
 | “I want a relatedness cap on the GA’s founder set, without guessing a raw penalty weight” | `select_parents_ga(coancestry_weight = ...)` or `target_degree = ...` (same 0-90 dial as [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md)) | 5.8 |
 | “My shortlist is naturally ‘best few families, best few lines each’” | [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md) | 5.8 |
 | “Which specific *crosses* among my shortlisted parents are worth making?” | [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md) | 8 |
@@ -1446,18 +1453,18 @@ list.
 | “How close is my heuristic mating plan to the true best achievable plan?” | [`validate_crosses_exact()`](https://FAkohoue.github.io/HapBlockR/reference/validate_crosses_exact.md) | 11 |
 | “I want a diverse founder/reference panel, not a merit-ranked shortlist” | [`select_core_collection()`](https://FAkohoue.github.io/HapBlockR/reference/select_core_collection.md) | 12 |
 
-The three shortlist-generating functions among the rows above –
+The four shortlist-generating functions among the rows above —
 [`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md),
-[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-(the merit- and relatedness-dial rows are variants of this same
-function, not separate tools), and
+[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md),
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md),
+and
 [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md)
-— are *alternatives to each other* for the same “who are my candidate
-parents” question, not a sequence. Every row from
+— provide alternative objectives for the same “who are my candidate
+parents” question. They are not a compulsory sequence. Every row from
 [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)
-onward is a downstream consumer of whichever shortlist you settled on
-from those three (or any other list you supply), not specifically the
-output of
+onward is a downstream consumer of whichever shortlist you selected from
+those tools, or any other list you supply, not specifically the output
+of
 [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
 — see Section 5.5 for the full explanation of how these two layers
 relate.
@@ -1486,33 +1493,33 @@ crossing cycle:
 ``` r
 final_parents <- data.frame(
   Genotype       = ga_sel$selected,
-  SelectionIndex = index_df$SelectionIndex[match(ga_sel$selected, index_df$id)],
+  SelectionIndex = pred$gebv[ga_sel$selected],
   Family         = family_id[ga_sel$selected],
   WholeGenomeGEBV = pred$gebv[ga_sel$selected],
   stringsAsFactors = FALSE
 )
 final_parents[order(-final_parents$SelectionIndex), ]
 #>        Genotype SelectionIndex Family WholeGenomeGEBV
-#> ind035   ind035         1.5574  Fam02      0.08833332
-#> ind104   ind104         1.4174  Fam10      0.23715899
-#> ind032   ind032         1.3820  Fam11      0.19779221
-#> ind088   ind088         1.2763  Fam12      0.29538438
-#> ind072   ind072         1.2757  Fam10      0.14545741
-#> ind077   ind077         1.1413  Fam02      0.11462186
-#> ind025   ind025         1.0970  Fam10      0.35563090
-#> ind007   ind007         1.0402  Fam02      0.10505889
-#> ind054   ind054         0.8542  Fam03      0.13232083
-#> ind064   ind064         0.7880  Fam08      0.18965733
-#> ind061   ind061         0.7863  Fam03      0.03033822
-#> ind049   ind049         0.7726  Fam04      0.17026799
-#> ind002   ind002         0.7635  Fam04      0.07506605
-#> ind094   ind094         0.7502  Fam11      0.14718568
-#> ind081   ind081         0.5434  Fam02      0.12888493
-#> ind110   ind110         0.5067  Fam01      0.05865479
-#> ind040   ind040         0.4301  Fam04      0.08854499
-#> ind016   ind016        -0.0085  Fam08      0.03198980
-#> ind078   ind078        -0.1099  Fam01      0.15389503
-#> ind076   ind076        -0.3633  Fam12      0.03942122
+#> ind108   ind108    0.384428951  Fam10     0.384428951
+#> ind111   ind111    0.243702562  Fam12     0.243702562
+#> ind104   ind104    0.237158990  Fam10     0.237158990
+#> ind095   ind095    0.194663707  Fam10     0.194663707
+#> ind064   ind064    0.189657326  Fam08     0.189657326
+#> ind044   ind044    0.176295109  Fam12     0.176295109
+#> ind049   ind049    0.170267994  Fam04     0.170267994
+#> ind027   ind027    0.104663047  Fam11     0.104663047
+#> ind103   ind103    0.097913812  Fam01     0.097913812
+#> ind102   ind102    0.077730342  Fam05     0.077730342
+#> ind093   ind093    0.061364228  Fam05     0.061364228
+#> ind076   ind076    0.039421216  Fam12     0.039421216
+#> ind105   ind105    0.008365577  Fam07     0.008365577
+#> ind063   ind063   -0.003586749  Fam10    -0.003586749
+#> ind096   ind096   -0.060363884  Fam02    -0.060363884
+#> ind070   ind070   -0.065138591  Fam08    -0.065138591
+#> ind051   ind051   -0.077208029  Fam01    -0.077208029
+#> ind107   ind107   -0.113786138  Fam08    -0.113786138
+#> ind106   ind106   -0.147038776  Fam06    -0.147038776
+#> ind082   ind082   -0.163848533  Fam03    -0.163848533
 ```
 
 This table — not the block-importance table, not the PCA plot — is the
@@ -1534,18 +1541,21 @@ whichever of those you need next.
 
 ## 15. See also
 
-- **The HapBlockR Breeder’s Guide** (`HapBlockR_Breeder_Guide.pdf`) — a
-  standalone, non-technical companion covering the same seven tools from
-  Sections 5 and 8-12 (what each is, when to reach for it, when to be
-  cautious, how it works in practice, plus a programme-shape decision
-  guide and glossary), with no R code, for breeders, programme managers,
-  or reviewers who won’t run this vignette themselves. Distributed as a
-  PDF (not an editable Word document) so it reaches readers as a fixed
-  reference. A `.pdf` has no vignette engine, so it isn’t indexed by
+- **The HapBlockR Breeder’s Guide** (`HapBlockR_Breeder_Guide.pdf` and
+  `HapBlockR_Breeder_Guide.docx`) — a standalone, non-technical
+  companion covering the same nine tools from Sections 5 and 8-12 (what
+  each is, when to reach for it, how to interpret its output, a worked
+  decision, uncertainty and feasibility gates, plus a programme-shape
+  decision guide, sign-off form, and glossary), with no R code, for
+  breeders, programme managers, or reviewers who won’t run this vignette
+  themselves. It is distributed as a tagged PDF and an editable Word
+  document. Its source is version controlled under `inst/guide/`. These
+  standalone editions are not indexed by
   [`vignette()`](https://rdrr.io/r/utils/vignette.html) the way this
-  document is — open it directly from the package’s GitHub repository,
-  or, once the package is installed, run
-  [`HapBlockR::open_breeder_guide()`](https://FAkohoue.github.io/HapBlockR/reference/open_breeder_guide.md).
+  document is. Open either edition directly from the package repository
+  or run
+  [`HapBlockR::open_breeder_guide()`](https://FAkohoue.github.io/HapBlockR/reference/open_breeder_guide.md)
+  after installation.
 - **Introduction to HapBlockR** — LD block detection itself, and the
   haplotype-stacking / association-testing tools
   ([`score_favorable_haplotypes()`](https://FAkohoue.github.io/HapBlockR/reference/score_favorable_haplotypes.md),
@@ -1570,5 +1580,5 @@ whichever of those you need next.
   [`?select_core_collection`](https://FAkohoue.github.io/HapBlockR/reference/select_core_collection.md)
   — full argument documentation, references, and (for
   [`select_parents_ocs()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ocs.md))
-  the honest verification-confidence notes on each external engine, for
-  the five functions introduced in Sections 8-12.
+  engine-specific constraint and verification details for the five
+  functions introduced in Sections 8-12.

@@ -25,7 +25,9 @@ select_parents_pareto(
 }
 \arguments{
 \item{value_matrix, n_founders, strategy, block_weights, top_candidates, popSize, maxiter, run, pmutation, pcrossover}{Passed through to \code{\link{select_parents_ga}} at every grid point;
-see its documentation.}
+see its documentation. The strategy values include
+\code{"OHS"} (Optimal Haplotype Selection) and
+\code{"OPV"} (Optimal Population Value).}
 
 \item{G}{Relationship/kinship matrix, required (used both for the
 coancestry penalty during each GA run and to report each resulting
@@ -73,20 +75,16 @@ A list with:
 \description{
 Sweeps \code{\link{select_parents_ga}}'s \code{coancestry_weight} across a
 grid of values, runs the GA at each one, and Pareto-filters the resulting
-(merit, relatedness) points into an empirical frontier -- letting you see
-the actual gain-vs-diversity tradeoff curve for your candidate population
-and pick a point off it deliberately, rather than guessing a single
-\code{coancestry_weight} value and hoping it was the right one.
+(merit, relatedness) points into an empirical frontier. This displays the
+realised gain-vs-diversity trade-off for the candidate population so that
+the programme can apply a declared policy to select a frontier point.
 }
 \details{
-This does not implement a new multi-objective search algorithm (e.g.
-NSGA-II) -- it reuses \code{\link{select_parents_ga}} (already
-implemented, already verified) as the underlying solver at each grid
-point, and \code{\link{pareto_front}} to filter the resulting points down
-to the actually non-dominated ones (a weight sweep is not guaranteed to
-only produce non-dominated results, since each run is itself a heuristic
-GA search -- filtering removes sweep points that turned out to be
-strictly worse than another point in both merit and relatedness).
+The function uses \code{\link{select_parents_ga}} as the solver at each
+grid point and \code{\link{pareto_front}} to retain the non-dominated
+results. This weight-sweep formulation supplies complete GA diagnostics at
+every point and removes any solution that is lower in merit and higher in
+relatedness than another solution.
 
 Runtime is the sum of every grid point's GA run -- with the default 6
 grid points and \code{n_reps = 3}, that is 18 GA searches. Lower

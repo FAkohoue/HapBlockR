@@ -1,0 +1,39 @@
+Package: DesiredGainR
+Type: Package
+Title: Desired-Gain Selection Index and Quadratic Genomic Selection
+        Index Tools for Plant Breeding
+Version: 0.2.0
+Authors@R: 
+    person(
+      given   = "Félicien",
+      family  = "Akohoue",
+      email   = "akohoue.f@gmail.com",
+      role    = c("aut", "cre"),
+      comment = c(ORCID = "0000-0002-2160-0182")
+    )
+Description: Provides auditable multi-trait selection-index tools for plant
+    breeding programs. The desired-gain selection index (DGSI) searches for
+    coefficients whose realised response approaches breeder-defined targets,
+    following Joukhadar et al. (2024) <doi:10.3389/fpls.2024.1337388>.
+    The quadratic genomic selection index (QGSI) scores genomic estimated
+    breeding values with an explicit linear-weight vector and a validated
+    symmetric matrix of squared and cross-product weights, following
+    Ceron-Rojas et al. (2026) <doi:10.1038/s41467-026-69890-3>. Results include
+    covariance provenance, automatic replicate selection, convergence and
+    stability diagnostics, eligibility decisions, rankings, and component-wise
+    score contributions.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports: data.table, stats
+Suggests: knitr, rmarkdown, testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/FAkohoue/DesiredGainR,
+        https://FAkohoue.github.io/DesiredGainR/
+BugReports: https://github.com/FAkohoue/DesiredGainR/issues
+Config/roxygen2/version: 8.0.0
+Author: Félicien Akohoue [aut, cre] (ORCID:
+    <https://orcid.org/0000-0002-2160-0182>)
+Maintainer: Félicien Akohoue <akohoue.f@gmail.com>
+Built: R 4.5.0; ; 2026-07-26 02:16:04 UTC; windows

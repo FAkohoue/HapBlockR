@@ -4,10 +4,9 @@ Sweeps
 [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
 `coancestry_weight` across a grid of values, runs the GA at each one,
 and Pareto-filters the resulting (merit, relatedness) points into an
-empirical frontier – letting you see the actual gain-vs-diversity
-tradeoff curve for your candidate population and pick a point off it
-deliberately, rather than guessing a single `coancestry_weight` value
-and hoping it was the right one.
+empirical frontier. This displays the realised gain-vs-diversity
+trade-off for the candidate population so that the programme can apply a
+declared policy to select a frontier point.
 
 ## Usage
 
@@ -39,7 +38,9 @@ select_parents_pareto(
 
   Passed through to
   [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-  at every grid point; see its documentation.
+  at every grid point; see its documentation. The strategy values
+  include `"OHS"` (Optimal Haplotype Selection) and `"OPV"` (Optimal
+  Population Value).
 
 - G:
 
@@ -103,17 +104,13 @@ A list with:
 
 ## Details
 
-This does not implement a new multi-objective search algorithm (e.g.
-NSGA-II) – it reuses
+The function uses
 [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-(already implemented, already verified) as the underlying solver at each
-grid point, and
+as the solver at each grid point and
 [`pareto_front`](https://FAkohoue.github.io/HapBlockR/reference/pareto_front.md)
-to filter the resulting points down to the actually non-dominated ones
-(a weight sweep is not guaranteed to only produce non-dominated results,
-since each run is itself a heuristic GA search – filtering removes sweep
-points that turned out to be strictly worse than another point in both
-merit and relatedness).
+to retain the non-dominated results. This weight-sweep formulation
+supplies complete GA diagnostics at every point and removes any solution
+that is lower in merit and higher in relatedness than another solution.
 
 Runtime is the sum of every grid point's GA run – with the default 6
 grid points and `n_reps = 3`, that is 18 GA searches. Lower `n_reps` or

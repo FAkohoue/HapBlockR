@@ -201,7 +201,13 @@ compare_block_effects(
 
 ## Value
 
-A named list of class `c("HapBlockR_effect_concordance", "list")`:
+A `hapblockr_result` of class
+`c("HapBlockR_effect_concordance", "hapblockr_result", "list")`, also
+carrying a `result_contract` (parameters, identifiers, transformations,
+quality gates, `concordance` as the decision table, and `shared_alleles`
+as the uncertainty table). Check with
+[`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
+before treating a block as replicated:
 
 - `concordance`:
 
@@ -346,38 +352,38 @@ conc <- compare_block_effects(res_1, res_2,
 
 # Replicated blocks
 conc$concordance[conc$concordance$replicated, ]
-#>               block_id CHR start_bp end_bp trait n_alleles_pop1 n_alleles_pop2
-#> 5 block_2_86236_105290   2    86236 105290 trait              8              5
+#>             block_id CHR start_bp end_bp trait n_alleles_pop1 n_alleles_pop2
+#> 1 block_1_1000_25027   1     1000  25027 trait              7              7
 #>   n_shared_alleles enough_shared effect_correlation direction_agreement
-#> 5                5          TRUE              0.674                 0.8
-#>   directionally_concordant meta_effect  meta_SE  meta_z    meta_p Q_stat Q_df
-#> 5                     TRUE   -0.063317 0.126322 -0.5012 0.6162045 1.9275    5
+#> 1                7          TRUE             0.5488              0.8571
+#>   directionally_concordant meta_effect  meta_SE  meta_z   meta_p Q_stat Q_df
+#> 1                     TRUE   -0.034451 0.119359 -0.2886 0.772865 4.4024    7
 #>         Q_p I2 replicated boundary_overlap_ratio boundary_warning match_type
-#> 5 0.8590893  0       TRUE                      1            FALSE      exact
+#> 1 0.7324312  0       TRUE                      1            FALSE      exact
 
 # Full per-allele details
 head(conc$shared_alleles)
-#>             block_id CHR start_bp end_bp trait                  allele
-#> 1 block_1_1000_25027   1     1000  25027 trait block_1_1000_25027_hap1
-#> 2 block_1_1000_25027   1     1000  25027 trait block_1_1000_25027_hap2
-#> 3 block_1_1000_25027   1     1000  25027 trait block_1_1000_25027_hap3
-#> 4 block_1_1000_25027   1     1000  25027 trait block_1_1000_25027_hap5
-#> 5 block_1_1000_25027   1     1000  25027 trait block_1_1000_25027_hap4
-#> 6 block_1_1000_25027   1     1000  25027 trait block_1_1000_25027_hap6
+#>             block_id CHR start_bp end_bp trait                    allele
+#> 1 block_1_1000_25027   1     1000  25027 trait 1011121012111011210020110
+#> 2 block_1_1000_25027   1     1000  25027 trait 0111021121110121201121101
+#> 3 block_1_1000_25027   1     1000  25027 trait 0010010011000010101111000
+#> 4 block_1_1000_25027   1     1000  25027 trait 0000020022000020200020000
+#> 5 block_1_1000_25027   1     1000  25027 trait 2022222002222002220020220
+#> 6 block_1_1000_25027   1     1000  25027 trait 0121011110110111102212101
 #>   effect_pop1  SE_pop1 p_wald_pop1 effect_pop2  SE_pop2 p_wald_pop2
 #> 1   -0.696700 0.367443  0.06207764    0.211897 0.347946   0.5455243
-#> 2   -0.503355 0.385732  0.19618931   -0.174085 0.401162   0.6663514
+#> 2   -0.503355 0.385732  0.19618931   -0.338970 0.510885   0.5103244
 #> 3    0.363369 0.415221  0.38450038    0.757311 0.501033   0.1375008
-#> 4    0.357132 0.447552  0.42758770   -0.729625 0.501925   0.1528313
-#> 5    0.227578 0.424338  0.59344356   -0.338970 0.510885   0.5103244
-#> 6   -0.263599 0.556897  0.63744636    0.562911 0.506570   0.2722476
+#> 4    0.357132 0.447552  0.42758770    0.143753 0.585729   0.8072181
+#> 5    0.227578 0.424338  0.59344356    0.562911 0.506570   0.2722476
+#> 6   -0.263599 0.556897  0.63744636   -0.729625 0.501925   0.1528313
 #>   direction_agree ivw_effect   ivw_SE
 #> 1           FALSE  -0.217657 0.252647
-#> 2            TRUE  -0.345174 0.278049
+#> 2            TRUE  -0.443669 0.307841
 #> 3            TRUE   0.523766 0.319704
-#> 4           FALSE  -0.124215 0.334043
-#> 5           FALSE  -0.003712 0.326425
-#> 6           FALSE   0.188682 0.374731
+#> 4            TRUE   0.278476 0.355621
+#> 5            TRUE   0.365852 0.325291
+#> 6            TRUE  -0.520742 0.372839
 
 # Summary
 print(conc)
@@ -389,7 +395,7 @@ print(conc)
 #>   Directionally concordant:   1 
 #>   Replicated (dir + Q_p>0.05): 1 
 #>   Boundary warnings:          0 (overlap ratio < 0.8 )
-#>   Median I2 (heterogeneity):  11.4 %
-#>   Shared allele comparisons:  61 
+#>   Median I2 (heterogeneity):  0 %
+#>   Shared allele comparisons:  56 
 # }
 ```

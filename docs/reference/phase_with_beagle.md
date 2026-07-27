@@ -26,6 +26,16 @@ phase_with_beagle(
   window = NULL,
   overlap = NULL,
   beagle_args = "",
+  required_beagle_major = 5L,
+  min_genotype_concordance = 0.99,
+  min_imputation_rate = 0,
+  truth_vcf = NULL,
+  max_switch_error_rate = 1,
+  min_truth_dosage_accuracy = 0,
+  min_truth_allele_concordance = 0,
+  min_truth_call_rate = 0,
+  require_switch_information = TRUE,
+  return_details = FALSE,
   verbose = TRUE
 )
 ```
@@ -42,8 +52,9 @@ phase_with_beagle(
 
 - beagle_jar:
 
-  Path to `beagle.jar`. Default: searched in `dirname(out_prefix)`, then
-  standard locations.
+  Path to `beagle.jar`. When omitted, HapBlockR checks option
+  `HapBlockR.beagle_jar`, environment variable `HAPBLOCKR_BEAGLE_JAR`,
+  and `beagle.jar` beside `out_prefix`, in that order.
 
 - java_path:
 
@@ -96,14 +107,68 @@ phase_with_beagle(
 
   Additional Beagle arguments string, space-separated. Default `""`.
 
+- required_beagle_major:
+
+  Integer. Supported Beagle major version. Default `5L`; execution stops
+  when the log reports another major version or no verifiable version.
+
+- min_genotype_concordance:
+
+  Minimum dosage concordance at genotypes that were observed before
+  phasing. Default `0.99`.
+
+- min_imputation_rate:
+
+  Minimum fraction of initially missing genotypes that must be called
+  after phasing. Default `0`; ignored when the input contains no missing
+  genotypes.
+
+- truth_vcf:
+
+  Optional path to a phased truth-set VCF. When supplied,
+  [`assess_phasing_accuracy`](https://FAkohoue.github.io/HapBlockR/reference/assess_phasing_accuracy.md)
+  calculates switch error, dosage accuracy, allele concordance, and call
+  rate. Default `NULL`.
+
+- max_switch_error_rate:
+
+  Maximum truth-set switch-error rate. Default `1`.
+
+- min_truth_dosage_accuracy:
+
+  Minimum truth-set dosage accuracy. Default `0`.
+
+- min_truth_allele_concordance:
+
+  Minimum truth-set phased-allele concordance. Default `0`.
+
+- min_truth_call_rate:
+
+  Minimum call rate against observed truth genotypes. Default `0`.
+
+- require_switch_information:
+
+  Logical. Require the truth set to contain at least one informative
+  heterozygous transition. Default `TRUE`.
+
+- return_details:
+
+  Logical. Return a structured result containing the output path,
+  provenance, and quality-control report. When `FALSE`, the historical
+  character path is returned with the same information in attributes.
+  Default `FALSE`.
+
 - verbose:
 
   Logical. Default `TRUE`.
 
 ## Value
 
-Invisibly returns the path to the phased VCF.gz. Beagle stdout and
-stderr are written to `out_prefix.log`.
+When `return_details = FALSE`, invisibly returns the path to the phased
+VCF.gz with provenance and quality-control attributes. When
+`return_details = TRUE`, invisibly returns a structured list with the
+output path, log path, provenance, and quality-control results. Beagle
+stdout and stderr are written to `out_prefix.log`.
 
 ## Note
 

@@ -219,7 +219,7 @@ run_ldx_pipeline(
   Integer. Number of representative SNPs sampled from each side of an
   inter-block gap when `close_gaps_with_snps = TRUE` to evaluate whether
   each gap SNP is more strongly associated with the left or right
-  neighboring block. Default `2L`.
+  neighbouring block. Default `2L`.
 
 - checkLargest:
 
@@ -354,13 +354,14 @@ res <- run_ldx_pipeline(
 #> [HapBlockR] Hap QC: n_snps range [20, 35] | blocks=92 | NA_matrix=0
 #> [HapBlockR] Pipeline QC: all checks passed.
 if (FALSE) { # \dontrun{
-# With Beagle phasing (place beagle.jar in out_dir first):
+# With explicitly configured external Beagle 5.x:
 res2 <- run_ldx_pipeline(
   geno_source = "data.vcf.gz", out_dir = "results/",
   out_blocks = "results/blocks.csv",
   out_diversity = "results/diversity.csv",
   out_hap_matrix = "results/hap_matrix.csv",
-  phase = TRUE, beagle_threads = 4L,
+  phase = TRUE, beagle_jar = "/absolute/path/to/beagle.jar",
+  beagle_threads = 2L,
   beagle_java_mem_gb = 8, beagle_seed = 42L
 )
 } # }# }

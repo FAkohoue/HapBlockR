@@ -163,6 +163,38 @@ read_phased_vcf <- function(vcf_file, min_maf = 0.0, verbose = TRUE) {
 }
 
 
+.parse_beagle_version <- function(log_lines) {
+  if (!is.character(log_lines) || !length(log_lines))
+    return(NA_character_)
+
+  # Beagle logs normally begin with text such as "beagle.27Feb25.75f.jar
+  # (version 5.5)". Require an explicit version label or a version number
+  # immediately following "Beagle" so that dates embedded in JAR names
+  # cannot be mistaken for the software version.
+  labelled <- grep(
+    "(?:beagle[^\\r\\n]*?\\bversion\\s*[:=]?\\s*|\\bbeagle\\s+)([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)",
+    log_lines,
+    value = TRUE,
+    ignore.case = TRUE,
+    perl = TRUE
+  )
+  if (!length(labelled))
+    return(NA_character_)
+
+  version <- sub(
+    ".*(?:\\bversion\\s*[:=]?\\s*|\\bbeagle\\s+)([0-9]+\\.[0-9]+(?:\\.[0-9]+)?).*",
+    "\\1",
+    labelled[1L],
+    ignore.case = TRUE,
+    perl = TRUE
+  )
+  if (grepl("^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$", version, perl = TRUE))
+    version
+  else
+    NA_character_
+}
+
+
 #' Statistical Phasing via Beagle 5.x
 #'
 #' @description
@@ -175,8 +207,10 @@ read_phased_vcf <- function(vcf_file, min_maf = 0.0, verbose = TRUE) {
 #'
 #' @param input_vcf   Path to input VCF or VCF.gz (unphased).
 #' @param out_prefix  Output path prefix. Beagle appends \code{.vcf.gz}.
-#' @param beagle_jar  Path to \code{beagle.jar}. Default: searched in
-#'   \code{dirname(out_prefix)}, then standard locations.
+#' @param beagle_jar  Path to \code{beagle.jar}. When omitted, HapBlockR
+#'   checks option \code{HapBlockR.beagle_jar}, environment variable
+#'   \code{HAPBLOCKR_BEAGLE_JAR}, and \code{beagle.jar} beside
+#'   \code{out_prefix}, in that order.
 #' @param java_path   Java executable. Default \code{"java"}.
 #' @param java_mem_gb Java heap size in GB (e.g. \code{8} sets \code{-Xmx8g}).
 #'   Default \code{NULL} (uses JVM default). Increase for large VCFs.
@@ -193,8 +227,36 @@ read_phased_vcf <- function(vcf_file, min_maf = 0.0, verbose = TRUE) {
 #' @param overlap     Beagle window overlap. Default \code{NULL} (Beagle default).
 #' @param beagle_args Additional Beagle arguments string, space-separated.
 #'   Default \code{""}.
+#' @param required_beagle_major Integer. Supported Beagle major version.
+#'   Default \code{5L}; execution stops when the log reports another major
+#'   version or no verifiable version.
+#' @param min_genotype_concordance Minimum dosage concordance at genotypes
+#'   that were observed before phasing. Default \code{0.99}.
+#' @param min_imputation_rate Minimum fraction of initially missing genotypes
+#'   that must be called after phasing. Default \code{0}; ignored when the
+#'   input contains no missing genotypes.
+#' @param truth_vcf Optional path to a phased truth-set VCF. When supplied,
+#'   \code{\link{assess_phasing_accuracy}} calculates switch error, dosage
+#'   accuracy, allele concordance, and call rate. Default \code{NULL}.
+#' @param max_switch_error_rate Maximum truth-set switch-error rate. Default
+#'   \code{1}.
+#' @param min_truth_dosage_accuracy Minimum truth-set dosage accuracy. Default
+#'   \code{0}.
+#' @param min_truth_allele_concordance Minimum truth-set phased-allele
+#'   concordance. Default \code{0}.
+#' @param min_truth_call_rate Minimum call rate against observed truth
+#'   genotypes. Default \code{0}.
+#' @param require_switch_information Logical. Require the truth set to contain
+#'   at least one informative heterozygous transition. Default \code{TRUE}.
+#' @param return_details Logical. Return a structured result containing the
+#'   output path, provenance, and quality-control report. When \code{FALSE},
+#'   the historical character path is returned with the same information in
+#'   attributes. Default \code{FALSE}.
 #' @param verbose     Logical. Default \code{TRUE}.
-#' @return Invisibly returns the path to the phased VCF.gz.
+#' @return When \code{return_details = FALSE}, invisibly returns the path to
+#'   the phased VCF.gz with provenance and quality-control attributes. When
+#'   \code{return_details = TRUE}, invisibly returns a structured list with
+#'   the output path, log path, provenance, and quality-control results.
 #'   Beagle stdout and stderr are written to \code{out_prefix.log}.
 #' @note \code{Sys.which("beagle.jar")} typically fails to find \code{.jar}
 #'   files on PATH. Supply \code{beagle_jar} explicitly or place
@@ -218,6 +280,16 @@ phase_with_beagle <- function(
     window      = NULL,
     overlap     = NULL,
     beagle_args = "",
+    required_beagle_major = 5L,
+    min_genotype_concordance = 0.99,
+    min_imputation_rate = 0,
+    truth_vcf = NULL,
+    max_switch_error_rate = 1,
+    min_truth_dosage_accuracy = 0,
+    min_truth_allele_concordance = 0,
+    min_truth_call_rate = 0,
+    require_switch_information = TRUE,
+    return_details = FALSE,
     verbose     = TRUE
 ) {
   if (!is.character(input_vcf) || length(input_vcf) != 1L || !file.exists(input_vcf))
@@ -228,6 +300,45 @@ phase_with_beagle <- function(
     stop("ref_panel not found: ", ref_panel, call. = FALSE)
   if (!is.null(map_file) && !file.exists(map_file))
     stop("map_file not found: ", map_file, call. = FALSE)
+  if (!is.null(truth_vcf) &&
+      (!is.character(truth_vcf) || length(truth_vcf) != 1L ||
+       !file.exists(truth_vcf)))
+    stop("truth_vcf not found: ", truth_vcf, call. = FALSE)
+  if (!is.null(java_mem_gb)) {
+    java_mem_gb <- as.numeric(java_mem_gb)
+    if (!is.finite(java_mem_gb) || java_mem_gb <= 0)
+      stop("java_mem_gb must be a positive number.", call. = FALSE)
+  }
+  nthreads <- as.integer(nthreads)
+  if (length(nthreads) != 1L || is.na(nthreads) ||
+      nthreads < 1L || nthreads > 2L)
+    stop("nthreads must be 1 or 2.", call. = FALSE)
+  if (length(required_beagle_major) != 1L ||
+      is.na(required_beagle_major) || required_beagle_major < 1L)
+    stop("required_beagle_major must be a positive integer.", call. = FALSE)
+  if (length(min_genotype_concordance) != 1L ||
+      !is.finite(min_genotype_concordance) ||
+      min_genotype_concordance < 0 || min_genotype_concordance > 1)
+    stop("min_genotype_concordance must be in [0, 1].", call. = FALSE)
+  if (length(min_imputation_rate) != 1L ||
+      !is.finite(min_imputation_rate) ||
+      min_imputation_rate < 0 || min_imputation_rate > 1)
+    stop("min_imputation_rate must be in [0, 1].", call. = FALSE)
+  max_switch_error_rate <- .validate_accuracy_threshold(
+    max_switch_error_rate, "max_switch_error_rate"
+  )
+  min_truth_dosage_accuracy <- .validate_accuracy_threshold(
+    min_truth_dosage_accuracy, "min_truth_dosage_accuracy"
+  )
+  min_truth_allele_concordance <- .validate_accuracy_threshold(
+    min_truth_allele_concordance, "min_truth_allele_concordance"
+  )
+  min_truth_call_rate <- .validate_accuracy_threshold(
+    min_truth_call_rate, "min_truth_call_rate"
+  )
+  if (length(require_switch_information) != 1L ||
+      is.na(require_switch_information))
+    stop("require_switch_information must be TRUE or FALSE.", call. = FALSE)
 
   out_dir <- dirname(out_prefix)
   if (!dir.exists(out_dir))
@@ -235,21 +346,40 @@ phase_with_beagle <- function(
 
   if (is.null(beagle_jar)) {
     cands <- c(
+      getOption("HapBlockR.beagle_jar", ""),
+      Sys.getenv("HAPBLOCKR_BEAGLE_JAR", unset = ""),
       file.path(out_dir, "beagle.jar"),
-      Sys.which("beagle.jar"),
-      "/usr/local/bin/beagle.jar",
-      file.path(Sys.getenv("HOME"), "beagle.jar")
+      file.path(dirname(out_prefix), "beagle.jar")
     )
+    cands <- unique(cands)
     found <- cands[nzchar(cands) & file.exists(cands)]
     if (!length(found))
       stop(
         "beagle.jar not found.\n",
-        "Place beagle.jar in out_dir ('", out_dir, "') or pass beagle_jar explicitly.\n",
+        "Pass beagle_jar explicitly, set options(HapBlockR.beagle_jar=...), ",
+        "set HAPBLOCKR_BEAGLE_JAR, or place beagle.jar in out_dir ('",
+        out_dir, "').\n",
         "Download: https://faculty.washington.edu/browning/beagle/beagle.html",
         call. = FALSE
       )
     beagle_jar <- found[1]
   }
+  beagle_jar <- normalizePath(beagle_jar, mustWork = TRUE)
+  java_executable <- if (file.exists(java_path)) {
+    normalizePath(java_path, mustWork = TRUE)
+  } else {
+    unname(Sys.which(java_path))
+  }
+  if (!nzchar(java_executable))
+    stop("Java executable not found: ", java_path, call. = FALSE)
+  java_version <- tryCatch(
+    system2(java_executable, "-version", stdout = TRUE, stderr = TRUE),
+    error = function(e) character()
+  )
+  if (!length(java_version))
+    stop("Unable to execute Java version check: ", java_executable,
+         call. = FALSE)
+  beagle_sha256 <- digest::digest(beagle_jar, algo = "sha256", file = TRUE)
 
   log_file <- paste0(out_prefix, ".log")
   out_vcf  <- paste0(out_prefix, ".vcf.gz")
@@ -257,15 +387,12 @@ phase_with_beagle <- function(
   args <- character(0)
 
   if (!is.null(java_mem_gb)) {
-    java_mem_gb <- as.numeric(java_mem_gb)
-    if (!is.finite(java_mem_gb) || java_mem_gb <= 0)
-      stop("java_mem_gb must be a positive number.", call. = FALSE)
     args <- c(args, paste0("-Xmx", format(java_mem_gb, trim = TRUE), "g"))
   }
 
   args <- c(
     args,
-    "-jar", normalizePath(beagle_jar, mustWork = TRUE),
+    "-jar", beagle_jar,
     paste0("gt=",       normalizePath(input_vcf, mustWork = TRUE)),
     paste0("out=",      out_prefix),
     paste0("nthreads=", as.integer(nthreads))
@@ -305,7 +432,7 @@ phase_with_beagle <- function(
     message("[phase_with_beagle]   log       : ", log_file)
   }
 
-  status <- system2(command = java_path, args = args,
+  status <- system2(command = java_executable, args = args,
                     stdout = log_file, stderr = log_file)
 
   if (!identical(status, 0L)) {
@@ -321,12 +448,111 @@ phase_with_beagle <- function(
   }
   if (!file.exists(out_vcf))
     stop("Beagle output not found: ", out_vcf, call. = FALSE)
+  log_lines <- readLines(log_file, warn = FALSE)
+  beagle_version <- .parse_beagle_version(log_lines)
+  if (is.na(beagle_version))
+    stop("Beagle completed, but its version could not be verified from ",
+         log_file, ".", call. = FALSE)
+  beagle_major <- as.integer(strsplit(beagle_version, ".", fixed = TRUE)[[1L]][1L])
+  if (!identical(beagle_major, as.integer(required_beagle_major)))
+    stop("Unsupported Beagle major version ", beagle_version,
+         "; HapBlockR requires Beagle ", required_beagle_major, ".x.",
+         call. = FALSE)
+
+  qc <- .compare_beagle_vcfs(input_vcf, out_vcf)
+  qc$sample_identity_passed <- isTRUE(qc$sample_identity)
+  qc$variant_identity_passed <- isTRUE(qc$variant_identity)
+  qc$genotype_concordance_passed <- is.na(qc$genotype_concordance) ||
+    qc$genotype_concordance >= min_genotype_concordance
+  qc$imputation_rate_passed <- is.na(qc$imputation_rate) ||
+    qc$imputation_rate >= min_imputation_rate
+  if (!qc$sample_identity_passed)
+    stop("Beagle output sample identity or order differs from the input.",
+         call. = FALSE)
+  if (!qc$variant_identity_passed)
+    stop("Beagle output variant or allele identity/order differs from the ",
+         "input.", call. = FALSE)
+  if (!qc$genotype_concordance_passed)
+    stop("Beagle genotype concordance ", round(qc$genotype_concordance, 6),
+         " is below min_genotype_concordance = ",
+         min_genotype_concordance, ".", call. = FALSE)
+  if (!qc$imputation_rate_passed)
+    stop("Beagle imputation rate ", round(qc$imputation_rate, 6),
+         " is below min_imputation_rate = ", min_imputation_rate, ".",
+         call. = FALSE)
+  truth_accuracy <- NULL
+  if (!is.null(truth_vcf)) {
+    truth_accuracy <- assess_phasing_accuracy(
+      truth = truth_vcf,
+      estimate = out_vcf,
+      max_switch_error_rate = max_switch_error_rate,
+      min_dosage_accuracy = min_truth_dosage_accuracy,
+      min_allele_concordance = min_truth_allele_concordance,
+      min_call_rate = min_truth_call_rate,
+      require_switch_information = require_switch_information,
+      strict = FALSE
+    )
+    qc$truth_set <- truth_accuracy
+    qc$switch_error_rate <- truth_accuracy$metrics$switch_error_rate
+    qc$truth_dosage_accuracy <- truth_accuracy$metrics$dosage_accuracy
+    qc$truth_allele_concordance <-
+      truth_accuracy$metrics$allele_concordance
+    qc$truth_call_rate <- truth_accuracy$metrics$call_rate
+    truth_gates <- truth_accuracy$quality_control
+    if (any(!truth_gates$passed)) {
+      report_path <- paste0(out_prefix, ".truth-qc.rds")
+      saveRDS(truth_accuracy, report_path)
+      stop(
+        "Beagle truth-set quality gate(s) failed: ",
+        paste(truth_gates$gate[!truth_gates$passed], collapse = ", "),
+        ". The complete report was saved to ", report_path, ".",
+        call. = FALSE
+      )
+    }
+  }
   if (!file.exists(paste0(out_vcf, ".tbi")) && verbose)
     message("[phase_with_beagle] Note: phased VCF index (.tbi) not found.")
   if (verbose)
     message("[phase_with_beagle] Done: ", out_vcf)
 
-  invisible(out_vcf)
+  provenance <- list(
+    java_executable = java_executable,
+    java_version = java_version,
+    beagle_jar = beagle_jar,
+    beagle_sha256 = beagle_sha256,
+    beagle_version = beagle_version,
+    command = c(java_executable, args),
+    input_vcf = normalizePath(input_vcf, mustWork = TRUE),
+    input_sha256 = digest::digest(input_vcf, algo = "sha256", file = TRUE),
+    truth_vcf = if (is.null(truth_vcf)) NULL else
+      normalizePath(truth_vcf, mustWork = TRUE),
+    truth_sha256 = if (is.null(truth_vcf)) NULL else
+      digest::digest(truth_vcf, algo = "sha256", file = TRUE),
+    output_vcf = normalizePath(out_vcf, mustWork = TRUE),
+    output_sha256 = digest::digest(out_vcf, algo = "sha256", file = TRUE),
+    reference_panel = if (is.null(ref_panel)) NULL else
+      normalizePath(ref_panel, mustWork = TRUE),
+    reference_sha256 = if (is.null(ref_panel)) NULL else
+      digest::digest(ref_panel, algo = "sha256", file = TRUE),
+    map_file = if (is.null(map_file)) NULL else
+      normalizePath(map_file, mustWork = TRUE),
+    seed = if (is.null(seed)) NA_integer_ else as.integer(seed),
+    nthreads = nthreads
+  )
+  details <- structure(
+    list(output_vcf = out_vcf, log_file = log_file,
+         provenance = provenance, quality_control = qc),
+    class = c("HapBlockR_beagle_result", "list")
+  )
+  saveRDS(details, paste0(out_prefix, ".provenance.rds"))
+  if (isTRUE(return_details)) return(invisible(details))
+  path_result <- structure(
+    out_vcf,
+    provenance = provenance,
+    quality_control = qc,
+    class = c("HapBlockR_beagle_path", "character")
+  )
+  invisible(path_result)
 }
 
 #' Collapse Phased Gametes to 0/1/2 Dosage
@@ -338,6 +564,120 @@ unphase_to_dosage <- function(phased_list) {
     stop("Need hap1 and hap2 elements.", call. = FALSE)
   # hap1/hap2 are stored as SNPs x individuals; return individuals x SNPs
   t(phased_list$hap1 + phased_list$hap2)
+}
+
+.open_vcf_text <- function(path) {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    gzfile(path, open = "rt")
+  } else {
+    file(path, open = "rt")
+  }
+}
+
+.vcf_header_samples <- function(path) {
+  con <- .open_vcf_text(path)
+  on.exit(close(con), add = TRUE)
+  repeat {
+    line <- readLines(con, n = 1L, warn = FALSE)
+    if (!length(line))
+      stop("VCF has no #CHROM header: ", path, call. = FALSE)
+    if (startsWith(line, "#CHROM")) {
+      fields <- strsplit(line, "\t", fixed = TRUE)[[1L]]
+      return(if (length(fields) > 9L) fields[-seq_len(9L)] else character())
+    }
+  }
+}
+
+.vcf_gt_dosage <- function(fields) {
+  if (!length(fields)) return(numeric())
+  gt <- sub(":.*$", "", fields)
+  vapply(strsplit(gt, "[/|]"), function(a) {
+    if (length(a) != 2L || any(a == ".") || any(!a %in% c("0", "1")))
+      return(NA_real_)
+    sum(as.integer(a))
+  }, numeric(1L))
+}
+
+.compare_beagle_vcfs <- function(input_vcf, output_vcf) {
+  samples_in <- .vcf_header_samples(input_vcf)
+  samples_out <- .vcf_header_samples(output_vcf)
+  sample_identity <- identical(samples_in, samples_out)
+
+  con_in <- .open_vcf_text(input_vcf)
+  con_out <- .open_vcf_text(output_vcf)
+  on.exit(close(con_in), add = TRUE)
+  on.exit(close(con_out), add = TRUE)
+  .next_data <- function(con) {
+    repeat {
+      line <- readLines(con, n = 1L, warn = FALSE)
+      if (!length(line)) return(character())
+      if (!startsWith(line, "#")) return(line)
+    }
+  }
+
+  n_variant_in <- n_variant_out <- n_variant_match <- 0L
+  n_observed <- n_observed_match <- 0L
+  n_missing_before <- n_missing_after <- n_imputed <- 0L
+  variant_identity <- TRUE
+  repeat {
+    line_in <- .next_data(con_in)
+    line_out <- .next_data(con_out)
+    if (!length(line_in) && !length(line_out)) break
+    if (!length(line_in) || !length(line_out)) {
+      variant_identity <- FALSE
+      if (length(line_in)) n_variant_in <- n_variant_in + 1L
+      if (length(line_out)) n_variant_out <- n_variant_out + 1L
+      next
+    }
+    n_variant_in <- n_variant_in + 1L
+    n_variant_out <- n_variant_out + 1L
+    fields_in <- strsplit(line_in, "\t", fixed = TRUE)[[1L]]
+    fields_out <- strsplit(line_out, "\t", fixed = TRUE)[[1L]]
+    key_in <- fields_in[seq_len(min(5L, length(fields_in)))]
+    key_out <- fields_out[seq_len(min(5L, length(fields_out)))]
+    same_variant <- length(key_in) == 5L && length(key_out) == 5L &&
+      identical(key_in, key_out)
+    variant_identity <- variant_identity && same_variant
+    if (same_variant) n_variant_match <- n_variant_match + 1L
+
+    if (sample_identity && length(fields_in) >= 9L &&
+        length(fields_out) >= 9L) {
+      dosage_in <- .vcf_gt_dosage(fields_in[-seq_len(9L)])
+      dosage_out <- .vcf_gt_dosage(fields_out[-seq_len(9L)])
+      observed <- is.finite(dosage_in)
+      missing_before <- !observed
+      n_observed <- n_observed + sum(observed)
+      n_observed_match <- n_observed_match +
+        sum(dosage_in[observed] == dosage_out[observed], na.rm = TRUE)
+      n_missing_before <- n_missing_before + sum(missing_before)
+      n_missing_after <- n_missing_after + sum(!is.finite(dosage_out))
+      n_imputed <- n_imputed +
+        sum(missing_before & is.finite(dosage_out))
+    }
+  }
+
+  list(
+    sample_identity = sample_identity,
+    variant_identity = variant_identity &&
+      n_variant_in == n_variant_out &&
+      n_variant_match == n_variant_in,
+    n_samples_input = length(samples_in),
+    n_samples_output = length(samples_out),
+    n_variants_input = n_variant_in,
+    n_variants_output = n_variant_out,
+    genotype_concordance = if (n_observed) {
+      n_observed_match / n_observed
+    } else {
+      NA_real_
+    },
+    missing_before = n_missing_before,
+    missing_after = n_missing_after,
+    imputation_rate = if (n_missing_before) {
+      n_imputed / n_missing_before
+    } else {
+      NA_real_
+    }
+  )
 }
 
 # ==============================================================================
@@ -1487,7 +1827,7 @@ build_haplotype_feature_matrix <- function(haplotypes, top_n=NULL,
 #' conventional SNP-based GRMs.
 #'
 #' Missing dosage values (\code{NA}) are mean-imputed per column before
-#' centering.
+#' centring.
 #'
 #' @param hap_matrix Numeric matrix (individuals x haplotype alleles) from
 #'   \code{\link{build_haplotype_feature_matrix}}.
@@ -1636,15 +1976,12 @@ compute_haplotype_grm <- function(hap_matrix, bend = FALSE, phased = NULL,
 #' @section What this does and does not do:
 #' This function computes \code{D} only -- it does not itself fit a
 #' dual-kernel (\eqn{G_A + G_D}) mixed model. \code{rrBLUP::kin.blup()}, the
-#' solver \code{\link{run_haplotype_prediction}} uses for its default GBLUP
-#' path, only accepts a single relationship matrix and cannot fit
-#' \eqn{G_A} and \eqn{G_D} simultaneously. Pair the output of this function
-#' with the output of \code{\link{compute_haplotype_grm}} (or
-#' \code{\link{prepare_gblup_inputs}()$G}) and fit both as random effects in
-#' \code{sommer::mmer()}, ASReml, or another dual-kernel-capable solver --
-#' mirroring how \code{\link{prepare_gblup_inputs}} already hands off a
-#' single \code{G} matrix for external GBLUP fitting rather than fitting the
-#' model itself.
+#' default single-kernel solver only accepts one relationship matrix.
+#' However, \code{\link{run_haplotype_prediction}} fits this dominance
+#' kernel jointly with the additive haplotype kernel through its
+#' \code{include_dominance = TRUE} BGLR pathway. The two matrices may also be
+#' passed to another dual-kernel-capable solver when a programme requires a
+#' different model specification.
 #'
 #' Diploid only (\code{ploidy = 2}): the dominance coding below is specific
 #' to biallelic diploid loci. Computed from the raw per-SNP genotype matrix
@@ -2338,7 +2675,7 @@ write_haplotype_diversity <- function(diversity, out_file,
 #' @param ploidy Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 #'   encoding (2 = diploid 0/1/2, 4 = autotetraploid 0/1/2/3/4, etc.).
 #'   Default \code{2L} (diploid, unchanged behaviour from previous releases).
-#'   Generalises the VanRaden (2008) centering/scaling from \eqn{2p}/\eqn{2\sum
+#'   Generalises the VanRaden (2008) centring/scaling from \eqn{2p}/\eqn{2\sum
 #'   p(1-p)} to \eqn{\text{ploidy} \cdot p}/\eqn{\text{ploidy} \cdot \sum p(1-p)}
 #'   (Endelman et al. 2018-style dosage scaling). Only the dosage arithmetic
 #'   generalises here -- HapBlockR's phased haplotype representation
@@ -2505,14 +2842,17 @@ backsolve_snp_effects <- function(geno_matrix, gebv, G = NULL, ploidy = 2L) {
 #' @param verbose Logical. For Bayesian methods, passed through to
 #'   \code{BGLR()}'s own (otherwise very chatty) console output. Default
 #'   \code{FALSE}.
+#' @param weights Optional named positive precision weights. If `y` is a
+#'   result from \code{\link{prepare_breeding_targets}}, `model_value` and its
+#'   normalised precision weights are used automatically.
 #' @param ploidy Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 #'   encoding. Default \code{2L} (diploid). See
-#'   \code{\link{backsolve_snp_effects}} for the generalised centering used.
+#'   \code{\link{backsolve_snp_effects}} for the generalised centring used.
 #'   Passed through to \code{backsolve_snp_effects()} for \code{method =
 #'   "gblup"}; for \code{"rrblup"}/Bayesian methods it only affects the
-#'   \code{gebv} centering (\eqn{M\hat\alpha}), since those solvers fit
+#'   \code{gebv} centring (\eqn{M\hat\alpha}), since those solvers fit
 #'   directly on the raw dosage matrix and are otherwise ploidy-agnostic.
-#'   \strong{In practice this centering step is ploidy-invariant}: the
+#'   \strong{In practice this centring step is ploidy-invariant}: the
 #'   centring term is \eqn{\text{ploidy} \cdot \hat p}, and \eqn{\hat p =
 #'   \text{colMeans(geno\_matrix)} / \text{ploidy}}, so \eqn{\text{ploidy}
 #'   \cdot \hat p} always simplifies to \code{colMeans(geno_matrix)}
@@ -2520,7 +2860,7 @@ backsolve_snp_effects <- function(geno_matrix, gebv, G = NULL, ploidy = 2L) {
 #'   \eqn{\hat p} does not engage, which it will not for realistic dosage
 #'   ranges). So changing \code{ploidy} will \emph{not} change
 #'   \code{"rrblup"}/Bayesian \code{gebv} in practice -- this is a
-#'   mathematical property of mean-centering, not a bug. \code{ploidy}'s
+#'   mathematical property of mean-centring, not a bug. \code{ploidy}'s
 #'   real, discriminating effect elsewhere in the package is on
 #'   \emph{scaling} terms (e.g. \code{compute_haplotype_grm()}'s
 #'   \eqn{\text{ploidy} \cdot \sum \hat p (1-\hat p)} denominator).
@@ -2577,10 +2917,19 @@ estimate_marker_effects <- function(geno_matrix, y,
                                     n_iter   = 6000L,
                                     burn_in  = 1000L,
                                     bglr_dir = NULL,
-                                    seed     = NULL,
-                                    verbose  = FALSE,
-                                    ploidy   = 2L) {
+                                     seed     = NULL,
+                                     verbose  = FALSE,
+                                     ploidy   = 2L,
+                                     weights  = NULL) {
   method <- match.arg(method)
+  target_bundle <- .hb_unpack_model_targets(y)
+  if (!is.null(target_bundle)) {
+    if (length(target_bundle$values) != 1L)
+      stop("estimate_marker_effects() accepts one prepared trait per call.",
+           call. = FALSE)
+    y <- target_bundle$values[[1L]]
+    if (is.null(weights)) weights <- target_bundle$weights[[1L]]
+  }
   if (!is.matrix(geno_matrix)) geno_matrix <- as.matrix(geno_matrix)
   if (!is.numeric(ploidy) || length(ploidy) != 1L || ploidy < 2L)
     stop("ploidy must be a single integer >= 2.", call. = FALSE)
@@ -2595,6 +2944,16 @@ estimate_marker_effects <- function(geno_matrix, y,
   if (length(common) < 10L)
     stop("Fewer than 10 phenotyped individuals in common with geno_matrix.",
          call. = FALSE)
+  if (is.null(weights)) {
+    weights <- stats::setNames(rep(1, length(common)), common)
+  } else {
+    if (!is.numeric(weights) || is.null(names(weights)) ||
+        !all(common %in% names(weights)) ||
+        any(!is.finite(weights[common])) || any(weights[common] <= 0))
+      stop("weights must be named, positive, finite, and cover every ",
+           "modelled individual.", call. = FALSE)
+    weights <- weights[common] / mean(weights[common])
+  }
 
   # Centred genotype matrix + allele frequencies computed once over ALL
   # genotyped individuals (not just `common`), matching the convention used
@@ -2619,14 +2978,20 @@ estimate_marker_effects <- function(geno_matrix, y,
       stop("G must have row/column names matching geno_matrix row names.",
            call. = FALSE)
 
-    pheno_df <- data.frame(gid = ids, y = y[ids], stringsAsFactors = FALSE)
+    sqrt_weight <- sqrt(weights[common])
+    Z_weighted <- matrix(0, nrow = length(common), ncol = length(ids))
+    Z_weighted[cbind(seq_along(common), match(common, ids))] <- sqrt_weight
     fit <- tryCatch(
-      rrBLUP::kin.blup(data = pheno_df, geno = "gid", pheno = "y",
-                       K = G[ids, ids, drop = FALSE]),
+      rrBLUP::mixed.solve(
+        y = sqrt_weight * as.numeric(y[common]),
+        Z = Z_weighted,
+        K = G[ids, ids, drop = FALSE],
+        X = matrix(sqrt_weight, ncol = 1L)
+      ),
       error = function(e)
-        stop("rrBLUP::kin.blup() failed: ", conditionMessage(e), call. = FALSE)
+        stop("Weighted GBLUP failed: ", conditionMessage(e), call. = FALSE)
     )
-    g_hat <- stats::setNames(fit$g, names(fit$g))
+    g_hat <- stats::setNames(as.numeric(fit$u), ids)
     alpha <- backsolve_snp_effects(geno_matrix, g_hat, G = G, ploidy = ploidy)
 
   } else if (method == "rrblup") {
@@ -2638,8 +3003,13 @@ estimate_marker_effects <- function(geno_matrix, y,
       na_j <- is.na(geno_fit[, j])
       if (any(na_j)) geno_fit[na_j, j] <- mean(geno_fit[, j], na.rm = TRUE)
     }
+    sqrt_weight <- sqrt(weights[common])
     fit <- tryCatch(
-      rrBLUP::mixed.solve(y = as.numeric(y[common]), Z = geno_fit),
+      rrBLUP::mixed.solve(
+        y = sqrt_weight * as.numeric(y[common]),
+        Z = sweep(geno_fit, 1L, sqrt_weight, "*"),
+        X = matrix(sqrt_weight, ncol = 1L)
+      ),
       error = function(e)
         stop("rrBLUP::mixed.solve() (SNP-BLUP) failed: ",
              conditionMessage(e), call. = FALSE)
@@ -2672,9 +3042,10 @@ estimate_marker_effects <- function(geno_matrix, y,
 
     fit <- tryCatch(
       BGLR::BGLR(y = as.numeric(y[common]),
-                ETA = list(list(X = geno_fit, model = bglr_model)),
-                nIter = n_iter, burnIn = burn_in,
-                saveAt = save_at, verbose = isTRUE(verbose)),
+                 ETA = list(list(X = geno_fit, model = bglr_model)),
+                 nIter = n_iter, burnIn = burn_in,
+                 weights = sqrt(weights[common]),
+                 saveAt = save_at, verbose = isTRUE(verbose)),
       error = function(e)
         stop("BGLR::BGLR() (", bglr_model, ") failed: ",
              conditionMessage(e), call. = FALSE)
@@ -2690,7 +3061,13 @@ estimate_marker_effects <- function(geno_matrix, y,
 
   gebv <- stats::setNames(as.numeric(M_all %*% alpha_full), rownames(M_all))
 
-  list(snp_effects = alpha_full, gebv = gebv, method = method, fit = fit)
+  list(
+    snp_effects = alpha_full,
+    gebv = gebv,
+    method = method,
+    fit = fit,
+    precision_weights = weights
+  )
 }
 
 
@@ -2705,7 +3082,7 @@ estimate_marker_effects <- function(geno_matrix, y,
 #'
 #' where \eqn{x_t} is the allele dosage (0/1/2) at SNP \eqn{t}, \eqn{p_t} is
 #' the SNP's own population allele frequency, and \eqn{\alpha_t} is its
-#' additive effect. Centering at \eqn{2p_t} (rather than at the heterozygote
+#' additive effect. Centring at \eqn{2p_t} (rather than at the heterozygote
 #' midpoint, dosage = 1) matches the convention used by
 #' \code{\link{backsolve_snp_effects}} to derive \code{alpha} in the first
 #' place (\eqn{\text{GEBV} = M\alpha} with \eqn{M} centred at \eqn{2p}), so
@@ -2715,7 +3092,7 @@ estimate_marker_effects <- function(geno_matrix, y,
 #' Blocks are ranked by \code{Var(local GEBV)} -- blocks with high variance
 #' contribute strongly to trait differences among individuals and likely
 #' harbour causal loci (Tong et al. 2025). This ranking is unaffected by the
-#' choice of centering point (variance is shift-invariant), but the absolute
+#' choice of centring point (variance is shift-invariant), but the absolute
 #' \code{local_gebv} values are only meaningful -- i.e. only summable back to
 #' the genome-wide GEBV -- under the \eqn{2p_t} convention used here.
 #'
@@ -2759,6 +3136,9 @@ estimate_marker_effects <- function(geno_matrix, y,
 #' @param snp_effects Named numeric vector of per-SNP additive effects from
 #'   \code{\link{backsolve_snp_effects}}, \code{\link{estimate_marker_effects}},
 #'   or from a marker model directly.
+#' @param snp_effect_se Optional named non-negative numeric vector of
+#'   per-SNP effect standard errors. When supplied, local GEBV standard
+#'   errors are propagated under an independent-marker-error approximation.
 #' @param scale Logical. If \code{TRUE} (default), scale \code{Var(local GEBV)}
 #'   to [0,1] so blocks are comparable across traits and datasets.
 #' @param complete_decomposition Logical. If \code{TRUE} (default), append a
@@ -2774,7 +3154,7 @@ estimate_marker_effects <- function(geno_matrix, y,
 #'   cumulative-variance selection instead of a fixed cutoff.
 #' @param ploidy Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 #'   encoding. Default \code{2L} (diploid, unchanged from previous releases).
-#'   Generalises the \eqn{2p_t} centering above to \eqn{\text{ploidy} \cdot
+#'   Generalises the \eqn{2p_t} centring above to \eqn{\text{ploidy} \cdot
 #'   p_t}; must match the \code{ploidy} used to derive \code{snp_effects}
 #'   (via \code{\link{backsolve_snp_effects}} or
 #'   \code{\link{estimate_marker_effects}}) for local GEBVs to sum correctly
@@ -2785,6 +3165,9 @@ estimate_marker_effects <- function(geno_matrix, y,
 #'   \item{\code{local_gebv}}{Numeric matrix (individuals x blocks) of per-block
 #'     local GEBV values. Includes singleton pseudo-block columns when
 #'     \code{complete_decomposition = TRUE} and any exist.}
+#'   \item{\code{local_gebv_se}}{Numeric matrix of propagated local GEBV
+#'     standard errors, or \code{NULL} when \code{snp_effect_se} is not
+#'     supplied.}
 #'   \item{\code{block_importance}}{Data frame with one row per block: block_id,
 #'     CHR, start_bp, end_bp, n_snps, var_local_gebv, var_scaled, important
 #'     (logical: scaled variance >= \code{importance_threshold}), and
@@ -2810,7 +3193,7 @@ estimate_marker_effects <- function(geno_matrix, y,
 #'
 #' @export
 compute_local_gebv <- function(geno_matrix, snp_info, blocks,
-                               snp_effects, scale = TRUE,
+                               snp_effects, snp_effect_se = NULL, scale = TRUE,
                                complete_decomposition = TRUE,
                                importance_threshold = 0.9,
                                ploidy = 2L) {
@@ -2818,6 +3201,19 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
     geno_matrix <- as.matrix(geno_matrix)
   if (!is.numeric(ploidy) || length(ploidy) != 1L || ploidy < 2L)
     stop("ploidy must be a single integer >= 2.", call. = FALSE)
+  if (!is.null(snp_effect_se)) {
+    if (!is.numeric(snp_effect_se) || is.null(names(snp_effect_se)) ||
+        any(!is.finite(snp_effect_se)) || any(snp_effect_se < 0))
+      stop("snp_effect_se must be a named, finite, non-negative numeric ",
+           "vector.", call. = FALSE)
+    missing_se <- setdiff(
+      intersect(colnames(geno_matrix), names(snp_effects)),
+      names(snp_effect_se)
+    )
+    if (length(missing_se))
+      stop("snp_effect_se is missing ", length(missing_se),
+           " SNP(s) with estimated effects.", call. = FALSE)
+  }
 
   snp_info$CHR <- .norm_chr_hap(as.character(snp_info$CHR))
   blocks$CHR   <- .norm_chr_hap(as.character(blocks$CHR))
@@ -2828,6 +3224,12 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
 
   local_mat  <- matrix(NA_real_, nrow = n_ind, ncol = n_blk,
                        dimnames = list(ind_ids, rep("", n_blk)))
+  local_se_mat <- if (is.null(snp_effect_se)) {
+    NULL
+  } else {
+    matrix(NA_real_, nrow = n_ind, ncol = n_blk,
+           dimnames = list(ind_ids, rep("", n_blk)))
+  }
   importance <- vector("list", n_blk)
   # Track every SNP actually attributed to a block, so that -- when
   # complete_decomposition = TRUE -- we can find the SNPs that fell through
@@ -2872,8 +3274,8 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
 
     # local GEBV_f = sum_t (x_t - ploidy*p_t) * alpha_t
     # Centred at the SNP's own population allele frequency (ploidy*p), the
-    # SAME centering used in backsolve_snp_effects() to derive `alpha`.
-    # Centering at the heterozygote midpoint (dosage - ploidy/2) instead --
+    # SAME centring used in backsolve_snp_effects() to derive `alpha`.
+    # Centring at the heterozygote midpoint (dosage - ploidy/2) instead --
     # as an earlier version of this function did -- is only equivalent when
     # p == 0.5 for every SNP; in general it introduces a per-SNP constant
     # offset that is identical for every individual. That constant does not
@@ -2885,6 +3287,12 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
     p_t  <- pmax(pmin(colMeans(G_sub) / ploidy, 1 - 1e-8), 1e-8)
     M    <- sweep(G_sub, 2, ploidy * p_t, "-")
     local_mat[, b] <- as.numeric(M %*% alpha)
+    if (!is.null(local_se_mat)) {
+      effect_var <- snp_effect_se[blk_snps_in_geno]^2
+      local_se_mat[, b] <- sqrt(rowSums(
+        sweep(M^2, 2L, effect_var, "*")
+      ))
+    }
 
     bid <- paste0("block_", chr, "_", sb, "_", eb)
     importance[[b]] <- data.frame(
@@ -2894,10 +3302,16 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
       end_bp    = as.integer(eb),
       n_snps    = length(blk_snps_in_geno),
       var_local_gebv = var(local_mat[, b], na.rm = TRUE),
+      mean_local_gebv_se = if (is.null(local_se_mat)) {
+        NA_real_
+      } else {
+        mean(local_se_mat[, b], na.rm = TRUE)
+      },
       singleton = FALSE,
       stringsAsFactors = FALSE
     )
     colnames(local_mat)[b] <- bid
+    if (!is.null(local_se_mat)) colnames(local_se_mat)[b] <- bid
     assigned_snps <- c(assigned_snps, blk_snps_in_geno)
   }
 
@@ -2978,6 +3392,13 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
       miss_pos <- as.numeric(snp_info$POS[snp_pos_idx])
       singleton_bid <- paste0("singleton_", miss_chr, "_", miss_pos)
       colnames(singleton_mat) <- singleton_bid
+      singleton_se <- if (is.null(local_se_mat)) {
+        NULL
+      } else {
+        se_mat <- sweep(abs(M_m), 2L, snp_effect_se[missing_snps], "*")
+        colnames(se_mat) <- singleton_bid
+        se_mat
+      }
 
       singleton_importance <- data.frame(
         block_id       = singleton_bid,
@@ -2986,11 +3407,18 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
         end_bp         = as.integer(miss_pos),
         n_snps         = 1L,
         var_local_gebv = apply(singleton_mat, 2L, stats::var, na.rm = TRUE),
+        mean_local_gebv_se = if (is.null(singleton_se)) {
+          NA_real_
+        } else {
+          colMeans(singleton_se, na.rm = TRUE)
+        },
         singleton      = TRUE,
         stringsAsFactors = FALSE
       )
 
       local_mat  <- cbind(local_mat, singleton_mat)
+      if (!is.null(local_se_mat))
+        local_se_mat <- cbind(local_se_mat, singleton_se)
       importance <- if (nrow(importance)) {
         rbind(importance, singleton_importance)
       } else {
@@ -3014,8 +3442,21 @@ compute_local_gebv <- function(geno_matrix, snp_info, blocks,
   # Trim local_mat to blocks that were evaluated
   valid_blk_ids <- importance$block_id
   local_mat <- local_mat[, colnames(local_mat) %in% valid_blk_ids, drop = FALSE]
+  if (!is.null(local_se_mat))
+    local_se_mat <- local_se_mat[
+      , colnames(local_se_mat) %in% valid_blk_ids, drop = FALSE
+    ]
 
-  list(local_gebv = local_mat, block_importance = importance)
+  list(
+    local_gebv = local_mat,
+    local_gebv_se = local_se_mat,
+    block_importance = importance,
+    uncertainty_assumption = if (is.null(snp_effect_se)) {
+      "not_available"
+    } else {
+      "independent_marker_effect_errors"
+    }
+  )
 }
 
 
@@ -3362,13 +3803,18 @@ prepare_gblup_inputs <- function(hap_matrix, pheno_df,
 #'   Defaults \code{6000}/\code{1000}.
 #' @param seed        Integer or \code{NULL}. Random seed for the Bayesian
 #'   methods (ignored otherwise). Default \code{NULL}.
+#' @param min_reliability Numeric in [0, 1]. Minimum GEBV reliability for an
+#'   individual to be marked \code{recommendable} in
+#'   \code{gebv_uncertainty}. Default \code{0.30}. Methods that do not expose
+#'   prediction error variance return missing reliability and are not
+#'   promoted as recommendations.
 #' @param verbose     Logical. Print progress. Default \code{TRUE}.
 #' @param ploidy Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 #'   encoding. Default \code{2L} (diploid, unchanged from previous releases).
 #'   Passed to \code{\link{backsolve_snp_effects}}/
 #'   \code{\link{estimate_marker_effects}}/\code{\link{compute_local_gebv}}
 #'   so marker effects and local GEBVs use ploidy-generalised VanRaden
-#'   centering (\eqn{\text{ploidy} \cdot p} instead of \eqn{2p}). Does
+#'   centring (\eqn{\text{ploidy} \cdot p} instead of \eqn{2p}). Does
 #'   \strong{not} affect the shared GRM (\code{G}), which is always built
 #'   from the haplotype-allele feature matrix -- itself derived from
 #'   HapBlockR's diploid-only \code{hap1}/\code{hap2} phased representation,
@@ -3388,6 +3834,9 @@ prepare_gblup_inputs <- function(hap_matrix, pheno_df,
 #'     dominance)"} when \code{include_dominance = TRUE}.}
 #'   \item{\code{include_dominance}}{Logical, echoes the argument.}
 #'   \item{\code{gebv}}{Named numeric vector of (additive) GEBV.}
+#'   \item{\code{gebv_uncertainty}}{Data frame containing individual GEBV,
+#'     prediction error variance, reliability, and the minimum-reliability
+#'     recommendation gate.}
 #'   \item{\code{dominance_deviation}}{Named numeric vector of dominance
 #'     deviations, or \code{NULL} when \code{include_dominance = FALSE}.}
 #'   \item{\code{total_genetic_value}}{\code{gebv + dominance_deviation}, or
@@ -3512,6 +3961,7 @@ run_haplotype_prediction <- function(geno_matrix,
                                      n_iter          = 6000L,
                                      burn_in         = 1000L,
                                      seed            = NULL,
+                                     min_reliability = 0.30,
                                      verbose         = TRUE,
                                      ploidy          = 2L) {
 
@@ -3519,6 +3969,11 @@ run_haplotype_prediction <- function(geno_matrix,
   marker_effect_method  <- match.arg(marker_effect_method)
   if (!is.numeric(ploidy) || length(ploidy) != 1L || ploidy < 2L)
     stop("ploidy must be a single integer >= 2.", call. = FALSE)
+  if (!is.numeric(min_reliability) || length(min_reliability) != 1L ||
+      is.na(min_reliability) || min_reliability < 0 ||
+      min_reliability > 1)
+    stop("min_reliability must be a single number in [0, 1].",
+         call. = FALSE)
   if (!is.logical(include_dominance) || length(include_dominance) != 1L ||
       is.na(include_dominance))
     stop("include_dominance must be a single TRUE/FALSE.", call. = FALSE)
@@ -3537,7 +3992,21 @@ run_haplotype_prediction <- function(geno_matrix,
 
   # -- Detect and normalise blues input into a named list of named vectors ----
   # Four accepted formats -- all normalised to list(trait = named_numeric_vec)
-  blues_list <- .parse_blues(blues, id_col, blue_col, blue_cols)
+  target_bundle <- .hb_unpack_model_targets(blues)
+  if (is.null(target_bundle)) {
+    blues_list <- .parse_blues(blues, id_col, blue_col, blue_cols)
+    precision_list <- lapply(blues_list, function(value) {
+      stats::setNames(rep(1, length(value)), names(value))
+    })
+    target_provenance <- NULL
+  } else {
+    blues_list <- target_bundle$values
+    precision_list <- target_bundle$weights
+    target_provenance <- list(
+      contract = target_bundle$contract,
+      precision = target_bundle$precision_provenance
+    )
+  }
   traits      <- names(blues_list)
   n_traits    <- length(traits)
   is_mt       <- n_traits > 1L
@@ -3611,6 +4080,7 @@ run_haplotype_prediction <- function(geno_matrix,
   snp_fx_list     <- stats::setNames(vector("list", n_traits), traits)
   local_gebv_list <- stats::setNames(vector("list", n_traits), traits)
   bi_list         <- stats::setNames(vector("list", n_traits), traits)
+  gebv_uncertainty_list <- stats::setNames(vector("list", n_traits), traits)
 
   solver_used <- switch(marker_effect_method,
                         gblup  = if (isTRUE(include_dominance))
@@ -3634,18 +4104,51 @@ run_haplotype_prediction <- function(geno_matrix,
     if (is_mt) .log("Fitting rrBLUP per-trait loop (", n_traits, " traits) ...")
     for (tr in traits) {
       if (is_mt) .log("  Fitting: ", tr)
-      pheno_tr <- data.frame(gid = pheno_wide$gid, y = pheno_wide[[tr]],
-                             stringsAsFactors = FALSE)
+      common_tr <- intersect(geno_ids, names(blues_list[[tr]]))
+      weight_tr <- precision_list[[tr]][common_tr]
+      weight_tr <- weight_tr / mean(weight_tr)
+      sqrt_weight <- sqrt(weight_tr)
+      Z_weighted <- matrix(
+        0, nrow = length(common_tr), ncol = length(geno_ids)
+      )
+      Z_weighted[
+        cbind(seq_along(common_tr), match(common_tr, geno_ids))
+      ] <- sqrt_weight
       fit_tr <- tryCatch(
-        rrBLUP::kin.blup(data = pheno_tr, geno = "gid", pheno = "y", K = G),
+        rrBLUP::mixed.solve(
+          y = sqrt_weight * as.numeric(blues_list[[tr]][common_tr]),
+          Z = Z_weighted,
+          K = G,
+          X = matrix(sqrt_weight, ncol = 1L)
+        ),
         error = function(e)
-          stop("rrBLUP::kin.blup() failed for trait '", tr, "': ",
+          stop("Weighted haplotype GBLUP failed for trait '", tr, "': ",
                conditionMessage(e),
                "\nTry bend = TRUE if GRM is not positive definite.", call. = FALSE)
       )
-      gebv_list[[tr]] <- stats::setNames(fit_tr$g, names(fit_tr$g))
+      gebv_list[[tr]] <- stats::setNames(as.numeric(fit_tr$u), geno_ids)
+      pev <- if (!is.null(fit_tr$PEV)) {
+        stats::setNames(as.numeric(fit_tr$PEV), geno_ids)
+      } else {
+        stats::setNames(rep(NA_real_, length(geno_ids)), geno_ids)
+      }
+      vg <- if (!is.null(fit_tr$Vu)) as.numeric(fit_tr$Vu)[1L] else NA_real_
+      reliability <- if (is.finite(vg) && vg > 0) {
+        pmax(0, pmin(1, 1 - pev / vg))
+      } else {
+        rep(NA_real_, length(pev))
+      }
+      gebv_uncertainty_list[[tr]] <- data.frame(
+        id = names(gebv_list[[tr]]),
+        gebv = unname(gebv_list[[tr]]),
+        PEV = unname(pev),
+        reliability = unname(reliability),
+        min_reliability = min_reliability,
+        recommendable = is.finite(reliability) &
+          reliability >= min_reliability,
+        stringsAsFactors = FALSE
+      )
 
-      common_tr <- intersect(geno_ids, names(blues_list[[tr]]))
       snp_fx_list[[tr]] <- backsolve_snp_effects(
         geno_matrix[common_tr, , drop = FALSE],
         gebv_list[[tr]][common_tr],
@@ -3670,6 +4173,10 @@ run_haplotype_prediction <- function(geno_matrix,
       if (is_mt) .log("  Fitting: ", tr)
       if (!is.null(seed)) set.seed(seed)
       y_tr <- pheno_wide[[tr]][match(rownames(G), pheno_wide$gid)]
+      bglr_precision <- precision_list[[tr]][match(
+        rownames(G), names(precision_list[[tr]])
+      )]
+      bglr_precision[!is.finite(bglr_precision)] <- 1
 
       bglr_out_dir <- tempfile("ldx_bglr_dom_")
       dir.create(bglr_out_dir, showWarnings = FALSE, recursive = TRUE)
@@ -3679,6 +4186,7 @@ run_haplotype_prediction <- function(geno_matrix,
       fit_tr <- tryCatch(
         BGLR::BGLR(
           y   = y_tr,
+          weights = sqrt(bglr_precision),
           ETA = list(
             A = list(K = G,   model = "RKHS"),
             D = list(K = G_D, model = "RKHS")
@@ -3694,6 +4202,15 @@ run_haplotype_prediction <- function(geno_matrix,
       )
       gebv_list[[tr]] <- stats::setNames(as.numeric(fit_tr$ETA$A$u), rownames(G))
       dom_list[[tr]]  <- stats::setNames(as.numeric(fit_tr$ETA$D$u), rownames(G))
+      gebv_uncertainty_list[[tr]] <- data.frame(
+        id = names(gebv_list[[tr]]),
+        gebv = unname(gebv_list[[tr]]),
+        PEV = NA_real_,
+        reliability = NA_real_,
+        min_reliability = min_reliability,
+        recommendable = FALSE,
+        stringsAsFactors = FALSE
+      )
 
       # Per-SNP effects are backsolved from the ADDITIVE component only
       # (backsolve_snp_effects() is an additive-only formula; dominance
@@ -3723,10 +4240,20 @@ run_haplotype_prediction <- function(geno_matrix,
         geno_matrix, blues_list[[tr]],
         method  = marker_effect_method,
         n_iter  = n_iter, burn_in = burn_in, seed = seed, verbose = FALSE,
-        ploidy  = ploidy
+        ploidy  = ploidy,
+        weights = precision_list[[tr]]
       )
       gebv_list[[tr]]   <- me$gebv
       snp_fx_list[[tr]] <- me$snp_effects
+      gebv_uncertainty_list[[tr]] <- data.frame(
+        id = names(me$gebv),
+        gebv = unname(me$gebv),
+        PEV = NA_real_,
+        reliability = NA_real_,
+        min_reliability = min_reliability,
+        recommendable = FALSE,
+        stringsAsFactors = FALSE
+      )
     }
   }
 
@@ -3777,6 +4304,7 @@ run_haplotype_prediction <- function(geno_matrix,
       solver_used          = solver_used,
       include_dominance    = isTRUE(include_dominance),
       gebv                 = gebv_list[[traits[1L]]],
+      gebv_uncertainty     = gebv_uncertainty_list[[traits[1L]]],
       dominance_deviation  = dom_list[[traits[1L]]],
       total_genetic_value  = total_gv_list[[traits[1L]]],
       snp_effects          = snp_fx_list[[traits[1L]]],
@@ -3785,7 +4313,8 @@ run_haplotype_prediction <- function(geno_matrix,
       G                    = G,
       G_dominance          = G_D,
       n_train              = n_train_vec[[traits[1L]]],
-      n_predict            = n_predict_vec[[traits[1L]]]
+      n_predict            = n_predict_vec[[traits[1L]]],
+      target_provenance    = target_provenance
     ))
   }
 
@@ -3840,6 +4369,7 @@ run_haplotype_prediction <- function(geno_matrix,
     solver_used           = solver_used,
     include_dominance     = isTRUE(include_dominance),
     gebv                  = gebv_list,
+    gebv_uncertainty      = gebv_uncertainty_list,
     dominance_deviation   = dom_list,
     total_genetic_value   = total_gv_list,
     snp_effects           = snp_fx_list,
@@ -3849,13 +4379,16 @@ run_haplotype_prediction <- function(geno_matrix,
     G                     = G,
     G_dominance           = G_D,
     n_train               = n_train_vec,
-    n_predict             = n_predict_vec
+    n_predict             = n_predict_vec,
+    target_provenance     = target_provenance
   )
 }
 
 # Internal helper: normalise all blues input formats into a named list
 # of named numeric vectors, one entry per trait.
 .parse_blues <- function(blues, id_col, blue_col, blue_cols) {
+  target_bundle <- .hb_unpack_model_targets(blues)
+  if (!is.null(target_bundle)) return(target_bundle$values)
   if (is.numeric(blues) && !is.null(names(blues))) {
     # Named numeric vector -- single trait
     return(list(trait = blues))

@@ -35,6 +35,10 @@
 #     maximising coverage of favourable per-block values, subject to a
 #     crossing-scheme `strategy`.
 #
+#   select_parents_ga_ts()
+#     Joint GA plus truncation-selection-merit search: retains complementary
+#     block coverage while rewarding mean whole-genome merit continuously.
+#
 #   plot_parent_selection_pca()
 #     PCA of a genomic/haplotype relationship matrix (or, via
 #     `feature_matrix`, the target-block value_matrix GA actually searched),
@@ -68,8 +72,10 @@
 #   "percentile"     min_sel_value in (0, 1]: keep the top min_sel_value
 #                    fraction by score (e.g. 0.6 = top 60%); cutoff computed
 #                    via quantile(score, 1 - min_sel_value)
-#   "sd_below_mean"  keep score >= mean(score) - min_sel_value * sd(score)
-#                    (min_sel_value = number of SDs below the mean)
+#   "sd_above_mean"  keep score >= mean(score) + min_sel_value * sd(score)
+#                    (intuitive superior-candidate threshold; k >= 0)
+#   "relaxed_pool"   keep score >= mean(score) - min_sel_value * sd(score)
+#                    (deliberately broad pool; not a superior-candidate rule)
 # Returns list(eligible = character vector of names clearing the floor,
 # cutoff = the numeric cutoff actually applied (-Inf if min_sel_value=NULL),
 # score = the input score vector restricted to finite values).
@@ -84,8 +90,21 @@
   if (is.null(min_sel_value))
     return(list(eligible = names(score), cutoff = -Inf, score = score))
 
-  min_sel_mode <- match.arg(min_sel_mode,
-                            c("value", "percentile", "sd_below_mean"))
+  min_sel_mode <- match.arg(
+    min_sel_mode,
+    c(
+      "value", "percentile", "sd_above_mean", "relaxed_pool",
+      "sd_below_mean"
+    )
+  )
+  if (min_sel_mode == "sd_below_mean") {
+    warning(
+      "min_sel_mode = 'sd_below_mean' is deprecated because the name is ",
+      "breeder-confusing; use 'relaxed_pool' for the same broad-pool rule.",
+      call. = FALSE
+    )
+    min_sel_mode <- "relaxed_pool"
+  }
   cutoff <- switch(
     min_sel_mode,
     "value" = min_sel_value,
@@ -97,15 +116,25 @@
       stats::quantile(score, probs = 1 - min_sel_value, na.rm = TRUE,
                       names = FALSE)
     },
-    "sd_below_mean" = mean(score, na.rm = TRUE) -
+    "sd_above_mean" = {
+      if (length(min_sel_value) != 1L || !is.numeric(min_sel_value) ||
+          !is.finite(min_sel_value) || min_sel_value < 0)
+        stop("min_sel_value must be one non-negative finite number when ",
+             "min_sel_mode = 'sd_above_mean'.", call. = FALSE)
+      mean(score, na.rm = TRUE) +
+        min_sel_value * stats::sd(score, na.rm = TRUE)
+    },
+    "relaxed_pool" = mean(score, na.rm = TRUE) -
       min_sel_value * stats::sd(score, na.rm = TRUE)
   )
 
   eligible <- names(score)[score >= cutoff]
-  if (!length(eligible))
+  if (!length(eligible)) {
+    adjustment <- if (min_sel_mode == "relaxed_pool") "Increase" else "Lower"
     stop("No ", label, "s clear the min_sel_value floor (cutoff = ",
-         round(cutoff, 4), ", mode = '", min_sel_mode, "'). Lower ",
-         "min_sel_value.", call. = FALSE)
+         round(cutoff, 4), ", mode = '", min_sel_mode, "'). ", adjustment,
+         " min_sel_value.", call. = FALSE)
+  }
 
   list(eligible = eligible, cutoff = cutoff, score = score)
 }
@@ -115,28 +144,32 @@
 #'
 #' @description
 #' The simplest possible parent-selection rule and the standard baseline
-#' breeders compare any smarter method against: rank individuals by a single
+#' breeders can compare with multi-objective methods: rank individuals by a single
 #' genome-wide score and keep the top \code{n_founders}. Used here as the
-#' "TS" comparison arm against \code{\link{select_parents_ga}} (see
+#' "TS" comparison arm against \code{\link{select_parents_ga}} and
+#' \code{\link{select_parents_ga_ts}} (see
 #' \code{\link{ga_vs_ts_simulation}}), and standalone whenever a plain
 #' best-GEBV shortlist is all that's needed.
 #'
 #' @param score Named numeric vector, e.g. whole-genome GEBV
 #'   (\code{run_haplotype_prediction()$gebv}) or a stacking index
 #'   (\code{score_favorable_haplotypes()$stacking_index}). Names are
-#'   individual IDs.
+#'   individual IDs. Scores must be directionally aligned so that larger
+#'   values always mean greater breeding merit. Reverse the sign of a
+#'   lower-is-better trait, or give that trait a negative selection-index
+#'   weight, before calling this function.
 #' @param n_founders Integer. Number of individuals to select.
 #' @param min_sel_value Numeric or \code{NULL} (default \code{NULL} = no
 #'   floor, every candidate with a finite \code{score} is eligible).
 #'   Excludes candidates below a merit floor \emph{before} ranking, so that
 #'   a plain top-\code{n_founders} call never has to hit deeper into the
-#'   population than your program's own quality bar. Interpreted according
+#'   population than your programme's own quality bar. Interpreted according
 #'   to \code{min_sel_mode}. Named \code{min_sel_value} rather than
 #'   \code{min_selection_index} because \code{score} need not be a
 #'   selection index -- it can be any single genome-wide value.
 #' @param min_sel_mode One of \code{"value"} (default), \code{"percentile"},
-#'   \code{"sd_below_mean"}. Only used when \code{min_sel_value} is not
-#'   \code{NULL}:
+#'   \code{"sd_above_mean"}, or \code{"relaxed_pool"}. Only used when
+#'   \code{min_sel_value} is not \code{NULL}:
 #'   \describe{
 #'     \item{\code{"value"}}{\code{min_sel_value} is an absolute cutoff on
 #'       \code{score} itself (same units/scale as \code{score} -- requires
@@ -145,10 +178,15 @@
 #'       the fraction of candidates to keep from the top, e.g. \code{0.6}
 #'       keeps the top 60\% by \code{score}. Self-scaling -- no need to know
 #'       \code{score}'s units.}
-#'     \item{\code{"sd_below_mean"}}{\code{min_sel_value} is the number of
-#'       standard deviations below \code{mean(score)} the cutoff sits, e.g.
-#'       \code{1} keeps everyone within/above one SD of the mean. Also
-#'       self-scaling.}
+#'     \item{\code{"sd_above_mean"}}{The breeder-facing superior-candidate
+#'       rule. The cutoff is \code{mean(score) + min_sel_value * sd(score)};
+#'       \code{0} retains candidates at or above the mean and \code{1}
+#'       retains candidates at least one SD above it.}
+#'     \item{\code{"relaxed_pool"}}{Deliberately broad candidate-pool rule.
+#'       The cutoff is \code{mean(score) - min_sel_value * sd(score)}. Use it
+#'       only when candidates slightly below the population mean should remain
+#'       eligible for haplotype complementarity or diversity; all retained
+#'       candidates are still ranked from highest to lowest score.}
 #'   }
 #'
 #' @return Named list:
@@ -168,14 +206,15 @@
 #' individuals it selects (two selected parents could carry identical
 #' favourable haplotypes and none of the ones another candidate has), and no
 #' relatedness/coancestry management. That simplicity is the point: it is the
-#' baseline every smarter method -- above all \code{\link{select_parents_ga}}
-#' -- needs to outperform to justify its added complexity. See
-#' \code{\link{select_parents_ga}}'s \emph{Choosing between this function and
-#' truncation_selection()} section for a full comparison and a decision
-#' guide, and the \emph{From Local GEBV to a Crossing Decision} vignette for
-#' a worked example running both side by side.
+#' transparent merit-only reference for interpreting whether complementary
+#' block coverage changes the shortlist. See
+#' \code{\link{select_parents_ga}} for coverage-only GA,
+#' \code{\link{select_parents_ga_ts}} for the joint coverage-and-merit
+#' objective, and the \emph{From Local GEBV to a Crossing Decision} vignette
+#' for a worked comparison.
 #'
-#' @seealso \code{\link{select_parents_ga}}
+#' @seealso \code{\link{select_parents_ga}},
+#'   \code{\link{select_parents_ga_ts}}
 #'
 #' @examples
 #' \dontrun{
@@ -188,7 +227,9 @@
 truncation_selection <- function(score, n_founders,
                                  min_sel_value = NULL,
                                  min_sel_mode  = c("value", "percentile",
-                                                  "sd_below_mean")) {
+                                                   "sd_above_mean",
+                                                   "relaxed_pool",
+                                                   "sd_below_mean")) {
   if (is.null(names(score)))
     stop("score must be a named numeric vector (names = individual IDs).",
          call. = FALSE)
@@ -357,7 +398,7 @@ truncation_selection <- function(score, n_founders,
 }
 
 # -- Internal: core scale-estimation shared by suggest_merit_weight() and
-# select_parents_ga()'s merit_priority argument. Estimates how big a swing
+# select_parents_ga_ts()'s merit_priority argument. Estimates how big a swing
 # the merit term and the block-coverage term can realistically produce for a
 # founder group of size n_founders, from THIS data, and returns the ratio
 # needed to make merit_priority (0-100) a fair "how much do I care about
@@ -369,7 +410,7 @@ truncation_selection <- function(score, n_founders,
 #
 # value_matrix/merit_score/block_weights/strategy/n_founders are assumed
 # already filtered/aligned to the SAME candidate pool the real search will
-# use (the caller's job -- see select_parents_ga()'s merit_priority wiring).
+# use (the caller's job -- see select_parents_ga_ts()'s merit_priority wiring).
 .calibrate_merit_scale <- function(value_matrix, merit_score, block_weights,
                                    strategy, n_founders) {
   if (any(block_weights < 0))
@@ -510,21 +551,19 @@ truncation_selection <- function(score, n_founders,
 }
 
 
-#' Suggest a Starting merit_weight for select_parents_ga()
+#' Suggest a Starting merit_weight for select_parents_ga_ts()
 #'
 #' @description
-#' \code{\link{select_parents_ga}}'s \code{merit_weight} and
-#' \code{coancestry_weight} arguments have no universal correct value: the
-#' block-coverage term and the merit term live on different, problem-specific
-#' scales, so a raw multiplier that works for one dataset can be meaningless
-#' for another. This function estimates a sensible starting point directly
-#' from your own data, in two ways: call it with \code{merit_priority} left
+#' The block-coverage and whole-genome merit terms used by
+#' \code{\link{select_parents_ga_ts}} are expressed on dataset-specific
+#' scales. This function calibrates their relative scale directly from the
+#' analysed candidate pool. Call it with \code{merit_priority} left
 #' \code{NULL} to see the raw diagnostic numbers (the realistic spread of
 #' each term, and the ratio between them), or supply \code{merit_priority}
-#' (0-100, "how much do you care about merit vs. coverage") to also get a
+#' (0-100) to also get a
 #' literal \code{merit_weight} value ready to pass straight into
-#' \code{\link{select_parents_ga}}. This is the same calculation
-#' \code{select_parents_ga()}'s own \code{merit_priority} argument uses
+#' \code{\link{select_parents_ga_ts}}. This is the same calculation
+#' \code{select_parents_ga_ts()}'s own \code{merit_priority} argument uses
 #' internally -- calling this function first just lets you see the numbers
 #' before committing to them.
 #'
@@ -537,10 +576,8 @@ truncation_selection <- function(score, n_founders,
 #' \code{merit_weight} so that merit's spread becomes comparable in
 #' magnitude to coverage's spread; \code{merit_priority = 0} is identical to
 #' \code{merit_weight = 0} (no merit term at all); values in between scale
-#' linearly. This is one reasonable, explicitly-stated definition of
-#' "comparable" -- not the only possible one (matching standard deviation
-#' instead of spread, for instance, would give a different number) -- see
-#' \emph{What this does not solve} below.
+#' linearly. This gives the breeder a reproducible definition of relative
+#' emphasis based on attainable contrasts in the supplied data.
 #'
 #' The "best achievable" coverage reference is not a naive per-block sum of
 #' each block's own maximum value across all candidates (which is usually
@@ -561,57 +598,55 @@ truncation_selection <- function(score, n_founders,
 #' the estimated spread. Trimming is skipped entirely on small candidate
 #' pools (under ~20), where it would not be meaningful.
 #'
-#' @section What this does not solve:
-#' Two limits are inherent to \emph{any} scale-matching approach, not
-#' specific to the method used here, and cannot be resolved by more
-#' engineering -- they are documented rather than hidden:
+#' @section Interpreting the calibration:
+#' The calibration has two interpretation properties:
 #' \describe{
-#'   \item{Matching spread is a choice, not a universal truth}{A different,
-#'     equally defensible definition of "comparable" (e.g. matching standard
-#'     deviation across many realistic groups, rather than the best-vs-worst
-#'     achievable span) would produce a different scale factor. Treat
-#'     \code{merit_priority}'s suggestion as a well-reasoned starting point
-#'     to inspect and adjust, not a uniquely correct answer -- the literal
-#'     \code{merit_weight} argument remains available in
-#'     \code{\link{select_parents_ga}} for full manual control.}
+#'   \item{Attainable-span scaling}{\code{merit_priority} uses the
+#'     best-vs-worst attainable span of each term. The returned diagnostics
+#'     show the exact contrasts used. A programme with an established raw
+#'     numerical policy may instead supply a positive \code{merit_weight}
+#'     to \code{\link{select_parents_ga_ts}}.}
 #'   \item{A single span number does not capture distribution shape}{If
 #'     \code{merit_score} or the block-coverage values are unusually shaped
-#'     (e.g. strongly bimodal), the dial's practical effect may not feel
-#'     perfectly linear across its 0-100 range even though the underlying
-#'     calculation is exact for what it measures.}
+#'     (e.g. strongly bimodal), equal changes in \code{merit_priority} need
+#'     not yield equal changes in the selected parent set because selection
+#'     depends on candidate combinations, not only marginal distributions.}
 #' }
-#' This calibration also only weighs merit against coverage; if
-#' \code{coancestry_weight} is also active in your \code{select_parents_ga()}
-#' call, its effect is held fixed rather than jointly recalibrated -- use
-#' \code{\link{select_parents_pareto}}'s sweep to explore that trade-off
-#' separately, as already recommended for tuning \code{coancestry_weight} on
-#' its own.
+#' The calibration scales merit against coverage. Any relationship control is
+#' applied as the separately declared third component of the complete
+#' objective and is reported in \code{objective_components}.
 #'
 #' @param value_matrix Numeric matrix (individuals x blocks), identical in
-#'   shape/meaning to \code{\link{select_parents_ga}}'s own argument --
+#'   shape and meaning to \code{\link{select_parents_ga_ts}}'s own argument --
 #'   ideally the exact same, already-filtered matrix you are about to pass
 #'   to that call (after any \code{min_sel_value}/\code{top_candidates}
 #'   filtering), so the calibration reflects the real candidate pool the GA
 #'   will search.
 #' @param merit_score Named numeric vector, whole-genome merit -- same as
-#'   \code{\link{select_parents_ga}}'s argument of the same name. Must cover
-#'   every individual in \code{value_matrix}.
-#' @param n_founders Integer. Same as \code{\link{select_parents_ga}}'s
+#'   \code{\link{select_parents_ga_ts}}'s argument of the same name. Must cover
+#'   every individual in \code{value_matrix} and be directionally aligned so
+#'   that larger values always mean greater breeding merit.
+#' @param n_founders Integer. Same as \code{\link{select_parents_ga_ts}}'s
 #'   argument of the same name -- the founder group size to calibrate for.
 #' @param strategy One of \code{"no_selfing"} (default), \code{"selfing"},
-#'   \code{"OHS"}, \code{"OPV"}, \code{"Haploid_OHS"} -- must match the
-#'   \code{strategy} you intend to run \code{select_parents_ga()} with, since
+#'   \code{"OHS"} (Optimal Haplotype Selection),
+#'   \code{"OPV"} (Optimal Population Value), or \code{"Haploid_OHS"} -- must match the
+#'   \code{strategy} you intend to run \code{select_parents_ga_ts()} with,
+#'   since
 #'   it changes how a block's achievable value is computed.
 #' @param block_weights Numeric vector, length \code{ncol(value_matrix)}, or
 #'   \code{NULL} (default: equal weight 1) -- same as
-#'   \code{\link{select_parents_ga}}'s argument of the same name. Must be
+#'   \code{\link{select_parents_ga_ts}}'s argument of the same name. Must be
 #'   non-negative.
 #' @param merit_priority Numeric in \code{[0, 100]}, or \code{NULL} (default).
 #'   \code{NULL} returns only the diagnostic spread/scale numbers, with
 #'   \code{suggested_merit_weight = NULL}. A number computes
 #'   \code{suggested_merit_weight} too -- \code{0} is always equivalent to
 #'   \code{merit_weight = 0}; \code{100} sets merit's spread comparable to
-#'   coverage's spread; values between scale linearly.
+#'   coverage's spread; values between scale linearly. A zero value is useful
+#'   for scale diagnostics but is not accepted by
+#'   \code{\link{select_parents_ga_ts}}; use
+#'   \code{\link{select_parents_ga}} for coverage-only selection.
 #'
 #' @return Named list:
 #' \describe{
@@ -629,7 +664,7 @@ truncation_selection <- function(score, n_founders,
 #'     small to divide by safely (see \code{ok}).}
 #'   \item{\code{merit_priority}}{Echoes the argument.}
 #'   \item{\code{suggested_merit_weight}}{\code{merit_priority / 100 *
-#'     scale_factor}, ready to pass to \code{\link{select_parents_ga}}'s
+#'     scale_factor}, ready to pass to \code{\link{select_parents_ga_ts}}'s
 #'     \code{merit_weight} argument. \code{NULL} if \code{merit_priority}
 #'     was \code{NULL}.}
 #'   \item{\code{ok}}{Logical. \code{FALSE} if \code{merit_span} was too
@@ -642,10 +677,10 @@ truncation_selection <- function(score, n_founders,
 #'     group (\code{0} on small candidate pools, where trimming is skipped).}
 #' }
 #'
-#' @seealso \code{\link{select_parents_ga}}'s \emph{Merit-weighted fitness
-#'   (GA+TS hybrid, optional)} section for the fitness function this feeds
-#'   into, and \code{\link{select_parents_pareto}} for exploring the
-#'   \code{coancestry_weight} trade-off the same way.
+#' @seealso \code{\link{select_parents_ga_ts}} for the joint objective,
+#'   \code{\link{select_parents_ga}} for coverage-only selection, and
+#'   \code{\link{select_parents_pareto}} for exploring coverage-relatedness
+#'   trade-offs.
 #'
 #' @examples
 #' \dontrun{
@@ -655,8 +690,10 @@ truncation_selection <- function(score, n_founders,
 #' cal  <- suggest_merit_weight(vmat, res$gebv, n_founders = 20,
 #'                              merit_priority = 50)
 #' cal$merit_span; cal$coverage_span; cal$suggested_merit_weight
-#' ga_out <- select_parents_ga(vmat, n_founders = 20, merit_score = res$gebv,
-#'                             merit_weight = cal$suggested_merit_weight)
+#' ga_out <- select_parents_ga_ts(
+#'   vmat, n_founders = 20, merit_score = res$gebv,
+#'   merit_weight = cal$suggested_merit_weight
+#' )
 #' }
 #'
 #' @export
@@ -666,12 +703,14 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
                                  block_weights = NULL, merit_priority = NULL) {
   strategy <- match.arg(strategy)
   if (!is.matrix(value_matrix)) value_matrix <- as.matrix(value_matrix)
-  if (is.null(rownames(value_matrix)))
-    stop("value_matrix must have row names (candidate individual IDs).",
-         call. = FALSE)
-  if (is.null(names(merit_score)))
-    stop("merit_score must be a named numeric vector (names = individual ",
-         "IDs).", call. = FALSE)
+  if (!is.numeric(value_matrix) || is.null(rownames(value_matrix)))
+    stop("value_matrix must be numeric and have row names (candidate ",
+         "individual IDs).", call. = FALSE)
+  if (!is.numeric(merit_score) || is.null(names(merit_score)) ||
+      any(!nzchar(names(merit_score))) || anyDuplicated(names(merit_score)) ||
+      any(!is.finite(merit_score)))
+    stop("merit_score must be a named finite numeric vector with unique, ",
+         "non-empty candidate IDs.", call. = FALSE)
   missing_m <- setdiff(rownames(value_matrix), names(merit_score))
   if (length(missing_m))
     stop(length(missing_m), " value_matrix candidate(s) have no merit_score ",
@@ -691,7 +730,9 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
   }
 
   if (!is.null(merit_priority) &&
-      (!is.numeric(merit_priority) || merit_priority < 0 || merit_priority > 100))
+      (!is.numeric(merit_priority) || length(merit_priority) != 1L ||
+       !is.finite(merit_priority) || merit_priority < 0 ||
+       merit_priority > 100))
     stop("merit_priority must be a single numeric value in [0, 100], or NULL.",
          call. = FALSE)
 
@@ -728,7 +769,7 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 
 
 # -- Internal: run GA::ga() once for a given value_matrix/strategy/weights.
-# Factored out of select_parents_ga() so it can be called n_reps times with
+# Factored out of the public GA tools so it can be called n_reps times with
 # different seeds for the replication/stability check documented there.
 # Returns the selected founders, fitness, per-block contributor table, the
 # raw ga_fit object, a convergence flag (ga_fit@iter < maxiter means
@@ -743,40 +784,119 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 # relatedness_ceiling, using the SAME idiom already used for the cardinality
 # penalty above (k - n_founders)^2 * penalty_weight -- see
 # .calibrate_relatedness_ceiling() for how both are derived. Mutually
-# exclusive with coancestry_weight at the select_parents_ga() level, but
+# exclusive with coancestry_weight at the public-function level, but
 # both branches are harmless if somehow both were active (each computes
 # `rel` independently).
+.repair_founder_bits <- function(bits, n_founders, priority) {
+  bits <- as.integer(bits > 0.5)
+  selected <- which(bits == 1L)
+
+  if (length(selected) > n_founders) {
+    drop <- selected[order(priority[selected], decreasing = FALSE,
+                           na.last = TRUE)][seq_len(length(selected) - n_founders)]
+    bits[drop] <- 0L
+  } else if (length(selected) < n_founders) {
+    available <- which(bits == 0L)
+    add <- available[order(priority[available], decreasing = TRUE,
+                           na.last = NA)][seq_len(n_founders - length(selected))]
+    bits[add] <- 1L
+  }
+
+  bits
+}
+
+
+.ga_objective_components <- function(chosen_idx, value_matrix, strategy,
+                                     block_weights, ids, G = NULL,
+                                     coancestry_weight = 0,
+                                     merit_score = NULL, merit_weight = 0,
+                                     relatedness_ceiling = NULL,
+                                     relatedness_tolerance = 1e-10) {
+  best_vals <- .block_best_values(value_matrix, chosen_idx, strategy)
+  coverage <- sum(best_vals * block_weights)
+  mean_rel <- if (!is.null(G)) {
+    .mean_pairwise_relationship(G, ids[chosen_idx])
+  } else {
+    NA_real_
+  }
+  mean_merit <- if (!is.null(merit_score)) {
+    mean(merit_score[ids[chosen_idx]])
+  } else {
+    NA_real_
+  }
+  merit_bonus <- if (is.finite(mean_merit) && merit_weight > 0) {
+    merit_weight * mean_merit
+  } else {
+    0
+  }
+  coancestry_penalty <- if (is.finite(mean_rel) && coancestry_weight > 0) {
+    coancestry_weight * mean_rel
+  } else {
+    0
+  }
+  relatedness_excess <- if (!is.null(relatedness_ceiling) &&
+                            is.finite(mean_rel)) {
+    max(0, mean_rel - relatedness_ceiling)
+  } else {
+    0
+  }
+  feasible_relatedness <- is.null(relatedness_ceiling) ||
+    (is.finite(mean_rel) &&
+       mean_rel <= relatedness_ceiling + relatedness_tolerance)
+
+  list(
+    coverage = coverage,
+    merit_bonus = merit_bonus,
+    coancestry_penalty = coancestry_penalty,
+    total = coverage + merit_bonus - coancestry_penalty,
+    mean_relationship = mean_rel,
+    mean_merit = mean_merit,
+    relatedness_excess = relatedness_excess,
+    feasible_relatedness = feasible_relatedness,
+    best_values = best_vals
+  )
+}
+
+
 .run_ga_once <- function(value_matrix, n_founders, strategy, block_weights,
                          popSize, maxiter, run, pmutation, pcrossover,
                          penalty_weight, seed, verbose,
                          G = NULL, coancestry_weight = 0,
                          merit_score = NULL, merit_weight = 0,
                          relatedness_ceiling = NULL,
-                         relatedness_penalty_coef = 0) {
+                         relatedness_penalty_coef = 0,
+                         constraint_seed_ids = NULL,
+                         relatedness_tolerance = 1e-10,
+                         run_id = 1L) {
   n_cand <- nrow(value_matrix)
   ids    <- rownames(value_matrix)
+  priority <- as.numeric(value_matrix %*% block_weights)
+  if (!is.null(merit_score) && merit_weight > 0) {
+    priority <- priority + merit_weight * merit_score[ids]
+  }
+
+  evaluate_bits <- function(bits) {
+    repaired <- .repair_founder_bits(bits, n_founders, priority)
+    chosen_idx <- which(repaired == 1L)
+    components <- .ga_objective_components(
+      chosen_idx, value_matrix, strategy, block_weights, ids,
+      G = G, coancestry_weight = coancestry_weight,
+      merit_score = merit_score, merit_weight = merit_weight,
+      relatedness_ceiling = relatedness_ceiling,
+      relatedness_tolerance = relatedness_tolerance
+    )
+    list(bits = repaired, chosen_idx = chosen_idx, components = components)
+  }
 
   fitness_fn <- function(bits) {
-    chosen_idx <- which(bits > 0.5)
-    k <- length(chosen_idx)
-    penalty <- (k - n_founders)^2 * penalty_weight
-    if (k < 1L) return(-1e9)
-    best_vals <- .block_best_values(value_matrix, chosen_idx, strategy)
-    fit <- sum(best_vals * block_weights) - penalty
-    if (!is.null(G) && coancestry_weight > 0 && k >= 2L) {
-      rel <- .mean_pairwise_relationship(G, ids[chosen_idx])
-      fit <- fit - coancestry_weight * rel
+    assessed <- evaluate_bits(bits)
+    if (!assessed$components$feasible_relatedness) {
+      infeasible_base <- -.Machine$double.xmax^(1 / 8)
+      return(infeasible_base -
+               relatedness_penalty_coef *
+               assessed$components$relatedness_excess^2)
     }
-    if (!is.null(G) && !is.null(relatedness_ceiling) && k >= 2L) {
-      rel  <- .mean_pairwise_relationship(G, ids[chosen_idx])
-      viol <- max(0, rel - relatedness_ceiling)
-      fit  <- fit - relatedness_penalty_coef * viol^2
-    }
-    if (!is.null(merit_score) && merit_weight > 0) {
-      mm <- mean(merit_score[ids[chosen_idx]])
-      fit <- fit + merit_weight * mm
-    }
-    fit
+    assessed$components$total
   }
 
   if (!is.null(seed)) set.seed(seed)
@@ -789,6 +909,15 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
     bits[sample.int(n_cand, n_founders)] <- 1L
     bits
   }, integer(n_cand)))
+  if (!is.null(constraint_seed_ids)) {
+    seed_idx <- match(constraint_seed_ids, ids)
+    seed_idx <- seed_idx[!is.na(seed_idx)]
+    if (length(seed_idx) != n_founders)
+      stop("Internal error: constraint_seed_ids must identify exactly ",
+           "n_founders candidates.", call. = FALSE)
+    suggested[1L, ] <- 0L
+    suggested[1L, seed_idx] <- 1L
+  }
 
   ga_fit <- GA::ga(
     type       = "binary",
@@ -804,10 +933,46 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
     seed       = seed
   )
 
-  best_bits  <- as.numeric(ga_fit@solution[1L, ])
-  chosen_idx <- which(best_bits > 0.5)
+  candidate_bits <- rbind(
+    as.numeric(ga_fit@solution[1L, ]),
+    ga_fit@population
+  )
+  if (!is.null(constraint_seed_ids)) {
+    constraint_bits <- integer(n_cand)
+    constraint_bits[match(constraint_seed_ids, ids)] <- 1L
+    candidate_bits <- rbind(candidate_bits, constraint_bits)
+  }
+  candidate_bits <- t(vapply(
+    seq_len(nrow(candidate_bits)),
+    function(i) .repair_founder_bits(candidate_bits[i, ], n_founders, priority),
+    integer(n_cand)
+  ))
+  candidate_bits <- unique(candidate_bits)
+  candidate_evaluations <- lapply(
+    seq_len(nrow(candidate_bits)),
+    function(i) evaluate_bits(candidate_bits[i, ])
+  )
+  feasible <- vapply(
+    candidate_evaluations,
+    function(x) isTRUE(x$components$feasible_relatedness),
+    logical(1)
+  )
+  if (!any(feasible)) {
+    stop("The genetic algorithm did not produce a founder set satisfying ",
+         "the hard relatedness ceiling. Increase popSize/maxiter or revise ",
+         "target_degree.", call. = FALSE)
+  }
+  feasible_evaluations <- candidate_evaluations[feasible]
+  feasible_fitness <- vapply(
+    feasible_evaluations,
+    function(x) x$components$total,
+    numeric(1)
+  )
+  assessed <- feasible_evaluations[[which.max(feasible_fitness)]]
+  best_bits <- assessed$bits
+  chosen_idx <- assessed$chosen_idx
 
-  best_vals    <- .block_best_values(value_matrix, chosen_idx, strategy)
+  best_vals    <- assessed$components$best_values
   contributors <- .block_best_contributors(value_matrix, chosen_idx, strategy)
 
   per_block <- data.frame(
@@ -817,17 +982,32 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
   )
   per_block <- cbind(per_block, contributors)
 
-  mean_rel <- if (!is.null(G)) .mean_pairwise_relationship(G, ids[chosen_idx]) else NA_real_
-  mean_mer <- if (!is.null(merit_score)) mean(merit_score[ids[chosen_idx]]) else NA_real_
+  mean_rel <- assessed$components$mean_relationship
+  mean_mer <- assessed$components$mean_merit
+  relatedness_excess <- assessed$components$relatedness_excess
+  feasible_final <- length(chosen_idx) == n_founders &&
+    isTRUE(assessed$components$feasible_relatedness)
 
   list(
     selected         = ids[chosen_idx],
-    fitness          = sum(best_vals * block_weights),
+    fitness          = assessed$components$total,
+    coverage_fitness = assessed$components$coverage,
+    objective_components = unlist(assessed$components[
+      c("coverage", "merit_bonus", "coancestry_penalty", "total")
+    ]),
     per_block        = per_block,
     ga_fit           = ga_fit,
     converged        = ga_fit@iter < maxiter,
     mean_relationship = mean_rel,
-    mean_merit         = mean_mer
+    mean_merit         = mean_mer,
+    feasible           = feasible_final,
+    constraint_violations = c(
+      founder_count = abs(length(chosen_idx) - n_founders),
+      relatedness_excess = relatedness_excess
+    ),
+    termination_reason = if (ga_fit@iter < maxiter) "fitness_plateau" else "maxiter",
+    seed = seed,
+    run_id = as.integer(run_id)
   )
 }
 
@@ -877,11 +1057,11 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #'     largest} value among the chosen founders -- a parent may be selfed to
 #'     realise its own value alone, without needing a complementary partner.
 #'     Mirrors HapSelect's localGEBV-mode \code{"selfing"}.}
-#'   \item{\code{"OHS"}}{Same computation as \code{"no_selfing"}
-#'     (two distinct parents required), named for haplotype-mode use where
-#'     each parent contributes one haplotype copy.}
-#'   \item{\code{"OPV"}}{Same computation as \code{"selfing"} (single best
-#'     value) -- "population value" framing: any one founder carrying the
+#'   \item{\code{"OHS"}}{Optimal Haplotype Selection (OHS). Same computation
+#'     as \code{"no_selfing"} (two distinct parents required), named for
+#'     haplotype-mode use where each parent contributes one haplotype copy.}
+#'   \item{\code{"OPV"}}{Optimal Population Value (OPV). Same computation as
+#'     \code{"selfing"} (single best value): any one founder carrying the
 #'     favourable haplotype is enough, poolable across the whole founder set
 #'     rather than requiring a specific complementary pairing.}
 #'   \item{\code{"Haploid_OHS"}}{Same computation as \code{"selfing"} -- a
@@ -936,7 +1116,10 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #'   flooding the console). Default \code{FALSE}.
 #' @param merit_score Named numeric vector (e.g.
 #'   \code{run_haplotype_prediction()$gebv}), or \code{NULL} (default).
-#'   Whole-genome merit, used for up to two independent purposes depending on
+#'   Whole-genome merit, directionally aligned so that larger always means
+#'   better. Reverse lower-is-better traits, or assign them negative
+#'   selection-index weights, before constructing this vector. It is used
+#'   for up to two independent purposes depending on
 #'   which of \code{min_sel_value}/\code{merit_weight} are set: (1) the
 #'   \code{min_sel_value} eligibility floor below, a hard pre-search
 #'   exclusion; and (2) when \code{merit_weight > 0}, a soft, additive term
@@ -1018,9 +1201,9 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #'   \item{\code{selected}}{Character vector of the selected individual IDs
 #'     from the best-fitness replicate (length \code{n_founders}, or as close
 #'     as the GA achieved -- check \code{length(selected) == n_founders}).}
-#'   \item{\code{fitness}}{Numeric. Best fitness value found (raw block-value
-#'     sum, after subtracting the cardinality penalty), best-fitness
-#'     replicate.}
+#'   \item{\code{fitness}}{Numeric. Greatest complete objective among feasible
+#'     replicates. The complete objective includes block coverage and any
+#'     requested merit or coancestry terms.}
 #'   \item{\code{per_block}}{Data frame for the best-fitness replicate:
 #'     \code{block_id}, \code{best_value}, \code{contributor_1},
 #'     \code{contributor_2} (equal to \code{contributor_1} under a
@@ -1104,7 +1287,7 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #' running with \code{coancestry_weight = 0} and inspecting \code{$fitness}'s
 #' typical magnitude, then choose a weight that makes the coancestry term
 #' large enough to visibly compete with it; increase further if the
-#' resulting \code{selected} set is still too related for your program, and
+#' resulting \code{selected} set is still too related for your programme, and
 #' compare \code{$mean_relationship} across a few candidate weights to see
 #' the trade-off curve directly. An easier alternative to tuning this by
 #' hand is \code{target_degree}, described next.
@@ -1227,11 +1410,12 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #' the calibration numbers, then pass a literal \code{merit_weight} yourself
 #' if you want to fine-tune from there.
 #'
-#' @section GA rigour: replication and convergence:
-#' A single GA run, taken at face value, tells you nothing about whether its
-#' answer is a robust optimum or one of several near-equally-good solutions a
-#' stochastic search happened to land on. This function addresses that
-#' directly rather than leaving it to the caller:
+#' @section GA replication, automatic selection and convergence:
+#' The function performs replicated stochastic searches, checks feasibility,
+#' calculates the complete objective for each replicate and automatically
+#' returns the feasible replicate with the greatest objective. The breeder
+#' reviews the combined stability diagnostics rather than choosing among
+#' individual runs:
 #' \describe{
 #'   \item{Convergence}{Every replicate's \code{ga_fit@iter} (generations
 #'     actually run) is checked against \code{maxiter}. Stopping early means
@@ -1244,19 +1428,15 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #'     is repeated from \code{n_reps} different starting populations/seeds.
 #'     \code{$stability$selection_freq} reports, for every candidate selected
 #'     in at least one replicate, the fraction of replicates that selected
-#'     them -- individuals at \code{1.0} are robustly supported regardless of
-#'     the GA's random starting point; individuals selected in only one
-#'     replicate out of several are borderline and worth a second look before
-#'     committing to them. \code{$stability$fitness_range} shows how much the
-#'     best achievable fitness varied across replicates -- a narrow range
-#'     alongside high selection frequencies is the signature of a stable,
-#'     trustworthy search.}
+#'     them. Individuals at \code{1.0} are selected from every starting
+#'     population. Lower frequencies identify alternative near-equivalent
+#'     sets or a search that may benefit from larger controls.
+#'     \code{$stability$fitness_range} shows how much the achieved objective
+#'     varied across replicates.}
 #' }
-#' This is deliberately more rigorous by default than a single fixed-seed GA
-#' run: HapSelect's own documented parent-selection GA (see \emph{Description})
-#' does not report replication stability or a convergence flag at all. Set
-#' \code{n_reps = 1} only once you have separately confirmed stability, or for
-#' quick iteration during exploratory analysis.
+#' The default \code{n_reps = 5} supplies replication evidence automatically.
+#' A value of one remains available for quick exploratory iteration or when
+#' stability has been established separately.
 #'
 #' @section Choosing between this function and truncation_selection():
 #' \code{\link{truncation_selection}} ranks by a single whole-genome score and
@@ -1269,21 +1449,12 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #'   \item{\code{truncation_selection()} ignores}{which haplotype blocks each
 #'     individual carries -- its top-N list can concentrate on the same
 #'     favourable blocks while leaving others uncovered.}
-#'   \item{\code{select_parents_ga()} ignores}{whole-genome merit by default,
-#'     unless \code{merit_score} is supplied via \code{min_sel_value} (a hard
-#'     pre-search floor), \code{merit_weight} (a soft, continuous term
-#'     rewarded throughout the search -- see \emph{Merit-weighted fitness
-#'     (GA+TS hybrid, optional)}), or both together. Without either, a
-#'     genuinely poor-performing individual who happens to uniquely carry one
-#'     target block's favourable value will still be selected, purely to
-#'     cover that block -- and, even with only a floor and no weight, a
-#'     candidate who barely clears the floor is treated identically to one
-#'     who clears it by a wide margin. Setting \code{merit_weight > 0} is the
-#'     tool's own built-in "GA+TS hybrid" mode: it keeps searching for joint
-#'     block coverage while also rewarding whole-genome merit directly inside
-#'     the search, which matters most when block-level/local-GEBV estimates
-#'     carry real estimation noise and a coverage-only search risks selecting
-#'     on that noise rather than on genuine signal.}
+#'   \item{\code{select_parents_ga()} ignores}{whole-genome merit because it is
+#'     deliberately the coverage-only public tool. Use
+#'     \code{\link{select_parents_ga_ts}} when whole-genome merit must define a
+#'     hard eligibility floor, contribute continuously to the objective, or
+#'     do both. The separate public functions prevent a coverage analysis from
+#'     being mistaken for a joint GA+TS analysis.}
 #'   \item{\strong{Neither function, by default}}{manages coancestry/
 #'     inbreeding risk in the chosen set, assigns differential contributions,
 #'     or decides who mates whom. This function's optional
@@ -1331,32 +1502,44 @@ suggest_merit_weight <- function(value_matrix, merit_score, n_founders,
 #' ga_out$selected
 #' }
 #'
-#' @export
-select_parents_ga <- function(value_matrix,
-                              n_founders,
-                              strategy = c("no_selfing", "selfing", "OHS",
-                                          "OPV", "Haploid_OHS"),
-                              block_weights  = NULL,
-                              top_candidates = NULL,
-                              popSize    = 100L,
-                              maxiter    = 200L,
-                              run        = 50L,
-                              pmutation  = 0.1,
-                              pcrossover = 0.8,
-                              penalty_weight = NULL,
-                              seed       = NULL,
-                              verbose    = FALSE,
-                              merit_score   = NULL,
-                              min_sel_value = NULL,
-                              min_sel_mode  = c("value", "percentile",
-                                               "sd_below_mean"),
-                              n_reps     = 5L,
-                              G = NULL,
-                              coancestry_weight = 0,
-                              merit_weight = 0,
-                              merit_priority = NULL,
-                              target_degree = NULL) {
+#' @noRd
+.select_parents_ga_engine <- function(
+    value_matrix,
+    n_founders,
+    strategy = c("no_selfing", "selfing", "OHS", "OPV", "Haploid_OHS"),
+    block_weights = NULL,
+    top_candidates = NULL,
+    popSize = 100L,
+    maxiter = 200L,
+    run = 50L,
+    pmutation = 0.1,
+    pcrossover = 0.8,
+    penalty_weight = NULL,
+    seed = NULL,
+    verbose = FALSE,
+    merit_score = NULL,
+    min_sel_value = NULL,
+    min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+                     "sd_below_mean"),
+    n_reps = 5L,
+    G = NULL,
+    coancestry_weight = 0,
+    merit_weight = 0,
+    merit_priority = NULL,
+    target_degree = NULL,
+    result_method,
+    result_call
+) {
   strategy <- match.arg(strategy)
+
+  if (!is.numeric(coancestry_weight) || length(coancestry_weight) != 1L ||
+      !is.finite(coancestry_weight) || coancestry_weight < 0)
+    stop("coancestry_weight must be one non-negative finite numeric value.",
+         call. = FALSE)
+  if (!is.numeric(merit_weight) || length(merit_weight) != 1L ||
+      !is.finite(merit_weight) || merit_weight < 0)
+    stop("merit_weight must be one non-negative finite numeric value.",
+         call. = FALSE)
 
   if (coancestry_weight > 0 && is.null(G))
     stop("coancestry_weight > 0 requires G (a relationship/kinship matrix ",
@@ -1373,12 +1556,13 @@ select_parents_ga <- function(value_matrix,
   # resolved and merit_score is validated to cover the final candidate pool
   # -- see .calibrate_relatedness_ceiling().
   if (!is.null(target_degree)) {
-    if (!missing(coancestry_weight))
+    if (isTRUE(coancestry_weight > 0))
       stop("Supply exactly one of coancestry_weight or target_degree, not ",
            "both -- target_degree is converted into an internal ",
            "relatedness-ceiling penalty, so passing both is ambiguous.",
            call. = FALSE)
-    if (!is.numeric(target_degree) || target_degree < 0 || target_degree > 90)
+    if (!is.numeric(target_degree) || length(target_degree) != 1L ||
+        !is.finite(target_degree) || target_degree < 0 || target_degree > 90)
       stop("target_degree must be a single numeric value in [0, 90] (same ",
            "convention as select_parents_ocs()'s target_degree: 0 = max ",
            "gain, prioritising coverage/merit; 90 = max diversity, ",
@@ -1394,12 +1578,14 @@ select_parents_ga <- function(value_matrix,
   # further down, AFTER min_sel_value/top_candidates filtering, so the
   # calibration reflects the real candidate pool the GA will search.
   if (!is.null(merit_priority)) {
-    if (!missing(merit_weight))
+    if (isTRUE(merit_weight > 0))
       stop("Supply exactly one of merit_weight or merit_priority, not both ",
            "-- merit_priority is converted into merit_weight internally, so ",
            "passing both is ambiguous. See ?suggest_merit_weight.",
            call. = FALSE)
-    if (!is.numeric(merit_priority) || merit_priority < 0 || merit_priority > 100)
+    if (!is.numeric(merit_priority) || length(merit_priority) != 1L ||
+        !is.finite(merit_priority) || merit_priority < 0 ||
+        merit_priority > 100)
       stop("merit_priority must be a single numeric value in [0, 100].",
            call. = FALSE)
     if (is.null(merit_score))
@@ -1411,22 +1597,38 @@ select_parents_ga <- function(value_matrix,
   if (merit_weight > 0 && is.null(merit_score))
     stop("merit_weight > 0 requires merit_score (a named whole-genome merit ",
          "vector) -- it is the value the weighted merit term in the fitness ",
-         "function is computed from. See ?select_parents_ga's 'Merit-",
-         "weighted fitness (GA+TS hybrid, optional)' section.", call. = FALSE)
+         "function is computed from. See ?select_parents_ga_ts.",
+         call. = FALSE)
 
   if (!requireNamespace("GA", quietly = TRUE))
-    stop("GA is required for select_parents_ga(). ",
+    stop("GA is required for ", result_method, "(). ",
          "Install with: install.packages('GA')", call. = FALSE)
   if (!is.matrix(value_matrix)) value_matrix <- as.matrix(value_matrix)
+  if (!is.numeric(value_matrix) || !nrow(value_matrix) || !ncol(value_matrix))
+    stop("value_matrix must be a non-empty numeric candidate-by-block matrix.",
+         call. = FALSE)
   if (is.null(rownames(value_matrix)))
     stop("value_matrix must have row names (candidate individual IDs).",
          call. = FALSE)
+  if (anyNA(rownames(value_matrix)) || any(!nzchar(rownames(value_matrix))) ||
+      anyDuplicated(rownames(value_matrix)))
+    stop("value_matrix row names must be unique, non-missing candidate IDs.",
+         call. = FALSE)
+  if (any(is.infinite(value_matrix)))
+    stop("value_matrix must not contain infinite values.", call. = FALSE)
+  if (any(colSums(is.finite(value_matrix)) == 0L))
+    stop("Every value_matrix block must contain at least one finite value.",
+         call. = FALSE)
   if (is.null(colnames(value_matrix)))
     colnames(value_matrix) <- paste0("block_", seq_len(ncol(value_matrix)))
+  if (anyNA(colnames(value_matrix)) || any(!nzchar(colnames(value_matrix))) ||
+      anyDuplicated(colnames(value_matrix)))
+    stop("value_matrix column names must be unique, non-missing block IDs.",
+         call. = FALSE)
 
   # -- Merit floor (optional) -- filters the candidate POOL before anything
   # else, using merit_score (whole-genome value), not value_matrix itself.
-  # See .apply_merit_floor() and ?select_parents_ga's min_sel_value docs.
+  # See .apply_merit_floor() and ?select_parents_ga_ts.
   if (!is.null(min_sel_value) && is.null(merit_score))
     stop("min_sel_value requires merit_score (a named whole-genome value ",
          "vector) to evaluate the floor against.", call. = FALSE)
@@ -1468,6 +1670,10 @@ select_parents_ga <- function(value_matrix,
   } else if (length(block_weights) != ncol(value_matrix)) {
     stop("block_weights must have length ncol(value_matrix).", call. = FALSE)
   }
+  if (!is.numeric(block_weights) || any(!is.finite(block_weights)) ||
+      any(block_weights < 0))
+    stop("block_weights must contain non-negative finite numeric values.",
+         call. = FALSE)
 
   # -- Optional candidate-pool prefilter (search-space size safeguard) -------
   if (!is.null(top_candidates)) {
@@ -1499,16 +1705,14 @@ select_parents_ga <- function(value_matrix,
     cal <- .calibrate_merit_scale(value_matrix, merit_score, block_weights,
                                   strategy, n_founders)
     if (!cal$ok) {
-      warning("[select_parents_ga] merit_priority requested, but ",
-              "merit_score has too little spread among the final candidate ",
-              "pool to calibrate a scale factor safely; merit_weight stays ",
-              "0 (no merit term). Supply merit_weight directly if you still ",
-              "want one. See ?suggest_merit_weight.", call. = FALSE)
-      merit_weight <- 0
+      stop("[", result_method, "] merit_priority cannot be calibrated because ",
+           "merit_score has too little spread in the final candidate pool. ",
+           "Supply a positive merit_weight directly if a scientifically ",
+           "justified raw scale is available.", call. = FALSE)
     } else {
       merit_weight <- (merit_priority / 100) * cal$scale_factor
       if (isTRUE(verbose))
-        message("[select_parents_ga] merit_priority = ", merit_priority,
+        message("[", result_method, "] merit_priority = ", merit_priority,
                 "% -> merit_weight = ", signif(merit_weight, 4),
                 " (coverage_span = ", signif(cal$coverage_span, 4),
                 ", merit_span = ", signif(cal$merit_span, 4), ").")
@@ -1553,12 +1757,14 @@ select_parents_ga <- function(value_matrix,
   # ?select_parents_ga's target_degree docs for the direction convention.
   relatedness_ceiling <- NULL
   relatedness_penalty_coef <- 0
+  constraint_seed_ids <- NULL
   if (!is.null(target_degree)) {
     cal_rel <- .calibrate_relatedness_ceiling(
       value_matrix, G, block_weights, strategy, n_founders,
       target_degree, merit_weight = merit_weight, merit_score = merit_score
     )
     relatedness_ceiling <- cal_rel$ceiling
+    constraint_seed_ids <- cal_rel$diversity_ids
     # Scaled to dominate any possible coverage/merit gain from violating the
     # ceiling, without a new user-tunable constant -- NOT penalty_weight,
     # which is calibrated for the unrelated cardinality constraint on a
@@ -1566,7 +1772,7 @@ select_parents_ga <- function(value_matrix,
     # units) -- see ?select_parents_ga's target_degree docs.
     relatedness_penalty_coef <- 10 * max(cal_rel$coverage_span, sqrt(.Machine$double.eps))
     if (isTRUE(verbose))
-      message("[select_parents_ga] target_degree = ", target_degree,
+      message("[", result_method, "] target_degree = ", target_degree,
               " -> relatedness ceiling = ", signif(relatedness_ceiling, 4),
               " (gain end = ", signif(cal_rel$gain_end, 4),
               ", diversity end = ", signif(cal_rel$diversity_end, 4), ").")
@@ -1586,7 +1792,9 @@ select_parents_ga <- function(value_matrix,
       G = G, coancestry_weight = coancestry_weight,
       merit_score = merit_score, merit_weight = merit_weight,
       relatedness_ceiling = relatedness_ceiling,
-      relatedness_penalty_coef = relatedness_penalty_coef
+      relatedness_penalty_coef = relatedness_penalty_coef,
+      constraint_seed_ids = constraint_seed_ids,
+      run_id = i
     )
   }
 
@@ -1594,13 +1802,15 @@ select_parents_ga <- function(value_matrix,
   best_i       <- which.max(fitness_vals)
   best         <- reps[[best_i]]
 
-  if (length(best$selected) != n_founders) {
-    warning("[select_parents_ga] Best replicate converged on ",
-            length(best$selected), " founders, not the requested ",
-            "n_founders = ", n_founders, ". Consider increasing ",
-            "maxiter/penalty_weight, or accept this as the GA's best ",
-            "trade-off.", call. = FALSE)
-  }
+  if (!isTRUE(best$feasible) || length(best$selected) != n_founders)
+    stop("Internal error: ", result_method,
+         "() selected an infeasible founder ",
+         "set after hard-constraint repair.", call. = FALSE)
+  if (!is.null(relatedness_ceiling) &&
+      best$mean_relationship > relatedness_ceiling + 1e-10)
+    stop("Internal error: ", result_method,
+         "() exceeded the hard relatedness ",
+         "ceiling after feasibility checking.", call. = FALSE)
 
   # -- Stability across replicates: per-individual selection frequency, and
   # how much the achievable fitness varied run to run. See "GA rigour".
@@ -1616,16 +1826,25 @@ select_parents_ga <- function(value_matrix,
     fitness_range      = range(fitness_vals),
     best_rep           = best_i,
     converged          = vapply(reps, function(r) r$converged, logical(1)),
+    feasible           = vapply(reps, function(r) r$feasible, logical(1)),
     selection_freq     = sel_freq,
     mean_relationship  = vapply(reps, function(r) r$mean_relationship, numeric(1)),
-    mean_merit         = vapply(reps, function(r) r$mean_merit, numeric(1))
+    mean_merit         = vapply(reps, function(r) r$mean_merit, numeric(1)),
+    seeds              = vapply(reps, function(r) {
+      if (is.null(r$seed)) NA_integer_ else as.integer(r$seed)
+    }, integer(1)),
+    termination_reason = vapply(reps, function(r) r$termination_reason,
+                                character(1))
   )
 
-  list(
+  result <- list(
     selected          = best$selected,
     fitness           = best$fitness,
+    coverage_fitness  = best$coverage_fitness,
+    objective_components = best$objective_components,
     per_block         = best$per_block,
     strategy          = strategy,
+    selection_method  = result_method,
     ga_fit            = best$ga_fit,
     converged         = best$converged,
     cutoff            = cutoff,
@@ -1636,7 +1855,417 @@ select_parents_ga <- function(value_matrix,
     coancestry_weight = coancestry_weight,
     target_degree     = target_degree,
     relatedness_ceiling = relatedness_ceiling,
+    feasible          = best$feasible,
+    constraint_violations = best$constraint_violations,
+    termination_reason = best$termination_reason,
+    seed              = best$seed,
+    run_id            = best$run_id,
     stability         = stability
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = result_method,
+    call = result_call,
+    parameters = list(
+      n_founders = n_founders, strategy = strategy,
+      merit_weight = merit_weight, coancestry_weight = coancestry_weight,
+      target_degree = target_degree,
+      relatedness_ceiling = relatedness_ceiling, n_reps = n_reps
+    ),
+    seed = seed,
+    sample_ids = rownames(value_matrix),
+    variant_ids = colnames(value_matrix),
+    inputs = list(
+      value_matrix = value_matrix,
+      relationship_matrix = G,
+      merit_score = merit_score,
+      block_weights = block_weights
+    ),
+    transformations = c(
+      "candidate eligibility filtering",
+      "exact-cardinality repair",
+      "hard relatedness feasibility evaluation",
+      "repeated genetic-algorithm optimisation"
+    ),
+    quality_gates = c(
+      exact_founder_count = length(result$selected) == n_founders,
+      hard_constraints_satisfied = isTRUE(result$feasible),
+      all_repetitions_feasible = all(stability$feasible)
+    ),
+    decision_table = data.frame(
+      id = result$selected,
+      selection_frequency = unname(stability$selection_freq[result$selected]),
+      stringsAsFactors = FALSE
+    ),
+    uncertainty = data.frame(
+      repetition = seq_len(n_reps),
+      seed = stability$seeds,
+      objective = stability$fitness_values,
+      mean_relationship = stability$mean_relationship,
+      mean_merit = stability$mean_merit,
+      feasible = stability$feasible,
+      stringsAsFactors = FALSE
+    )
+  )
+}
+
+
+#' Select Parents by Genetic-Algorithm Haplotype Coverage
+#'
+#' @description
+#' Selects a fixed-size parent set that jointly covers favourable values
+#' across target haplotype blocks. This is the coverage-only genetic-algorithm
+#' (GA) tool. Use \code{\link{select_parents_ga_ts}} when whole-genome merit
+#' must also contribute directly to the optimisation objective, or
+#' \code{\link{truncation_selection}} when parents should be selected only by
+#' a whole-genome score.
+#'
+#' @details
+#' For a candidate set \eqn{S}, the core objective is
+#' \deqn{\mathrm{coverage}(S) =
+#' \sum_j w_j\,\mathrm{best}_j(S),}
+#' where \eqn{w_j} is the weight of target block \eqn{j}. The definition of
+#' \eqn{\mathrm{best}_j(S)} follows \code{strategy}. When
+#' \code{coancestry_weight > 0}, mean pairwise relationship is subtracted
+#' from the objective. When \code{target_degree} is supplied, the search
+#' instead enforces the corresponding internally calibrated relatedness
+#' ceiling.
+#'
+#' The function conducts \code{n_reps} independent searches, checks founder
+#' count and any relatedness ceiling, and automatically returns the feasible
+#' replicate with the greatest complete objective. Breeders do not choose
+#' manually among GA replicates. The \code{stability} component reports
+#' agreement, convergence and achieved objective values across all searches.
+#'
+#' @section Crossing-scheme strategies:
+#' \describe{
+#'   \item{\code{"no_selfing"}}{Uses the mean of the two greatest block
+#'     values among distinct selected parents.}
+#'   \item{\code{"OHS"}}{Optimal Haplotype Selection (OHS); uses the same
+#'     distinct-parent calculation as \code{"no_selfing"}.}
+#'   \item{\code{"selfing"}}{Uses the single greatest block value because a
+#'     selected parent may contribute the block without a distinct partner.}
+#'   \item{\code{"OPV"}}{Optimal Population Value (OPV); uses the same
+#'     single-best-value calculation as \code{"selfing"}, interpreted as
+#'     favourable value available in the selected population.}
+#'   \item{\code{"Haploid_OHS"}}{Uses the same single-best-value calculation;
+#'     one heterozygous parent may provide non-homologous gametes.}
+#' }
+#'
+#' @param value_matrix Numeric matrix with candidates in rows and target
+#'   blocks in columns. Row names must contain unique candidate identifiers.
+#'   Values may be local genomic estimated breeding values (local GEBV),
+#'   directionally aligned favourable-haplotype scores or comparable
+#'   per-block values for which larger is better.
+#' @param n_founders Positive integer giving the required number of parents.
+#' @param strategy One of \code{"no_selfing"}, \code{"selfing"},
+#'   \code{"OHS"}, \code{"OPV"} or \code{"Haploid_OHS"}. See
+#'   \emph{Crossing-scheme strategies}.
+#' @param block_weights Optional non-negative numeric vector of length
+#'   \code{ncol(value_matrix)}. The default gives every block weight one.
+#' @param top_candidates Optional positive integer. Before optimisation,
+#'   restrict the search to this number of candidates ranked by their
+#'   greatest value across target blocks. It must be at least
+#'   \code{n_founders}. Leave \code{NULL} to search all candidates.
+#' @param popSize,maxiter,run,pmutation,pcrossover Controls passed to
+#'   \code{GA::ga()}. They define population size, maximum generations,
+#'   generations without improvement before stopping, mutation probability
+#'   and crossover probability.
+#' @param penalty_weight Optional positive coefficient used internally to
+#'   penalise deviations from exactly \code{n_founders}. The default is
+#'   calibrated from the block weights.
+#' @param seed Optional integer seed. With repeated searches, replicate
+#'   \eqn{i} uses \code{seed + i - 1}.
+#' @param verbose Logical. If \code{TRUE}, show the GA monitor for the first
+#'   replicate.
+#' @param n_reps Positive integer number of independent GA searches. Default
+#'   \code{5L}. The best feasible replicate is selected automatically.
+#' @param G Optional named relationship matrix covering all candidates. It is
+#'   required when \code{coancestry_weight > 0} or \code{target_degree} is
+#'   supplied and may otherwise be provided to report realised mean
+#'   relationship.
+#' @param coancestry_weight Non-negative numeric weight on mean pairwise
+#'   relationship. Default zero. A positive value produces a weighted
+#'   coverage-relatedness objective. Do not combine it with
+#'   \code{target_degree}.
+#' @param target_degree Optional number in \code{[0, 90]}. Zero favours the
+#'   unconstrained coverage end and 90 favours the diversity end. It is
+#'   converted to a relationship ceiling using the supplied \code{G}. Do not
+#'   combine it with \code{coancestry_weight}.
+#'
+#' @return A \code{hapblockr_result} list. Principal components are
+#'   \code{selected}, \code{fitness}, \code{coverage_fitness},
+#'   \code{objective_components}, \code{per_block}, \code{mean_relationship},
+#'   \code{stability}, \code{feasible}, \code{converged} and
+#'   \code{result_contract}. \code{stability$best_rep} identifies the
+#'   automatically selected replicate.
+#'
+#' @examples
+#' \dontrun{
+#' prediction <- run_haplotype_prediction(
+#'   geno, snp_info, blocks, blues = phenotype_values
+#' )
+#' target <- select_top_blocks(prediction$block_importance, n = 15)
+#' block_values <- prediction$local_gebv[, target$block_id, drop = FALSE]
+#'
+#' selected <- select_parents_ga(
+#'   value_matrix = block_values,
+#'   n_founders = 20,
+#'   strategy = "OHS",
+#'   n_reps = 5,
+#'   seed = 2026
+#' )
+#' selected$selected
+#' selected$stability
+#' }
+#'
+#' @seealso
+#' \code{\link{select_parents_ga_ts}},
+#' \code{\link{truncation_selection}},
+#' \code{\link{select_parents_ocs}},
+#' \code{\link{select_parents_pareto}}
+#'
+#' @export
+select_parents_ga <- function(
+    value_matrix,
+    n_founders,
+    strategy = c("no_selfing", "selfing", "OHS", "OPV", "Haploid_OHS"),
+    block_weights = NULL,
+    top_candidates = NULL,
+    popSize = 100L,
+    maxiter = 200L,
+    run = 50L,
+    pmutation = 0.1,
+    pcrossover = 0.8,
+    penalty_weight = NULL,
+    seed = NULL,
+    verbose = FALSE,
+    n_reps = 5L,
+    G = NULL,
+    coancestry_weight = 0,
+    target_degree = NULL
+) {
+  result_call <- match.call()
+  .select_parents_ga_engine(
+    value_matrix = value_matrix,
+    n_founders = n_founders,
+    strategy = strategy,
+    block_weights = block_weights,
+    top_candidates = top_candidates,
+    popSize = popSize,
+    maxiter = maxiter,
+    run = run,
+    pmutation = pmutation,
+    pcrossover = pcrossover,
+    penalty_weight = penalty_weight,
+    seed = seed,
+    verbose = verbose,
+    merit_score = NULL,
+    min_sel_value = NULL,
+    n_reps = n_reps,
+    G = G,
+    coancestry_weight = coancestry_weight,
+    merit_weight = 0,
+    merit_priority = NULL,
+    target_degree = target_degree,
+    result_method = "select_parents_ga",
+    result_call = result_call
+  )
+}
+
+
+#' Select Parents by Joint GA and Whole-Genome Merit
+#'
+#' @description
+#' Selects parents through a joint GA plus truncation-selection-merit
+#' objective. The search simultaneously rewards complementary favourable
+#' haplotype-block coverage and the selected set's mean whole-genome merit.
+#' It is an explicit alternative to the coverage-only
+#' \code{\link{select_parents_ga}} and the merit-only
+#' \code{\link{truncation_selection}} tools.
+#'
+#' @details
+#' This is a joint optimisation, not a sequential procedure that first
+#' performs truncation selection and then runs a GA. For a candidate parent
+#' set \eqn{S}, the complete objective is
+#' \deqn{\mathrm{fitness}(S) =
+#' \mathrm{coverage}(S) +
+#' \lambda\,\overline{\mathrm{merit}}(S) -
+#' \gamma\,\overline{G}(S),}
+#' where the final term is included only when a positive
+#' \code{coancestry_weight} is requested. Because \code{n_founders} is fixed,
+#' maximising mean merit gives the same ranking as maximising total merit.
+#'
+#' The breeder must provide \code{merit_score} with larger values consistently
+#' representing better candidates. The score is normally a HapBlockR
+#' prediction or selection index produced after internal genomic, haplotype,
+#' multi-trait or genotype-by-environment modelling. Lower-is-better
+#' objectives must already have been directionally aligned before this
+#' function is called.
+#'
+#' Exactly one merit-control form is active:
+#' \itemize{
+#'   \item \code{merit_priority} is the recommended breeder-facing control.
+#'     It is greater than zero and no more than 100. The default, 50, asks
+#'     the package to scale merit to half the empirically reachable
+#'     coverage span for the analysed candidate pool.
+#'   \item \code{merit_weight} is an advanced positive raw multiplier. If it
+#'     is supplied, omit \code{merit_priority}.
+#' }
+#' A value of zero is deliberately unavailable here because it would silently
+#' turn the hybrid tool into coverage-only GA. Use
+#' \code{\link{select_parents_ga}} for that analysis.
+#'
+#' The optional \code{min_sel_value} is a separate hard eligibility rule. It
+#' filters the candidate pool using \code{merit_score} before joint
+#' optimisation; it does not replace the continuous merit term.
+#'
+#' As with \code{\link{select_parents_ga}}, all \code{n_reps} searches are
+#' assessed automatically and the greatest complete objective among feasible
+#' replicates is returned. The breeder reviews the combined stability
+#' diagnostics rather than choosing an individual run manually.
+#'
+#' @inheritParams select_parents_ga
+#' @inheritSection select_parents_ga Crossing-scheme strategies
+#' @param merit_score Named finite numeric vector covering every candidate in
+#'   \code{value_matrix}. Larger values must always represent greater
+#'   whole-genome merit.
+#' @param merit_priority Number greater than zero and no more than 100.
+#'   Default 50. It is converted internally to a dataset-specific
+#'   \code{merit_weight} using the reachable coverage and merit spans. Omit
+#'   it when supplying \code{merit_weight}.
+#' @param merit_weight Optional advanced positive raw multiplier for mean
+#'   whole-genome merit. When supplied, \code{merit_priority} must be omitted.
+#' @param min_sel_value Optional merit eligibility floor applied before the
+#'   GA. Its interpretation is set by \code{min_sel_mode}.
+#' @param min_sel_mode One of \code{"value"}, \code{"percentile"},
+#'   \code{"sd_above_mean"} or \code{"relaxed_pool"}.
+#'   \code{"sd_above_mean"} retains scores at least the stated number of
+#'   standard deviations above the mean. The deprecated
+#'   \code{"sd_below_mean"} alias is accepted temporarily and maps to
+#'   \code{"relaxed_pool"}.
+#'
+#' @return A \code{hapblockr_result} list with the components documented for
+#'   \code{\link{select_parents_ga}}, plus \code{mean_merit},
+#'   \code{merit_weight}, \code{merit_priority} and \code{cutoff}. The result
+#'   contract records \code{method = "select_parents_ga_ts"}.
+#'
+#' @examples
+#' \dontrun{
+#' hybrid <- select_parents_ga_ts(
+#'   value_matrix = prediction$local_gebv[, target_blocks, drop = FALSE],
+#'   n_founders = 20,
+#'   merit_score = prediction$gebv,
+#'   strategy = "OHS",
+#'   merit_priority = 50,
+#'   min_sel_value = 0,
+#'   min_sel_mode = "sd_above_mean",
+#'   n_reps = 5,
+#'   seed = 2026
+#' )
+#' hybrid$selected
+#' hybrid$objective_components
+#' hybrid$stability
+#' }
+#'
+#' @seealso
+#' \code{\link{select_parents_ga}},
+#' \code{\link{truncation_selection}},
+#' \code{\link{suggest_merit_weight}},
+#' \code{\link{select_parents_ocs}}
+#'
+#' @export
+select_parents_ga_ts <- function(
+    value_matrix,
+    n_founders,
+    merit_score,
+    strategy = c("no_selfing", "selfing", "OHS", "OPV", "Haploid_OHS"),
+    block_weights = NULL,
+    top_candidates = NULL,
+    merit_priority = 50,
+    merit_weight = NULL,
+    min_sel_value = NULL,
+    min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+                     "sd_below_mean"),
+    popSize = 100L,
+    maxiter = 200L,
+    run = 50L,
+    pmutation = 0.1,
+    pcrossover = 0.8,
+    penalty_weight = NULL,
+    seed = NULL,
+    verbose = FALSE,
+    n_reps = 5L,
+    G = NULL,
+    coancestry_weight = 0,
+    target_degree = NULL
+) {
+  result_call <- match.call()
+  priority_was_supplied <- !missing(merit_priority)
+
+  if (!is.numeric(merit_score) || !length(merit_score) ||
+      is.null(names(merit_score)) || any(!nzchar(names(merit_score))) ||
+      anyDuplicated(names(merit_score)))
+    stop("merit_score must be a named numeric vector with unique, non-empty ",
+         "candidate identifiers.", call. = FALSE)
+  if (any(!is.finite(merit_score)))
+    stop("merit_score must contain only finite values.", call. = FALSE)
+  candidate_ids <- rownames(as.matrix(value_matrix))
+  if (is.null(candidate_ids))
+    stop("value_matrix must have row names (candidate individual IDs).",
+         call. = FALSE)
+  missing_merit <- setdiff(candidate_ids, names(merit_score))
+  if (length(missing_merit))
+    stop(length(missing_merit), " value_matrix candidate(s) have no ",
+         "merit_score entry: ",
+         paste(utils::head(missing_merit, 10L), collapse = ", "),
+         if (length(missing_merit) > 10L) ", ..." else "",
+         call. = FALSE)
+
+  if (!is.null(merit_weight)) {
+    if (priority_was_supplied)
+      stop("Supply exactly one of merit_priority or merit_weight, not both.",
+           call. = FALSE)
+    if (!is.numeric(merit_weight) || length(merit_weight) != 1L ||
+        !is.finite(merit_weight) || merit_weight <= 0)
+      stop("merit_weight must be one positive finite numeric value.",
+           call. = FALSE)
+    merit_priority <- NULL
+  } else {
+    if (!is.numeric(merit_priority) || length(merit_priority) != 1L ||
+        !is.finite(merit_priority) || merit_priority <= 0 ||
+        merit_priority > 100)
+      stop("merit_priority must be one numeric value in (0, 100]. Use ",
+           "select_parents_ga() for coverage-only selection.",
+           call. = FALSE)
+    merit_weight <- 0
+  }
+
+  .select_parents_ga_engine(
+    value_matrix = value_matrix,
+    n_founders = n_founders,
+    strategy = strategy,
+    block_weights = block_weights,
+    top_candidates = top_candidates,
+    popSize = popSize,
+    maxiter = maxiter,
+    run = run,
+    pmutation = pmutation,
+    pcrossover = pcrossover,
+    penalty_weight = penalty_weight,
+    seed = seed,
+    verbose = verbose,
+    merit_score = merit_score,
+    min_sel_value = min_sel_value,
+    min_sel_mode = min_sel_mode,
+    n_reps = n_reps,
+    G = G,
+    coancestry_weight = coancestry_weight,
+    merit_weight = merit_weight,
+    merit_priority = merit_priority,
+    target_degree = target_degree,
+    result_method = "select_parents_ga_ts",
+    result_call = result_call
   )
 }
 
@@ -1825,7 +2454,7 @@ plot_parent_selection_pca <- function(G = NULL, ga_selected, ts_selected,
 #' @param n_clusters Integer \code{>= 2}. Number of clusters to cut the
 #'   population into. \strong{Required} -- this package does not silently
 #'   guess a number of clusters for you. If you don't already have a
-#'   biological reason for a specific number (e.g. "this program has 3
+#'   biological reason for a specific number (e.g. "this programme has 3
 #'   founder families"), a reasonable starting point is to try a small range
 #'   (e.g. 2-6) and look at \code{cluster_fit} (the \code{hclust}/
 #'   \code{kmeans} object returned) with standard diagnostics

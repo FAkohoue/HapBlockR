@@ -161,6 +161,7 @@ print(conc2)
 #>   Directionally concordant:   6 
 #>   Replicated (dir + Q_p>0.05): 6 
 #>   Boundary warnings:          0 (overlap ratio < 0.8 )
+#>   Median I2 (heterogeneity):  0 %
 #>   Shared allele comparisons:  6 
 # }
 ```

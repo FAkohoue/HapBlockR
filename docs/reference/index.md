@@ -79,6 +79,8 @@ pre-phased VCF files.
   : Read Pre-Phased VCF
 - [`phase_with_beagle()`](https://FAkohoue.github.io/HapBlockR/reference/phase_with_beagle.md)
   : Statistical Phasing via Beagle 5.x
+- [`assess_phasing_accuracy()`](https://FAkohoue.github.io/HapBlockR/reference/assess_phasing_accuracy.md)
+  : Assess Phasing Accuracy against a Truth Set
 
 ## Haplotype construction and diversity
 
@@ -109,7 +111,7 @@ rare alleles into biologically meaningful groups.
 - [`collapse_haplotypes()`](https://FAkohoue.github.io/HapBlockR/reference/collapse_haplotypes.md)
   : Collapse Rare Haplotype Alleles Into Biologically Meaningful Groups
 - [`harmonize_haplotypes()`](https://FAkohoue.github.io/HapBlockR/reference/harmonize_haplotypes.md)
-  : Harmonize Haplotype Allele Labels Across Panels or Analysis Runs
+  : Harmonise Haplotype Allele Labels Across Panels or Analysis Runs
 
 ## Haplotype export
 
@@ -181,6 +183,26 @@ operate on GRM-corrected REML residuals from test_block_haplotypes().
 - [`fine_map_epistasis_block()`](https://FAkohoue.github.io/HapBlockR/reference/fine_map_epistasis_block.md)
   : Fine-Map Epistatic SNP Pairs Within a Single Block
 
+## Breeding targets and multi-trait prediction
+
+Validate externally analysed genotype-level target values, propagate
+their uncertainty through genomic models, construct internal multi-trait
+selection indices, and fit environment-specific or across-environment
+genomic predictions.
+
+- [`breeding_target_types()`](https://FAkohoue.github.io/HapBlockR/reference/breeding_target_types.md)
+  : Describe Accepted Breeding-target Inputs
+- [`prepare_breeding_targets()`](https://FAkohoue.github.io/HapBlockR/reference/prepare_breeding_targets.md)
+  : Prepare Externally Analysed Breeding Targets
+- [`fit_multitrait_gblup()`](https://FAkohoue.github.io/HapBlockR/reference/fit_multitrait_gblup.md)
+  : Fit a Multivariate Genomic BLUP
+- [`build_selection_index()`](https://FAkohoue.github.io/HapBlockR/reference/build_selection_index.md)
+  : Construct an Economic or Desired-Gain Selection Index
+- [`build_environment_kernel()`](https://FAkohoue.github.io/HapBlockR/reference/build_environment_kernel.md)
+  : Build an Environmental Similarity Kernel
+- [`fit_gxe_gblup()`](https://FAkohoue.github.io/HapBlockR/reference/fit_gxe_gblup.md)
+  : Fit a Reaction-Norm Genomic GxE Model
+
 ## Breeding decision support
 
 Identify favourable haplotypes and rank LD blocks for haplotype stacking
@@ -200,21 +222,22 @@ strategies.
 
 ## Parent selection and mate allocation
 
-Genetic-algorithm founder-parent optimiser (select_parents_ga, via the
-GA package) searching for the combination of individuals maximising
-coverage of favourable local GEBV/haplotype values across target blocks,
-under crossing-scheme constraints (no_selfing/selfing/OHS/
-OPV/Haploid_OHS), with a truncation-selection baseline, a calibration
-helper for its optional merit-weighted fitness (suggest_merit_weight),
-and a PCA visualisation for comparing parent sets. Family- (or
-genetic-cluster-) quota selection (select_parents_by_family): best-
-performing groups first, then the best individual lines within each, via
-four mutually exclusive rules for how many lines a group takes
-(family_select_mode = count/percentage/sd_threshold/check_relative),
-with an optional GBLUP-corrected group ranking and a within-group
-haplotype-diversity tiebreak. Beyond founder-set selection: an explicit
-merit-vs-diversity Pareto tradeoff frontier (select_parents_pareto,
-pareto_front); true Optimal Contribution Selection producing an actual
+Separate coverage-only (select_parents_ga) and joint GA plus
+whole-genome-merit (select_parents_ga_ts) founder-parent optimisers,
+both using the GA package to search combinations that cover favourable
+local GEBV/haplotype values across target blocks under crossing-scheme
+constraints (no_selfing/selfing/OHS/ OPV/Haploid_OHS), with a
+truncation-selection baseline, a calibration helper for its optional
+merit-weighted fitness (suggest_merit_weight), and a PCA visualisation
+for comparing parent sets. Family- (or genetic-cluster-) quota selection
+(select_parents_by_family): best- performing groups first, then the best
+individual lines within each, via four mutually exclusive rules for how
+many lines a group takes (family_select_mode =
+count/percentage/sd_threshold/check_relative), with an optional
+GBLUP-corrected group ranking and a within-group haplotype-diversity
+tiebreak. Beyond founder-set selection: an explicit merit-vs-diversity
+Pareto tradeoff frontier (select_parents_pareto, pareto_front); true
+Optimal Contribution Selection producing an actual
 contribution-and-mating plan (select_parents_ocs, via the AlphaMate
 executable, optiSel, or SimpleMating’s planCross()/selectCrosses());
 cross ranking by predicted mid-parent value plus segregation variance
@@ -225,9 +248,11 @@ core-collection selection for germplasm-bank/founder-diversity use cases
 (select_core_collection).
 
 - [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-  : Genetic-Algorithm Founder-Parent Selection
+  : Select Parents by Genetic-Algorithm Haplotype Coverage
+- [`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+  : Select Parents by Joint GA and Whole-Genome Merit
 - [`suggest_merit_weight()`](https://FAkohoue.github.io/HapBlockR/reference/suggest_merit_weight.md)
-  : Suggest a Starting merit_weight for select_parents_ga()
+  : Suggest a Starting merit_weight for select_parents_ga_ts()
 - [`truncation_selection()`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)
   : Truncation Selection (Top-n by a Single Score)
 - [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md)
@@ -253,6 +278,10 @@ core-collection selection for germplasm-bank/founder-diversity use cases
   Plans
 - [`select_core_collection()`](https://FAkohoue.github.io/HapBlockR/reference/select_core_collection.md)
   : Core-Collection / Diversity-Maximizing Subset Selection
+- [`screen_candidate_crosses()`](https://FAkohoue.github.io/HapBlockR/reference/screen_candidate_crosses.md)
+  : Screen Crosses for Operational Feasibility
+- [`certify_mating_plan()`](https://FAkohoue.github.io/HapBlockR/reference/certify_mating_plan.md)
+  : Certify an Operational Mating Plan
 
 ## Forward-in-time simulation
 
@@ -278,12 +307,32 @@ stability across environments.
 - [`run_haplotype_stability()`](https://FAkohoue.github.io/HapBlockR/reference/run_haplotype_stability.md)
   : Finlay-Wilkinson Stability Analysis of Haplotype Effects Across
   Environments
+- [`assess_decision_stability()`](https://FAkohoue.github.io/HapBlockR/reference/assess_decision_stability.md)
+  : Assess Recommendation Stability Across Scenarios
 - [`scan_diversity_windows()`](https://FAkohoue.github.io/HapBlockR/reference/scan_diversity_windows.md)
   : Sliding-Window Genome-Wide Diversity Scan
 - [`decompose_block_effects()`](https://FAkohoue.github.io/HapBlockR/reference/decompose_block_effects.md)
   : Decompose Per-SNP Effects into Per-Haplotype-Allele Effect Table
 - [`export_candidate_regions()`](https://FAkohoue.github.io/HapBlockR/reference/export_candidate_regions.md)
   : Export Candidate Gene Regions to BED, CSV, or biomaRt Format
+
+## Metadata, exchange, and result validation
+
+Validate breeding metadata and HapBlockR result contracts, and create,
+write, or read checksum-protected breeding exchange objects.
+
+- [`validate()`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
+  : Validate an Object
+- [`validate_hapblockr_result()`](https://FAkohoue.github.io/HapBlockR/reference/validate_hapblockr_result.md)
+  : Validate a HapBlockR Result Contract
+- [`validate_breeding_metadata()`](https://FAkohoue.github.io/HapBlockR/reference/validate_breeding_metadata.md)
+  : Validate Traceable Breeding Metadata
+- [`build_breeding_exchange()`](https://FAkohoue.github.io/HapBlockR/reference/build_breeding_exchange.md)
+  : Build a BrAPI/MIAPPE-Oriented Recommendation Bundle
+- [`write_breeding_exchange()`](https://FAkohoue.github.io/HapBlockR/reference/write_breeding_exchange.md)
+  : Write a Breeding Exchange Bundle
+- [`read_breeding_exchange()`](https://FAkohoue.github.io/HapBlockR/reference/read_breeding_exchange.md)
+  : Read and Verify a Breeding Exchange Bundle
 
 ## Cross-validation
 

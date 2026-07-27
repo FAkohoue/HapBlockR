@@ -4,57 +4,61 @@
 \alias{open_breeder_guide}
 \title{Locate or Open the HapBlockR Breeder's Guide}
 \usage{
-open_breeder_guide(open = TRUE)
+open_breeder_guide(open = TRUE, format = c("pdf", "html"))
 }
 \arguments{
 \item{open}{Logical, default \code{TRUE}. If \code{TRUE} and the session
 is interactive, opens the file with the operating system's default
-application for \code{.pdf} files via \code{\link[utils]{browseURL}}.
+application for the selected file via \code{\link[utils]{browseURL}}.
 If \code{FALSE}, or the session is non-interactive, the file is not
 opened -- only its path is returned.}
+
+\item{format}{Character, one of \code{"pdf"} (default) or \code{"html"}.
+Selects the tagged fixed-layout edition or HTML edition.}
 }
 \value{
-The file path (character, invisibly) to
-  \code{HapBlockR_Breeder_Guide.pdf} in the installed package. Errors if
-  the file cannot be found (e.g. the package was installed with
-  \code{build_vignettes} machinery that stripped \code{inst/extdata} --
-  not expected under a normal install, but checked explicitly rather than
-  than silently returning \code{NULL} or an invalid path).
+The file path (character, invisibly) to the selected guide edition
+  in the installed package. The function reports an explicit error if the
+  requested edition is unavailable.
 }
 \description{
-\code{HapBlockR_Breeder_Guide.pdf} is a standalone, non-technical
-companion to the \emph{From Local GEBV to a Crossing Decision} vignette --
-the same seven parent- and cross-selection tools
+The PDF and HTML editions of the HapBlockR Breeder's Guide are standalone
+companions to the \emph{From Local GEBV to a Crossing Decision} vignette --
+the same nine parent- and cross-selection tools
 (\code{\link{truncation_selection}}, \code{\link{select_parents_ga}},
+\code{\link{select_parents_ga_ts}},
+\code{\link{select_parents_by_family}},
 \code{\link{usefulness_criterion}}, \code{\link{select_parents_ocs}},
 \code{\link{select_parents_pareto}}, \code{\link{validate_crosses_exact}},
 \code{\link{select_core_collection}}), explained in plain language -- what
-each is, when to reach for it, when to be cautious, and how it works in
-practice -- with breeding-program analogies and a program-shape decision
-guide, and no R code required to read it. Intended for breeders, program
-managers, or reviewers who will use or approve a crossing decision but do
-not necessarily run R themselves.
+each is, when to use it, its variants, how it works, and how to interpret
+its output -- with breeding-programme analogies and a programme-shape
+decision guide, and no R code required to read it. It is intended for
+breeders, programme managers, or reviewers who will use or approve a
+crossing decision but do not necessarily run R themselves.
 }
 \details{
-Distributed as a PDF (not an editable Word document) so that the guide
-reaches readers as a fixed reference rather than something they might
-unintentionally edit. A \code{.pdf} file has no vignette engine, so it is
-not indexed by \code{vignette()}/\code{browseVignettes()} the way the
-package's \code{.Rmd} vignettes are -- it ships as a static file in
-\code{inst/extdata/} (the same convention this package uses for
-\code{beagle.jar} and its \code{example_*} datasets) and is located via
-\code{\link[base]{system.file}}. This function is a thin convenience
-wrapper around that lookup.
+The tagged PDF provides a fixed reference edition and the HTML edition
+renders the same content for on-screen reading. These standalone files
+have no vignette engine, so they are not indexed by
+\code{vignette()}/\code{browseVignettes()} like the package's
+\code{.Rmd} vignettes. Their version-controlled source is
+\code{inst/guide/HapBlockR_Breeder_Guide.Rmd}; both generated files ship
+in \code{inst/extdata/} and are located via
+\code{\link[base]{system.file}}.
 }
 \examples{
-guide_path <- open_breeder_guide(open = FALSE)
-file.exists(guide_path)
+pdf_path  <- open_breeder_guide(open = FALSE)
+html_path <- open_breeder_guide(open = FALSE, format = "html")
+file.exists(pdf_path)
+file.exists(html_path)
 
 }
 \seealso{
 The \emph{From Local GEBV to a Crossing Decision} vignette
   (\code{vignette("HapBlockR-breeding-decisions", package = "HapBlockR")})
-  for the same seven tools with full statistical detail and runnable R
-  code; \code{\link{select_parents_ga}}, \code{\link{usefulness_criterion}},
-  \code{\link{select_parents_ocs}}.
+  for the same nine tools with full statistical detail and runnable R
+  code; \code{\link{select_parents_ga}},
+  \code{\link{select_parents_ga_ts}},
+  \code{\link{usefulness_criterion}}, \code{\link{select_parents_ocs}}.
 }

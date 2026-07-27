@@ -8,14 +8,18 @@ truncation_selection(
   score,
   n_founders,
   min_sel_value = NULL,
-  min_sel_mode = c("value", "percentile", "sd_below_mean")
+  min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+    "sd_below_mean")
 )
 }
 \arguments{
 \item{score}{Named numeric vector, e.g. whole-genome GEBV
 (\code{run_haplotype_prediction()$gebv}) or a stacking index
 (\code{score_favorable_haplotypes()$stacking_index}). Names are
-individual IDs.}
+individual IDs. Scores must be directionally aligned so that larger
+values always mean greater breeding merit. Reverse the sign of a
+lower-is-better trait, or give that trait a negative selection-index
+weight, before calling this function.}
 
 \item{n_founders}{Integer. Number of individuals to select.}
 
@@ -23,14 +27,14 @@ individual IDs.}
 floor, every candidate with a finite \code{score} is eligible).
 Excludes candidates below a merit floor \emph{before} ranking, so that
 a plain top-\code{n_founders} call never has to hit deeper into the
-population than your program's own quality bar. Interpreted according
+population than your programme's own quality bar. Interpreted according
 to \code{min_sel_mode}. Named \code{min_sel_value} rather than
 \code{min_selection_index} because \code{score} need not be a
 selection index -- it can be any single genome-wide value.}
 
 \item{min_sel_mode}{One of \code{"value"} (default), \code{"percentile"},
-\code{"sd_below_mean"}. Only used when \code{min_sel_value} is not
-\code{NULL}:
+\code{"sd_above_mean"}, or \code{"relaxed_pool"}. Only used when
+\code{min_sel_value} is not \code{NULL}:
 \describe{
   \item{\code{"value"}}{\code{min_sel_value} is an absolute cutoff on
     \code{score} itself (same units/scale as \code{score} -- requires
@@ -39,10 +43,15 @@ selection index -- it can be any single genome-wide value.}
     the fraction of candidates to keep from the top, e.g. \code{0.6}
     keeps the top 60\% by \code{score}. Self-scaling -- no need to know
     \code{score}'s units.}
-  \item{\code{"sd_below_mean"}}{\code{min_sel_value} is the number of
-    standard deviations below \code{mean(score)} the cutoff sits, e.g.
-    \code{1} keeps everyone within/above one SD of the mean. Also
-    self-scaling.}
+  \item{\code{"sd_above_mean"}}{The breeder-facing superior-candidate
+    rule. The cutoff is \code{mean(score) + min_sel_value * sd(score)};
+    \code{0} retains candidates at or above the mean and \code{1}
+    retains candidates at least one SD above it.}
+  \item{\code{"relaxed_pool"}}{Deliberately broad candidate-pool rule.
+    The cutoff is \code{mean(score) - min_sel_value * sd(score)}. Use it
+    only when candidates slightly below the population mean should remain
+    eligible for haplotype complementarity or diversity; all retained
+    candidates are still ranked from highest to lowest score.}
 }}
 }
 \value{
@@ -58,9 +67,10 @@ Named list:
 }
 \description{
 The simplest possible parent-selection rule and the standard baseline
-breeders compare any smarter method against: rank individuals by a single
+breeders can compare with multi-objective methods: rank individuals by a single
 genome-wide score and keep the top \code{n_founders}. Used here as the
-"TS" comparison arm against \code{\link{select_parents_ga}} (see
+"TS" comparison arm against \code{\link{select_parents_ga}} and
+\code{\link{select_parents_ga_ts}} (see
 \code{\link{ga_vs_ts_simulation}}), and standalone whenever a plain
 best-GEBV shortlist is all that's needed.
 }
@@ -72,12 +82,12 @@ blocks each individual carries, no complementarity check between the
 individuals it selects (two selected parents could carry identical
 favourable haplotypes and none of the ones another candidate has), and no
 relatedness/coancestry management. That simplicity is the point: it is the
-baseline every smarter method -- above all \code{\link{select_parents_ga}}
--- needs to outperform to justify its added complexity. See
-\code{\link{select_parents_ga}}'s \emph{Choosing between this function and
-truncation_selection()} section for a full comparison and a decision
-guide, and the \emph{From Local GEBV to a Crossing Decision} vignette for
-a worked example running both side by side.
+transparent merit-only reference for interpreting whether complementary
+block coverage changes the shortlist. See
+\code{\link{select_parents_ga}} for coverage-only GA,
+\code{\link{select_parents_ga_ts}} for the joint coverage-and-merit
+objective, and the \emph{From Local GEBV to a Crossing Decision} vignette
+for a worked comparison.
 }
 
 \examples{
@@ -89,5 +99,6 @@ ts$selected
 
 }
 \seealso{
-\code{\link{select_parents_ga}}
+\code{\link{select_parents_ga}},
+  \code{\link{select_parents_ga_ts}}
 }

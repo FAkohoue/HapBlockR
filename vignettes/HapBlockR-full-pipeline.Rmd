@@ -1,0 +1,450 @@
+---
+title: "The Full Pipeline: Genotypes to a Certified Mating Plan"
+author: "HapBlockR Development Team"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{The Full Pipeline: Genotypes to a Certified Mating Plan}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+library(HapBlockR)
+set.seed(1)
+```
+
+# Purpose
+
+Every other vignette in this package is a deep dive into one topic: LD
+metrics, phasing, large-scale backends, the parent-selection toolkit,
+programme-level operations. This one instead runs the whole thing, start to
+finish, as one continuous pipeline on HapBlockR's own small example dataset
+(`ldx_geno`, `ldx_snp_info`, `ldx_blocks`, `ldx_blues`) so the relationships
+between stages -- what feeds what, what each stage's output is actually used
+for next -- are visible in one place rather than left to be inferred across
+seven documents.
+
+The stage structure mirrors a real production pipeline built on this package
+(a CIAT Peru rice parent-selection script, distributed with the package
+source under `scripts/`), organised here into four phases: evidence,
+shortlist, mate allocation, sign-off. Each stage is kept short and points to
+the vignette or Breeder's Guide section that covers it in depth -- this is
+the connective tissue, not a replacement for those.
+
+```{r data}
+data(ldx_geno)
+data(ldx_snp_info)
+data(ldx_blocks)
+data(ldx_blues)
+
+dim(ldx_geno)               # 120 individuals x 230 SNPs
+table(ldx_snp_info$CHR)     # three chromosomes
+head(ldx_blues)
+```
+
+# Phase 1: Evidence (stages 1-4)
+
+## Stage 1 -- Prepare the targets
+
+A real programme's phenotype rarely arrives as a bare numeric column: it is
+the output of a field-trial analysis or genetic evaluation run outside
+HapBlockR, and that analysis's estimand (an adjusted mean? a BLUP shrunk
+toward zero? a breeding value?) changes how it should be used downstream.
+`prepare_breeding_targets()` makes that estimand explicit and, for shrunk
+random-effect predictions, deregresses them before they re-enter marker or
+haplotype models. See "Externally analysed targets" in the *programme
+operations* vignette and `breeding_target_types()` for the complete list of
+accepted input types.
+
+The toy `ldx_blues` already stands in for a completed external analysis --
+one row per individual, a single trait (`YLD`) -- so here it is used
+directly as a named vector, the simplest of the four phenotype formats
+`run_haplotype_prediction()` accepts:
+
+```{r targets}
+blues_vec <- setNames(ldx_blues$YLD, ldx_blues$id)
+length(blues_vec)
+```
+
+## Stage 2 -- Genotypes and LD blocks
+
+`read_geno()` is the entry point for real files (VCF, HapMap, GDS, PLINK
+BED, dosage tables), with an explicit multiallelic policy and immutable
+sample/variant identity preserved throughout. `ldx_geno` is already an
+in-memory dosage matrix, so this vignette skips straight to LD block
+detection; `Big_LD()` (single chromosome) and `run_Big_LD_all_chr()`
+(genome-wide) are the tools that would normally produce `ldx_blocks` from
+`ldx_geno`/`ldx_snp_info`:
+
+```{r blocks}
+head(ldx_blocks)
+identical(sort(unique(ldx_blocks$CHR)), sort(unique(ldx_snp_info$CHR)))
+```
+
+See the *intro* vignette for genome-wide detection and block summarisation,
+and the *large-scale* vignette for file-backed and whole-genome-sequencing
+routes.
+
+## Stage 3 -- Fit the prediction model
+
+`run_haplotype_prediction()` extracts haplotype alleles per block, builds
+the shared haplotype-block GRM, fits marker effects (GBLUP by default), and
+backsolves each individual's per-block local GEBV. The return value carries
+both the whole-genome GEBV every shortlist tool below scores candidates on,
+and `gebv_uncertainty` -- prediction error variance, reliability, and the
+`min_reliability` recommendation gate -- so "how good is this GEBV, really"
+has an answer before any decision is built on top of it.
+
+```{r prediction}
+pred <- run_haplotype_prediction(
+  geno_matrix = ldx_geno,
+  snp_info    = ldx_snp_info,
+  blocks      = ldx_blocks,
+  blues       = blues_vec,
+  min_snps    = 3L,
+  seed        = 1,
+  verbose     = FALSE
+)
+
+head(pred$gebv_uncertainty)
+dim(pred$local_gebv)
+dim(pred$G)
+```
+
+## Stage 4 -- Validate with a deployment-matched design
+
+A predictive-ability estimate is only trustworthy if the cross-validation
+design matches how the model will actually be deployed. `"random"` folds
+estimate interpolation within an exchangeable population (used here for
+speed); `"grouped"` folds (holding whole families or sites out together)
+estimate transfer across families or locations; `"forward"` folds estimate
+prediction into a not-yet-observed cycle. See "Leakage-aware validation" in
+the *workflow* vignette for the other two designs.
+
+```{r cv}
+cv <- cv_haplotype_prediction(
+  geno_matrix = ldx_geno, snp_info = ldx_snp_info, blocks = ldx_blocks,
+  blues = blues_vec, k = 3L, validation = "random", seed = 1, verbose = FALSE
+)
+cv$pa_mean
+```
+
+# Phase 2: Shortlist (stages 5-8)
+
+## Stage 5 -- Select the blocks that matter
+
+`select_top_blocks()` reduces `pred$block_importance` to the smallest
+top-ranked set that explains most of the variance in local GEBV -- here, the
+smallest set explaining 90%. The resulting columns of `pred$local_gebv`
+become `value_matrix`, the shared input to every founder-selection tool
+below.
+
+```{r top-blocks}
+top_blocks <- select_top_blocks(pred$block_importance, perc_of_total_var = 0.90)
+nrow(top_blocks)
+
+value_matrix <- pred$local_gebv[, top_blocks$block_id, drop = FALSE]
+dim(value_matrix)
+```
+
+## Stage 6 -- Truncation baseline
+
+`truncation_selection()` on `pred$gebv` is the reference point every
+alternative shortlist tool below should be judged against.
+
+```{r truncation}
+n_founders <- 15L
+ts_sel <- truncation_selection(pred$gebv, n_founders = n_founders)
+ts_sel$selected
+```
+
+## Stage 7 -- An alternative shortlist tool
+
+Four alternatives are available depending on which constraint actually
+matters for the programme -- pure block coverage, coverage plus merit,
+guaranteed family or genetic-cluster representation, or diversity itself as
+the objective. This vignette runs the GA (pure block-coverage) and
+family-quota tools; the *breeding decisions* vignette compares all four
+against each other, including a forward-simulation check of realised genetic
+gain, in depth.
+
+```{r ga}
+ga_sel <- select_parents_ga(
+  value_matrix  = value_matrix,
+  n_founders    = n_founders,
+  strategy      = "no_selfing",
+  block_weights = top_blocks$var_scaled,
+  popSize = 30L, maxiter = 20L, run = 10L,
+  seed = 1, n_reps = 3L, verbose = FALSE
+)
+ga_sel$selected
+ga_sel$converged
+```
+
+```{r family-quota}
+# ldx_geno/ldx_blues carry no real pedigree; a synthetic family label (12
+# families of 10) stands in here so family_select_mode has something to
+# group on. See "Family or genetic-cluster quota selection" in the Breeder's
+# Guide for all four family_select_mode variants and the shrinkage-corrected
+# family ranking behind this tool.
+ids    <- rownames(ldx_geno)
+family <- setNames(paste0("Fam", ceiling(seq_along(ids) / 10)), ids)
+
+fam_sel <- select_parents_by_family(
+  score = pred$gebv, family = family, n_families = 5L, n_per_family = 3L,
+  family_select_mode = "count", variance_method = "anova",
+  use_family_relationship = TRUE, G = pred$G, verbose = FALSE
+)
+fam_sel$selected
+fam_sel$family_ranking[, c("family", "rank_score", "rank")]
+```
+
+## Stage 8 -- See the realised gain-vs-diversity tradeoff
+
+`select_parents_pareto()` sweeps `select_parents_ga()`'s `coancestry_weight`
+across a grid and Pareto-filters the resulting (merit, relatedness) points
+into an empirical frontier, so `target_degree` in stage 11 can be set from
+an observed tradeoff rather than a guess.
+
+```{r pareto}
+pareto_res <- select_parents_pareto(
+  value_matrix = value_matrix, n_founders = n_founders,
+  strategy = "no_selfing", block_weights = top_blocks$var_scaled,
+  G = pred$G, coancestry_weights = c(0, 1, 2), merit = pred$gebv,
+  popSize = 30L, maxiter = 20L, run = 10L, n_reps = 2L,
+  seed = 1, verbose = FALSE
+)
+pareto_res$frontier[, c("coancestry_weight", "mean_merit",
+                        "mean_relationship", "pareto_optimal")]
+```
+
+# Phase 3: Mate allocation (stages 9-13)
+
+## Stage 9 -- Screen candidate crosses for operational feasibility
+
+A cross that cannot physically be made should never reach a merit-based
+ranking. `screen_candidate_crosses()` checks role, fertility, flowering
+overlap, heterotic group, quarantine compatibility, forbidden pairs and
+reciprocal effects up front. `ldx_geno` carries no real breeding metadata, so
+a minimal illustrative status table stands in here for the GA shortlist;
+see "Operational screening" in the *programme operations* vignette for the
+complete set of checks.
+
+```{r screening}
+ga_status <- data.frame(
+  id = ga_sel$selected,
+  female_allowed = TRUE,
+  male_allowed = TRUE,
+  fertile = TRUE,
+  flowering_start = 5,
+  flowering_end = 9
+)
+candidate_pairs <- t(utils::combn(ga_sel$selected, 2L))
+screened <- screen_candidate_crosses(candidate_pairs, ga_status)
+table(screened$feasible)
+
+feasible_pairs <- screened[screened$feasible, c("female", "male")]
+```
+
+## Stage 10 -- Rank feasible crosses by usefulness criterion
+
+`usefulness_criterion()` scores each feasible pair -- only the pairs stage 9
+actually cleared, passed in via `cross_pairs` rather than regenerated from
+scratch -- by predicted mid-parent value plus predicted segregation variance
+at the target blocks. `variance_model = "block_independent"` is used here
+since only unphased local GEBV is available; see "Variance-model variants"
+in the Breeder's Guide for the phased, linked and SimpleMating-based
+alternatives and what each requires.
+
+```{r uc}
+uc_res <- usefulness_criterion(
+  cross_pairs = feasible_pairs, gebv = pred$gebv,
+  selected_proportion = 0.1, seed = 1,
+  variance_model = "block_independent",
+  block_importance = top_blocks, local_gebv = pred$local_gebv,
+  verbose = FALSE
+)
+head(uc_res[, c("parent1", "parent2", "mid_parent_gebv", "UC", "rank")])
+```
+
+## Stage 11 -- Solve for actual optimal contributions
+
+`select_parents_ocs()` solves the real Optimal Contribution Selection
+problem (Meuwissen 1997): how much each parent should contribute, and which
+specific matings deliver that, under a relatedness ceiling set by
+`target_degree` (informed by stage 8's frontier). It is run here restricted
+to the stage 5-8 shortlist (`merit`/`G` subset to `ga_sel$selected`), not the
+full 120-individual population, so its output stays on the same candidate
+pool as stage 10's ranking and stage 13's exact-validation comparison below
+-- OCS is solving "how to allocate this already-shortlisted set", not
+re-shortlisting from scratch. This needs the optional `optiSel` or
+`SimpleMating` packages; where neither is installed, the usefulness
+-criterion ranking from stage 10 stands in as the shortlist for stages 12-13
+below.
+
+```{r ocs-check, include=FALSE}
+have_ocs <- requireNamespace("optiSel", quietly = TRUE)
+```
+
+```{r ocs, eval=have_ocs}
+shortlist <- ga_sel$selected
+ocs_res <- select_parents_ocs(
+  merit = pred$gebv[shortlist], G = pred$G[shortlist, shortlist],
+  family = family[shortlist],
+  engine = "optisel", n_crosses = 10L, max_contrib_per_parent = 3L,
+  target_degree = 30, seed = 1, verbose = FALSE
+)
+ocs_res$mating_plan
+ocs_res$ok
+```
+
+```{r ocs-fallback, eval=!have_ocs}
+message("optiSel not installed -- using the stage 10 usefulness-criterion ",
+        "ranking as the mating-plan candidate list instead.")
+mating_plan <- uc_res[uc_res$rank <= 10L,
+                      c("parent1", "parent2", "UC")]
+names(mating_plan)[3] <- "criterion"
+mating_plan
+```
+
+## Stage 12 -- Certify the plan and check its sensitivity
+
+`certify_mating_plan()` validates the complete plan against family size,
+parent capacity, required pairs, period-specific capacity and subpopulation
+quotas, and returns every binding constraint alongside the certificate.
+`assess_decision_stability()` (not run here -- see "Sensitivity" in the
+*programme operations* vignette) then compares the certified plan against
+threshold, model or population-scenario variants.
+
+```{r certificate}
+plan_pairs <- if (have_ocs) ocs_res$mating_plan else mating_plan
+plan <- data.frame(
+  female = plan_pairs$parent1,
+  male = plan_pairs$parent2,
+  family_size = 20
+)
+plan_status <- data.frame(
+  id = unique(c(plan$female, plan$male)),
+  female_allowed = TRUE, male_allowed = TRUE, fertile = TRUE,
+  flowering_start = 5, flowering_end = 9
+)
+certificate <- certify_mating_plan(plan, plan_status, min_family_size = 20)
+certificate$certificate
+```
+
+## Stage 13 -- Validate against the true optimum
+
+`validate_crosses_exact()` solves the same cross-selection problem exactly
+(binary integer linear programming) on the culled candidate list and reports
+the heuristic plan's percentage gap below the true optimum -- a small-scale
+sanity check on stage 11, not a routine replacement for it. This needs the
+optional `lpSolve` package.
+
+```{r exact-check, include=FALSE}
+have_lpsolve <- requireNamespace("lpSolve", quietly = TRUE)
+```
+
+```{r exact, eval=have_lpsolve}
+exact_res <- validate_crosses_exact(
+  data = uc_res, n_cross = min(10L, nrow(uc_res)), max_cross = 3L,
+  heuristic_plan = plan_pairs[, c("parent1", "parent2")], verbose = FALSE
+)
+exact_res$exact_objective
+exact_res$gap_pct
+```
+
+# Phase 4: Sign-off (stages 14-16)
+
+## Stage 14 -- Cross-check with a diversity-first alternative
+
+`select_core_collection()` on the same relationship matrix, and
+`cluster_selection_groups()` across every strategy computed above, show
+whether the merit-driven selections concentrate on one or two genetic
+clusters or actually spread across the population's real structure.
+
+```{r core-collection}
+core_res <- select_core_collection(
+  G = pred$G, n_core = n_founders, type = "relationship",
+  strategy = "maximin", merit = pred$gebv, seed = 1, verbose = FALSE
+)
+
+selection_groups <- list(
+  Truncation  = ts_sel$selected,
+  GA          = ga_sel$selected,
+  FamilyQuota = fam_sel$selected,
+  Core        = core_res$selected
+)
+clust_res <- cluster_selection_groups(
+  G = pred$G, groups = selection_groups,
+  variance_threshold = 0.95, method = "hierarchical",
+  n_clusters = 3L, verbose = FALSE
+)
+clust_res$table
+```
+
+## Stage 15 -- Validate the result contract
+
+Every breeder-facing result from stage 3 onward carries a `hapblockr_result`
+contract; `validate()` checks the schema, immutable identifiers, input
+hashes, quality gates and decision table before a result is treated as a
+recommendation. See "Interpreting quality control and uncertainty" and
+"Decision sign-off" in the Breeder's Guide.
+
+```{r validate}
+validate(ga_sel)
+validate(fam_sel)
+validate(core_res)
+validate(certificate)
+validate(exact_res)
+```
+
+## Stage 16 -- Export for exchange
+
+`build_breeding_exchange()` converts a validated result into BrAPI/MIAPPE
+-oriented tables, and `write_breeding_exchange()` writes them as a
+checksummed CSV bundle a programme's own integration layer can consume. Any
+`hapblockr_result` qualifies; the diversity-first core-collection result
+from stage 14 is exported here because it best illustrates the
+cross-clustering check from that stage. See "Standards-oriented exchange"
+in the *programme operations* vignette.
+
+```{r exchange}
+bundle <- build_breeding_exchange(
+  core_res,
+  breeding_program_id = "DEMO", study_id = "DEMO-CYCLE-1", trial_id = "DEMO-T1"
+)
+head(bundle$recommendations[, c("entity_id", "rank", "score", "recommendable")])
+
+exchange_path <- tempfile("hapblockr-full-pipeline-")
+write_breeding_exchange(bundle, exchange_path)
+list.files(exchange_path)
+```
+
+# Where each stage is covered in depth
+
+| Stage | Vignette / Guide section |
+| :--- | :--- |
+| 1 | *Programme operations* vignette, "Externally analysed targets" |
+| 2 | *Intro* vignette; *Large-scale* vignette for file-backed/WGS routes |
+| 3-4 | *Workflow* vignette |
+| 5-8 | *Breeding decisions* vignette (all four shortlist tools compared) |
+| 9, 12 | *Programme operations* vignette, "Operational screening"/"Feasibility certificate" |
+| 10-11, 13 | *Breeding decisions* vignette; Breeder's Guide "The nine decision tools and their variants" |
+| 14 | *Breeding decisions* vignette |
+| 15 | Breeder's Guide "Interpreting quality control and uncertainty" |
+| 16 | *Programme operations* vignette, "Standards-oriented exchange" |
+
+```{r session}
+packageVersion("HapBlockR")
+sessionInfo()
+```

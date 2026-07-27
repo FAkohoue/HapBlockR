@@ -1,13 +1,5 @@
 #!/bin/sh
-# configure.win — Windows counterpart of configure.
-# On Windows with Rtools (MinGW GCC), -fopenmp links libgomp automatically.
+# Rtools supplies SHLIB_OPENMP_CXXFLAGS only when the active compiler
+# toolchain supports OpenMP. The checked-in Makevars.win uses that variable.
 
-echo "*** Configuring HapBlockR OpenMP support (Windows) ***"
-
-sed \
-  -e "s|@OPENMP_CXXFLAGS@|-fopenmp|g" \
-  -e "s|@OPENMP_LIBS@|-fopenmp|g" \
-  src/Makevars.in > src/Makevars.win
-
-echo "    src/Makevars.win written"
-echo "*** Configuration complete ***"
+echo "*** Configuring HapBlockR with Rtools OpenMP flags ***"

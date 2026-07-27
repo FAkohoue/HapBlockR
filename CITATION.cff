@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use HapBlockR, please cite it using this metadata."
+title: "HapBlockR: LD Blocks, Haplotype Analysis, and Breeding Decisions"
+type: software
+authors:
+  - family-names: Akohoue
+    given-names: Félicien
+    orcid: "https://orcid.org/0000-0002-2160-0182"
+version: 0.3.12.9000
+date-released: 2026-07-25
+license: MIT
+repository-code: "https://github.com/FAkohoue/HapBlockR"
+url: "https://FAkohoue.github.io/HapBlockR/"
+keywords:
+  - breeding
+  - genomic prediction
+  - haplotype
+  - linkage disequilibrium

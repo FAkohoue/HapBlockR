@@ -20,6 +20,7 @@ test_block_haplotypes(
   meff_scope = c("chromosome", "global", "block"),
   meff_percent_cut = 0.995,
   meff_max_cols = 1000L,
+  fallback = c("error", "unadjusted"),
   optimize_pcs = FALSE,
   optimize_pcs_max = 10L,
   optimize_method = c("bic_lambda", "bic", "lambda"),
@@ -106,6 +107,14 @@ by the retained PCs in the simpleM eigendecomposition. Default \code{0.995}
 when computing \eqn{M_{\mathrm{eff}}}. Larger groups are chunked and
 summed. Default \code{1000L}.}
 
+\item{fallback}{Character. Behaviour when the genomic relationship matrix
+(GRM), restricted maximum-likelihood null model, or generalised
+least-squares transform fails. \code{"error"} stops rather than
+presenting an unadjusted analysis as GRM-adjusted inference.
+\code{"unadjusted"} permits an identity covariance or ordinary residual
+scan, emits a warning, and records the mode in
+\code{inference_diagnostics}. Default \code{"error"}.}
+
 \item{optimize_pcs}{Logical. When \code{TRUE}, automatically selects
 \code{n_pcs} by fitting REML null models for
 \code{k = 0, 1, \ldots, optimize_pcs_max} and choosing the value that
@@ -163,6 +172,8 @@ A named list of class \code{c("HapBlockR_haplotype_assoc", "list")}:
   \item{\code{meff}}{Named list of \eqn{M_{\mathrm{eff}}} summaries per
     trait, each with \code{$allele} (global/chromosome/block) and
     \code{$block} (global/chromosome) components.}
+  \item{\code{inference_diagnostics}}{Per-trait record of the fitted
+    inference mode and any explicit fallback reason.}
 }
 }
 \description{

@@ -56,7 +56,7 @@ et al. (2023), ensuring the relationship scale is compatible with
 conventional SNP-based GRMs.
 
 Missing dosage values (\code{NA}) are mean-imputed per column before
-centering.
+centring.
 }
 \examples{
 data(ldx_geno, ldx_snp_info, ldx_blocks, package = "HapBlockR")

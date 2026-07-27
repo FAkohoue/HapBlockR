@@ -147,7 +147,7 @@ MAF filtering is assigned to a block. Default \code{TRUE}.}
 \item{gap_k_rep}{Integer. Number of representative SNPs sampled from each
 side of an inter-block gap when \code{close_gaps_with_snps = TRUE} to
 evaluate whether each gap SNP is more strongly associated with the left
-or right neighboring block. Default \code{2L}.}
+or right neighbouring block. Default \code{2L}.}
 
 \item{checkLargest}{Dense-core pre-pass. Default \code{FALSE}.}
 
@@ -251,13 +251,14 @@ res <- run_ldx_pipeline(
   leng = 10L, subSegmSize = 80L, verbose = FALSE
 )
 \dontrun{
-# With Beagle phasing (place beagle.jar in out_dir first):
+# With explicitly configured external Beagle 5.x:
 res2 <- run_ldx_pipeline(
   geno_source = "data.vcf.gz", out_dir = "results/",
   out_blocks = "results/blocks.csv",
   out_diversity = "results/diversity.csv",
   out_hap_matrix = "results/hap_matrix.csv",
-  phase = TRUE, beagle_threads = 4L,
+  phase = TRUE, beagle_jar = "/absolute/path/to/beagle.jar",
+  beagle_threads = 2L,
   beagle_java_mem_gb = 8, beagle_seed = 42L
 )
 }}

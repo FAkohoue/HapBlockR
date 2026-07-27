@@ -64,7 +64,7 @@ al. (2023), ensuring the relationship scale is compatible with
 conventional SNP-based GRMs.
 
 Missing dosage values (`NA`) are mean-imputed per column before
-centering.
+centring.
 
 ## References
 

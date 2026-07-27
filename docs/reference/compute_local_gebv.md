@@ -8,7 +8,7 @@ carry within the block:
 
 where \\x_t\\ is the allele dosage (0/1/2) at SNP \\t\\, \\p_t\\ is the
 SNP's own population allele frequency, and \\\alpha_t\\ is its additive
-effect. Centering at \\2p_t\\ (rather than at the heterozygote midpoint,
+effect. Centring at \\2p_t\\ (rather than at the heterozygote midpoint,
 dosage = 1) matches the convention used by
 [`backsolve_snp_effects`](https://FAkohoue.github.io/HapBlockR/reference/backsolve_snp_effects.md)
 to derive `alpha` in the first place (\\\text{GEBV} = M\alpha\\ with
@@ -19,7 +19,7 @@ backsolved GEBV.
 Blocks are ranked by `Var(local GEBV)` – blocks with high variance
 contribute strongly to trait differences among individuals and likely
 harbour causal loci (Tong et al. 2025). This ranking is unaffected by
-the choice of centering point (variance is shift-invariant), but the
+the choice of centring point (variance is shift-invariant), but the
 absolute `local_gebv` values are only meaningful – i.e. only summable
 back to the genome-wide GEBV – under the \\2p_t\\ convention used here.
 
@@ -31,6 +31,7 @@ compute_local_gebv(
   snp_info,
   blocks,
   snp_effects,
+  snp_effect_se = NULL,
   scale = TRUE,
   complete_decomposition = TRUE,
   importance_threshold = 0.9,
@@ -60,6 +61,12 @@ compute_local_gebv(
   [`estimate_marker_effects`](https://FAkohoue.github.io/HapBlockR/reference/estimate_marker_effects.md),
   or from a marker model directly.
 
+- snp_effect_se:
+
+  Optional named non-negative numeric vector of per-SNP effect standard
+  errors. When supplied, local GEBV standard errors are propagated under
+  an independent-marker-error approximation.
+
 - scale:
 
   Logical. If `TRUE` (default), scale `Var(local GEBV)` to \[0,1\] so
@@ -87,8 +94,8 @@ compute_local_gebv(
 
   Integer \>= 2. Ploidy level of `geno_matrix`'s dosage encoding.
   Default `2L` (diploid, unchanged from previous releases). Generalises
-  the \\2p_t\\ centering above to \\\text{ploidy} \cdot p_t\\; must
-  match the `ploidy` used to derive `snp_effects` (via
+  the \\2p_t\\ centring above to \\\text{ploidy} \cdot p_t\\; must match
+  the `ploidy` used to derive `snp_effects` (via
   [`backsolve_snp_effects`](https://FAkohoue.github.io/HapBlockR/reference/backsolve_snp_effects.md)
   or
   [`estimate_marker_effects`](https://FAkohoue.github.io/HapBlockR/reference/estimate_marker_effects.md))
@@ -103,6 +110,11 @@ A list with two elements:
   Numeric matrix (individuals x blocks) of per-block local GEBV values.
   Includes singleton pseudo-block columns when
   `complete_decomposition = TRUE` and any exist.
+
+- `local_gebv_se`:
+
+  Numeric matrix of propagated local GEBV standard errors, or `NULL`
+  when `snp_effect_se` is not supplied.
 
 - `block_importance`:
 

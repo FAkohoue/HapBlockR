@@ -109,6 +109,22 @@ test_that("get_V_inv_sqrt(): both methods satisfy A V A^T = I", {
   }
 })
 
+test_that("get_V_inv_sqrt(): both methods satisfy A V A^T = I for a NON-diagonal matrix", {
+  # A diagonal V has a diagonal (hence trivially symmetric) Cholesky factor,
+  # so R^-1 and t(R^-1) coincide and a transpose bug in the "chol" branch is
+  # invisible to every test above. A genuine relationship/kinship matrix is
+  # never diagonal -- that is the entire point of rV2's kinship whitening --
+  # so this is the case that actually exercises the whitening property.
+  set.seed(321)
+  n <- 5L
+  M <- matrix(stats::rnorm(n * n), n, n)
+  V <- M %*% t(M) + diag(n)   # symmetric positive-definite, non-diagonal
+  for (m in c("chol", "eigen")) {
+    A <- get_V_inv_sqrt(V, method = m)
+    expect_equal(A %*% V %*% t(A), diag(n), tolerance = 1e-8, label = m)
+  }
+})
+
 test_that("get_V_inv_sqrt(): chol and eigen agree on a well-conditioned diagonal matrix", {
   V <- diag(c(4, 9, 16))
   A_chol  <- get_V_inv_sqrt(V, method = "chol")

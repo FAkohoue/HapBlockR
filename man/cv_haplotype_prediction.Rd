@@ -18,6 +18,10 @@ cv_haplotype_prediction(
   blue_col = "blue",
   blue_cols = NULL,
   seed = 42L,
+  validation = c("random", "grouped", "forward"),
+  groups = NULL,
+  time = NULL,
+  on_fit_error = c("error", "record"),
   verbose = TRUE
 )
 }
@@ -60,6 +64,23 @@ frames. Default \code{NULL} (auto-detect all numeric non-ID columns).}
 \item{seed}{Integer. RNG seed for reproducible fold assignment.
 Default \code{42L}.}
 
+\item{validation}{Validation design. \code{"random"} assigns individuals
+to balanced folds; \code{"grouped"} keeps all individuals in the same
+group in one test fold; \code{"forward"} trains only on earlier time
+points. Default \code{"random"}.}
+
+\item{groups}{Named vector mapping individual identifiers to groups.
+Required when \code{validation = "grouped"}.}
+
+\item{time}{Named numeric or ordered vector mapping individual
+identifiers to breeding cycles, years, or other ordered time points.
+Required when \code{validation = "forward"}.}
+
+\item{on_fit_error}{Behaviour when \code{rrBLUP::kin.blup()} fails.
+\code{"error"} stops with trait, repetition, and fold context;
+\code{"record"} retains the failed fold with missing predictions and an
+explicit error message. Default \code{"error"}.}
+
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
 }
 \value{
@@ -67,13 +88,20 @@ A named list of class \code{HapBlockR_cv}:
 \describe{
   \item{\code{pa_summary}}{Data frame: \code{trait}, \code{rep},
     \code{fold}, \code{n_train}, \code{n_test}, \code{PA} (Pearson r),
-    \code{RMSE}.}
-  \item{\code{pa_mean}}{Data frame: mean PA and RMSE per trait across
-    all folds and replications.}
-  \item{\code{gebv_all}}{Data frame of out-of-fold GEBVs for all
-    individuals and traits (one row per individual x trait).}
+    \code{RMSE}, fit status, and any fit error.}
+  \item{\code{pa_pooled}}{One row per trait and repetition, calculated
+    from the complete pooled out-of-fold predictions: predictive ability,
+    root mean squared error, mean absolute error, bias, and calibration
+    slope.}
+  \item{\code{pa_mean}}{Mean pooled predictive ability and root mean
+    squared error per trait across replications.}
+  \item{\code{gebv_all}}{Out-of-fold predictions for every tested
+    individual, trait, and repetition. \code{gebv} is the predicted
+    phenotype on the BLUE scale; \code{breeding_value} is the centred
+    random genetic deviation returned by \code{kin.blup()}.}
   \item{\code{k}}{Number of folds used.}
   \item{\code{n_rep}}{Number of replications.}
+  \item{\code{validation}}{Validation design used.}
 }
 }
 \description{

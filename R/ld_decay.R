@@ -380,7 +380,7 @@ compute_ld_decay <- function(
       x[is.na(x)] <- mu
     }
 
-    # Same centering logic as prepare_geno()
+    # Same centring logic as prepare_geno()
     x <- x - mean(x, na.rm = TRUE)
 
     # Optional kinship whitening for rV2
@@ -803,7 +803,7 @@ compute_ld_decay <- function(
     # Decay-distance estimation
     # IMPORTANT:
     # Use empirical binned mean r2 for threshold crossing.
-    # LOESS/Hill-Weir are retained for visualization only.
+    # LOESS/Hill-Weir are retained for visualisation only.
     ##############################################################################
 
     if (!is.null(critical_r2)) {

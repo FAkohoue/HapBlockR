@@ -86,6 +86,7 @@ test_block_haplotypes(
   meff_scope = c("chromosome", "global", "block"),
   meff_percent_cut = 0.995,
   meff_max_cols = 1000L,
+  fallback = c("error", "unadjusted"),
   optimize_pcs = FALSE,
   optimize_pcs_max = 10L,
   optimize_method = c("bic_lambda", "bic", "lambda"),
@@ -204,6 +205,15 @@ test_block_haplotypes(
   \\M\_{\mathrm{eff}}\\. Larger groups are chunked and summed. Default
   `1000L`.
 
+- fallback:
+
+  Character. Behaviour when the genomic relationship matrix (GRM),
+  restricted maximum-likelihood null model, or generalised least-squares
+  transform fails. `"error"` stops rather than presenting an unadjusted
+  analysis as GRM-adjusted inference. `"unadjusted"` permits an identity
+  covariance or ordinary residual scan, emits a warning, and records the
+  mode in `inference_diagnostics`. Default `"error"`.
+
 - optimize_pcs:
 
   Logical. When `TRUE`, automatically selects `n_pcs` by fitting REML
@@ -300,6 +310,11 @@ A named list of class `c("HapBlockR_haplotype_assoc", "list")`:
   Named list of \\M\_{\mathrm{eff}}\\ summaries per trait, each with
   `$allele` (global/chromosome/block) and `$block` (global/chromosome)
   components.
+
+- `inference_diagnostics`:
+
+  Per-trait record of the fitted inference mode and any explicit
+  fallback reason.
 
 ## References
 

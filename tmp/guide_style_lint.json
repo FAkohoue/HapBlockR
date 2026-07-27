@@ -1,0 +1,171 @@
+{
+  "input": "D:\\OneDrive - CGIAR\\HapBlockR\\inst\\extdata\\HapBlockR_Breeder_Guide.docx",
+  "fonts_by_char_count": {
+    "Consolas": 5316,
+    "Calibri": 55
+  },
+  "direct_run_formatting_runs": 784,
+  "direct_paragraph_formatting_paragraphs": 558,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 412,
+      "text": "Decision need",
+      "style": "Normal"
+    },
+    {
+      "para_index": 413,
+      "text": "Tool",
+      "style": "Normal"
+    },
+    {
+      "para_index": 414,
+      "text": "Primary output",
+      "style": "Normal"
+    },
+    {
+      "para_index": 439,
+      "text": "input_type",
+      "style": "Normal"
+    },
+    {
+      "para_index": 440,
+      "text": "Definition",
+      "style": "Normal"
+    },
+    {
+      "para_index": 441,
+      "text": "Required uncertainty and treatment",
+      "style": "Normal"
+    },
+    {
+      "para_index": 463,
+      "text": "Variant",
+      "style": "Normal"
+    },
+    {
+      "para_index": 464,
+      "text": "Interpretation",
+      "style": "Normal"
+    },
+    {
+      "para_index": 465,
+      "text": "Example use",
+      "style": "Normal"
+    },
+    {
+      "para_index": 478,
+      "text": "strategy",
+      "style": "Normal"
+    },
+    {
+      "para_index": 479,
+      "text": "Block value used by the objective",
+      "style": "Normal"
+    },
+    {
+      "para_index": 480,
+      "text": "Breeding interpretation",
+      "style": "Normal"
+    },
+    {
+      "para_index": 496,
+      "text": "group_by",
+      "style": "Normal"
+    },
+    {
+      "para_index": 497,
+      "text": "Required evidence",
+      "style": "Normal"
+    },
+    {
+      "para_index": 498,
+      "text": "Interpretation",
+      "style": "Normal"
+    },
+    {
+      "para_index": 505,
+      "text": "family_select_mode",
+      "style": "Normal"
+    },
+    {
+      "para_index": 506,
+      "text": "Rule",
+      "style": "Normal"
+    },
+    {
+      "para_index": 515,
+      "text": "variance_model",
+      "style": "Normal"
+    },
+    {
+      "para_index": 516,
+      "text": "Required inputs",
+      "style": "Normal"
+    },
+    {
+      "para_index": 517,
+      "text": "What is represented",
+      "style": "Normal"
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 3,
+        "text": "Document ID: HBR-GUIDE-001",
+        "style": "Normal"
+      },
+      {
+        "para_index": 4,
+        "text": "Edition: 5",
+        "style": "Normal"
+      },
+      {
+        "para_index": 5,
+        "text": "Compatible package version: 0.3.12.9000",
+        "style": "Normal"
+      },
+      {
+        "para_index": 6,
+        "text": "Release date: 25 July 2026",
+        "style": "Normal"
+      },
+      {
+        "para_index": 7,
+        "text": "Author: F\u00e9licien Akohoue, PhD",
+        "style": "Normal"
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 36,
+        "run_text": "prepare_breeding_targets()",
+        "style": "Normal"
+      },
+      {
+        "para_index": 37,
+        "run_text": "estimand",
+        "style": "List Number"
+      },
+      {
+        "para_index": 38,
+        "run_text": "estimation basis",
+        "style": "List Number"
+      },
+      {
+        "para_index": 41,
+        "run_text": "lower_is_better",
+        "style": "Normal"
+      },
+      {
+        "para_index": 41,
+        "run_text": "model_value",
+        "style": "Normal"
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

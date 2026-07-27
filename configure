@@ -1,37 +1,7 @@
 #!/bin/sh
-# configure — detect OpenMP support and write src/Makevars from src/Makevars.in
-# Called automatically by R CMD INSTALL before compilation.
+# R supplies SHLIB_OPENMP_CXXFLAGS only when the active compiler toolchain
+# supports OpenMP. The C++ code has a serial fallback when the flag is empty.
 
-echo "*** Configuring HapBlockR OpenMP support ***"
-
-OPENMP_CXXFLAGS=""
-OPENMP_LIBS=""
-
-# Detect platform
-OS=$(uname -s 2>/dev/null || echo "unknown")
-
-if [ "$OS" = "Darwin" ]; then
-  # macOS: build without OpenMP.
-  # The C++ code is guarded with #ifdef _OPENMP and will fall back
-  # safely to single-threaded execution.
-  echo "    macOS detected — building without OpenMP"
-  OPENMP_CXXFLAGS=""
-  OPENMP_LIBS=""
-else
-  # Linux / other Unix: GCC -fopenmp links libgomp automatically
-  echo "    Non-macOS platform ($OS) — using -fopenmp"
-  OPENMP_CXXFLAGS="-fopenmp"
-  OPENMP_LIBS="-fopenmp"
-fi
-
-echo "    PKG_CXXFLAGS addition: $OPENMP_CXXFLAGS"
-echo "    PKG_LIBS addition:     $OPENMP_LIBS"
-
-# Write src/Makevars from template
-sed \
-  -e "s|@OPENMP_CXXFLAGS@|${OPENMP_CXXFLAGS}|g" \
-  -e "s|@OPENMP_LIBS@|${OPENMP_LIBS}|g" \
-  src/Makevars.in > src/Makevars
-
+echo "*** Configuring HapBlockR with R's OpenMP toolchain flags ***"
+cp src/Makevars.in src/Makevars
 echo "    src/Makevars written"
-echo "*** Configuration complete ***"

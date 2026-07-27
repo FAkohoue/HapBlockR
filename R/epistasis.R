@@ -103,7 +103,7 @@
     for (j in seq(i + 1L, p)) {
       xj  <- X[, j]
       # Interaction column: (x_i - mean(x_i)) * (x_j - mean(x_j))
-      # Centering reduces collinearity with main effects
+      # Centring reduces collinearity with main effects
       xij <- xi_c * (xj - mean(xj))
       xij_var <- sum(xij^2) - sum(xij)^2 / n
       if (!is.finite(xij_var) || xij_var < 1e-10) next
@@ -635,6 +635,7 @@ scan_block_by_block_epistasis <- function(
   feat_obj <- build_haplotype_feature_matrix(
     haplotypes, top_n = top_n, min_freq = min_freq, encoding = "additive_012")
   hap_mat  <- feat_obj$matrix
+  hap_info <- feat_obj$info
   col_blocks <- sub("_hap[0-9]+$", "", colnames(hap_mat))
 
   # -- Build GRM and REML residuals -------------------------------------------
@@ -687,9 +688,26 @@ scan_block_by_block_epistasis <- function(
   block_chr_map <- stats::setNames(blocks$CHR, blocks$block_id)
 
   n_total  <- ncol(hap_sub)
-  n_tests  <- n_sig * (n_total - 1L)
-  .log("Total interaction tests: ", format(n_tests, big.mark = ","),
-       " (", n_sig, " x ", n_total - 1L, ")")
+  .query_index <- function(q_block, q_allele) {
+    info_idx <- which(hap_info$block_id == q_block &
+                        hap_info$hap_string == q_allele)
+    ids <- hap_info$hap_id[info_idx]
+    idx <- match(ids, col_names, nomatch = 0L)
+    idx <- idx[idx > 0L]
+    if (!length(idx) && q_allele %in% col_names)
+      idx <- match(q_allele, col_names)
+    unique(idx)
+  }
+  query_indices <- lapply(seq_len(n_sig), function(i) {
+    .query_index(sig_alleles$block_id[i], sig_alleles$allele[i])
+  })
+  n_candidate_tests <- sum(vapply(seq_len(n_sig), function(i) {
+    if (!length(query_indices[[i]])) return(0L)
+    sum(col_blks != sig_alleles$block_id[i])
+  }, integer(1L)))
+  .log("Candidate interaction tests: ", format(n_candidate_tests, big.mark = ","),
+       " across ", n_sig, " query allele(s) and ", n_total,
+       " retained allele columns")
 
   yb    <- mean(y_resid)
   ss_tot <- sum((y_resid - yb)^2)
@@ -701,18 +719,10 @@ scan_block_by_block_epistasis <- function(
     q_block  <- sig_alleles$block_id[qi]
     q_allele <- sig_alleles$allele[qi]
 
-    # Find the column index of this query allele.
-    # Strategy: try exact match "block_id_allele" first, then escape the
-    # allele string for regex and search for it as a suffix.
-    # Never fall back to a different allele from the same block.
-    q_col_name <- paste0(q_block, "_", q_allele)
-    q_idx <- which(col_names == q_col_name)
-    if (!length(q_idx)) {
-      # Allele label may have been stored differently; try regex-escaped suffix
-      q_allele_esc <- gsub("([.|()*+?\\^${}\\[\\]])", "\\\1", q_allele)
-      q_idx <- grep(paste0("^", q_block, "_", q_allele_esc, "$"), col_names)
-    }
-    if (!length(q_idx)) next   # allele not in feature matrix -- skip, do NOT substitute
+    # Resolve the exact biological haplotype string through the feature
+    # metadata. Never substitute a different allele from the same block.
+    q_idx <- query_indices[[qi]]
+    if (!length(q_idx)) next
 
     xi   <- hap_sub[, q_idx]
     xi_c <- xi - mean(xi)
@@ -779,11 +789,18 @@ scan_block_by_block_epistasis <- function(
         result_rows <- c(result_rows, vector("list", 1000L))
 
       j_block <- col_blks[other_idx[jj]]
+      partner_id <- col_names[other_idx[jj]]
+      partner_info <- match(partner_id, hap_info$hap_id)
+      partner_allele <- if (!is.na(partner_info)) {
+        hap_info$hap_string[partner_info]
+      } else {
+        partner_id
+      }
       result_rows[[k]] <- data.frame(
         block_i    = q_block,
         allele_i   = q_allele,
         block_j    = j_block,
-        allele_j   = sub(paste0("^", j_block, "_"), "", col_names[other_idx[jj]]),
+        allele_j   = partner_allele,
         CHR_i      = unname(block_chr_map[q_block]),
         CHR_j      = unname(block_chr_map[j_block]),
         same_chr   = identical(unname(block_chr_map[q_block]),
@@ -796,6 +813,16 @@ scan_block_by_block_epistasis <- function(
       )
     }
   }
+
+  # n_tests must reflect the number of interaction tests that actually
+  # produced a valid result row (k), not the pre-loop candidate-pair count
+  # (n_candidate_tests): pairs are skipped inside the loop whenever the OLS
+  # fit is degenerate or rank-deficient (singular X'X, non-finite SE, etc.),
+  # so using the candidate count would overstate the true number of tests
+  # and make p_bonf/Meff-fallback more conservative than the actual family
+  # of tests performed -- contradicting the documented "actual number of
+  # tests" behaviour.
+  n_tests <- k
 
   results_df <- if (k > 0L) {
     df <- do.call(rbind, result_rows[seq_len(k)])
@@ -882,6 +909,8 @@ scan_block_by_block_epistasis <- function(
 #'   eigendecomposition. Default \code{0.995}.
 #' @param lasso_nfolds Integer. CV folds for glmnet lambda selection.
 #'   Default \code{5L}.
+#' @param lasso_seed Integer. Random seed used to construct balanced LASSO
+#'   cross-validation folds. Default \code{42L}.
 #' @param verbose Logical. Default \code{TRUE}.
 #'
 #' @return A data frame sorted by p_wald (pairwise) or |coefficient|
@@ -905,6 +934,7 @@ fine_map_epistasis_block <- function(
     sig_metric    = c("p_simplem_sidak", "p_simplem", "p_bonf", "p_fdr"),
     meff_percent_cut = 0.995,
     lasso_nfolds  = 5L,
+    lasso_seed    = 42L,
     verbose       = TRUE
 ) {
   method     <- match.arg(method)
@@ -953,6 +983,11 @@ fine_map_epistasis_block <- function(
   if (length(common) < 10L) stop("Fewer than 10 common individuals.", call. = FALSE)
   G_blk  <- G_blk[common, , drop = FALSE]
   y_r    <- y_resid[common]
+  complete_y <- is.finite(y_r)
+  G_blk <- G_blk[complete_y, , drop = FALSE]
+  y_r <- as.numeric(y_r[complete_y])
+  if (length(y_r) < 10L)
+    stop("Fewer than 10 individuals have finite residuals.", call. = FALSE)
 
   # MAF filter -- keep si_b aligned with G_blk
   maf_b    <- apply(G_blk, 2L, function(x) {
@@ -969,8 +1004,11 @@ fine_map_epistasis_block <- function(
     if (any(na_j)) G_blk[na_j, j] <- mean(G_blk[, j], na.rm = TRUE)
   }
   col_var  <- apply(G_blk, 2L, stats::var)
-  var_keep <- col_var > 1e-10
+  var_keep <- is.finite(col_var) & col_var > 1e-10
   G_blk    <- G_blk[, var_keep, drop = FALSE]
+  if (ncol(G_blk) < 2L)
+    stop("Fewer than 2 non-degenerate SNPs remain after filtering.",
+         call. = FALSE)
   if (!is.null(colnames(G_blk)) && all(colnames(G_blk) %in% si_b$SNP))
     si_b <- si_b[match(colnames(G_blk), si_b$SNP), , drop = FALSE]
 
@@ -1054,24 +1092,42 @@ fine_map_epistasis_block <- function(
     colnames(X_int_mat) <- pair_names[seq_len(k)]
 
     X_full <- cbind(G_blk, X_int_mat)
-    X_full <- scale(X_full, center = TRUE, scale = TRUE)
-    X_full[!is.finite(X_full)] <- 0
+    term_type <- c(rep("main", p_blk), rep("interaction", ncol(X_int_mat)))
+    design_var <- apply(X_full, 2L, stats::var)
+    design_keep <- is.finite(design_var) & design_var > 1e-10
+    X_full <- X_full[, design_keep, drop = FALSE]
+    term_type <- term_type[design_keep]
+    if (!ncol(X_full))
+      stop("No non-degenerate main or interaction terms remain for LASSO.",
+           call. = FALSE)
+
+    lasso_nfolds <- as.integer(lasso_nfolds)
+    if (length(lasso_nfolds) != 1L || is.na(lasso_nfolds) ||
+        lasso_nfolds < 3L || lasso_nfolds > nrow(X_full))
+      stop("lasso_nfolds must be between 3 and the number of individuals.",
+           call. = FALSE)
+    if (length(lasso_seed) != 1L || is.na(lasso_seed) ||
+        !is.finite(lasso_seed))
+      stop("lasso_seed must be a single finite integer.", call. = FALSE)
+    set.seed(as.integer(lasso_seed))
+    foldid <- sample(rep(seq_len(lasso_nfolds),
+                         length.out = nrow(X_full)))
 
     .log("Fitting LASSO (", ncol(X_full), " terms, ", lasso_nfolds, "-fold CV) ...")
     cv_fit <- tryCatch(
       glmnet::cv.glmnet(x = X_full, y = y_r, alpha = 1,
-                        nfolds = lasso_nfolds, intercept = TRUE),
+                        foldid = foldid, intercept = TRUE,
+                        standardize = TRUE),
       error = function(e) {
         stop("glmnet::cv.glmnet failed: ", conditionMessage(e), call. = FALSE)
       }
     )
 
-    coef_cv <- as.numeric(
-      glmnet::coef.glmnet(cv_fit, s = "lambda.1se")[-1L])   # drop intercept
+    coef_cv <- as.numeric(stats::coef(cv_fit, s = "lambda.1se")[-1L])
     names(coef_cv) <- colnames(X_full)
 
     # Extract non-zero interaction terms
-    int_coefs <- coef_cv[(p_blk + 1L):length(coef_cv)]
+    int_coefs <- coef_cv[term_type == "interaction"]
     selected  <- names(int_coefs)[abs(int_coefs) > 1e-10]
 
     if (!length(selected)) {

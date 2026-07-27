@@ -6,7 +6,7 @@
 # select_parents_ga() (which selects a fixed-size SET of parents with an
 # optional soft relatedness penalty) or usefulness_criterion() (which ranks
 # candidate CROSSES independently), OCS solves the actual contribution-
-# optimization problem: how much should each candidate parent contribute to
+# optimisation problem: how much should each candidate parent contribute to
 # the next generation, and which specific matings should be made, to
 # maximize genetic merit subject to an explicit constraint on the next
 # generation's relatedness/inbreeding (Meuwissen 1997).
@@ -26,10 +26,10 @@
 #
 # This package does not implement an OCS solver from scratch. Three mature,
 # purpose-built engines are wrapped instead, matching the package's existing
-# philosophy of handing off hard optimization/statistical machinery to
+# philosophy of handing off hard optimisation/statistical machinery to
 # validated external tools (GA::ga() for select_parents_ga(), rrBLUP/BGLR for
 # marker effects) rather than reimplementing it. Two solve the actual OCS
-# problem (continuous contribution optimization under a relatedness
+# problem (continuous contribution optimisation under a relatedness
 # constraint); one instead does discrete, greedy cross PREDICTION/selection
 # -- a genuinely different algorithm class, not just a different solver for
 # the same problem:
@@ -43,7 +43,7 @@
 #   engine = "optisel" -- TRUE OCS. Wraps optiSel's own solver (Wellmann
 #     2019, Meuwissen 1997's formal OCS problem): optiSel::candes() builds
 #     the candidate-description object from merit + G (relatedness), then
-#     optiSel::opticont() solves the actual continuous-optimization problem
+#     optiSel::opticont() solves the actual continuous-optimisation problem
 #     for each candidate's optimum contribution, subject to an upper bound
 #     on the next generation's mean kinship. That kinship bound is set from
 #     `target_degree` by locating the two ends of the gain/diversity
@@ -92,7 +92,7 @@
 #     guaranteed by construction (each unordered pair appears at most once
 #     in planCross()'s candidate list, so selectCrosses()'s greedy search
 #     can never select the same pair twice) rather than merely checked
-#     afterward.
+#     afterwards.
 #
 # engine = "auto" (default): uses "alphamate" when a usable alphamate_exe
 # resolves, otherwise falls back to "optisel" (the other TRUE-OCS engine,
@@ -231,7 +231,7 @@
 #'     distributed with HapBlockR.}
 #'   \item{\code{"optisel"}}{\strong{True OCS.} \code{optiSel::candes()} +
 #'     \code{opticont()} (Wellmann 2019) -- optiSel's own continuous-
-#'     optimization solver for Meuwissen's (1997) formal OCS problem:
+#'     optimisation solver for Meuwissen's (1997) formal OCS problem:
 #'     optimal per-candidate contributions subject to an explicit upper
 #'     bound on the next generation's mean kinship. \code{target_degree} is
 #'     mapped onto that kinship bound by solving both ends of the gain/
@@ -277,7 +277,7 @@
 #'
 #' @section Engine differences -- read before choosing:
 #' \code{"alphamate"} and \code{"optisel"} both solve the actual OCS problem
-#' (continuous contribution optimization under a relatedness constraint) via
+#' (continuous contribution optimisation under a relatedness constraint) via
 #' genuinely different solvers -- AlphaMate's own evolutionary algorithm vs.
 #' optiSel's \code{candes()}/\code{opticont()}/\code{matings()}. Both are
 #' controlled by the same \code{target_degree} lever using the same
@@ -311,12 +311,12 @@
 #' if you switch engines.
 #'
 #' Beyond that: AlphaMate lets you cap the parent count
-#' (\code{n_parents_max}) as a native constraint during allocation; the
-#' \code{"optisel"} engine approximates it by zeroing all but the
-#' \code{n_parents_max} largest solved contributions \emph{after} solving
-#' (not a re-optimised constrained solution -- see \code{.run_optisel_ocs()});
-#' the \code{"simplemating"} engine does not support it at all -- ignored
-#' (with a message). \code{max_contrib_per_parent} IS honoured directly by
+#' (\code{n_parents_max}) as a native constraint during allocation. The
+#' \code{"optisel"} engine uses the leading solved contributors to define the
+#' permitted subset, then re-solves the OCS frontier and constrained optimum
+#' within that subset before allocating matings. The \code{"simplemating"}
+#' engine does not expose this control and reports it as unsupported.
+#' \code{max_contrib_per_parent} is honoured directly by
 #' all three engines (AlphaMate's own cap; \code{selectCrosses()}'s
 #' \code{max.cross} argument under \code{"simplemating"};
 #' \code{optiSel::matings()}'s \code{ub.n} argument under \code{"optisel"}).
@@ -348,42 +348,15 @@
 #' prediction/selection) both require no external executable at all -- only
 #' R packages -- and are the more portable, drop-in choices.
 #'
-#' @section Verification status (read this):
-#' The AlphaMate wrapper is a direct translation of a working, production
-#' AlphaMate driver script (same file formats, same call sequence) and is
-#' implemented with high confidence.
-#'
-#' The \code{"simplemating"} engine went through two revisions after real
-#' \code{devtools::test()} failures against an actually-installed
-#' SimpleMating: a hand-written \code{optiSel::candes()}/\code{opticont()}
-#' call with real argument-name mismatches, replaced by a wrapper around
-#' \code{SimpleMating::GOCS()} after reading its actual source -- which
-#' itself then failed because a real, freshly-reinstalled SimpleMating 0.2.1
-#' does not export \code{GOCS()} despite it being present in the GitHub
-#' repository's checked-in source/NAMESPACE (unresolved discrepancy;
-#' possibly a stale NAMESPACE line). This engine now wraps
-#' \code{planCross()} + \code{selectCrosses()} instead, specifically because
-#' both are confirmed present in a real, current SimpleMating 0.2.1
-#' installation's own help index AND their exact current source was read
-#' directly before writing this (\code{Resende-Lab/SimpleMating},
-#' \code{planCross.R} and \code{selectCrosses.R}). If \code{engine =
-#' "simplemating"} errors with what looks like an argument-name mismatch,
-#' SimpleMating's own API may have moved again since this wrapper was
-#' written -- check \code{?SimpleMating::planCross}/
-#' \code{?SimpleMating::selectCrosses} against your installed version.
-#'
-#' The \code{"optisel"} engine is written directly against optiSel's own
-#' \code{candes()}/\code{opticont()}/\code{matings()}/\code{noffspring()}
-#' documentation. The specific assumptions most likely to matter if you hit
-#' an argument-name or return-shape mismatch: (1) \code{optiSel::noffspring()}'s
-#' exact first positional argument and return shape (assumed to accept the
-#' \code{opticont()} \code{$parent} data frame directly and return a list
-#' with a \code{$parent$n} column); (2) \code{optiSel::matings()}'s
-#' \code{ub.n} argument being an upper bound on repeated matings of the same
-#' Sire x Dam pair (used here to enforce \code{allow_repeated_matings =
-#' FALSE} natively rather than by post-hoc filtering). Check
-#' \code{?optiSel::candes}, \code{?optiSel::opticont}, \code{?optiSel::matings},
-#' and \code{?optiSel::noffspring} against your installed version.
+#' @section Engine integration:
+#' The AlphaMate wrapper follows the programme's documented file formats and
+#' execution sequence. The \code{"optisel"} engine calls
+#' \code{candes()} and \code{opticont()} for the continuous OCS problem and
+#' uses HapBlockR's hard-constrained discrete allocator for the mating plan.
+#' The \code{"simplemating"} engine uses the exported
+#' \code{planCross()} and \code{selectCrosses()} interface. HapBlockR checks
+#' required exports and returned constraints so that an incompatible optional
+#' dependency fails explicitly with the installed version and function name.
 #'
 #' @param merit Named numeric vector of candidate parent merit (e.g. GEBV,
 #'   a Selection Index, or \code{score_favorable_haplotypes()}'s
@@ -391,8 +364,9 @@
 #' @param G Dimnamed relationship matrix (row/column names = individual
 #'   IDs), e.g. from \code{\link{compute_haplotype_grm}}, or your own
 #'   VanRaden/IBS/blended-H/pedigree-A matrix built however you already
-#'   build it. This function does not construct \code{G} for you -- pass in
-#'   whatever relationship matrix you trust.
+#'   build it. Supply the relationship matrix produced by the HapBlockR
+#'   workflow or another aligned relationship analysis appropriate to the
+#'   programme.
 #' @param family Optional named character vector (names = individual IDs)
 #'   of family/cross-of-origin labels, used only for output labelling/
 #'   reporting (neither engine enforces family representation as a hard
@@ -406,12 +380,12 @@
 #'   produce.
 #' @param n_parents_max Optional integer. Maximum number of distinct parents
 #'   to use. AlphaMate: \code{NumberOfParents}, a native constraint enforced
-#'   during allocation. \code{engine = "optisel"}: approximated by zeroing
-#'   all but the \code{n_parents_max} largest solved contributions after
-#'   \code{opticont()} solves -- not a re-optimised constrained solution
-#'   (with a message). Ignored entirely (with a message) under \code{engine
-#'   = "simplemating"} -- \code{selectCrosses()} does not expose this
-#'   control at all.
+#'   during allocation. \code{engine = "optisel"}: uses the
+#'   \code{n_parents_max} leading contributors to define a restricted
+#'   candidate subset, then re-solves the OCS frontier and constrained optimum
+#'   within that subset before mating allocation. \code{engine =
+#'   "simplemating"}: reported as unsupported because
+#'   \code{selectCrosses()} does not expose this control.
 #' @param max_contrib_per_parent Integer, default \code{4L}. Maximum number
 #'   of matings any single parent can participate in. Honoured directly by
 #'   all three engines (AlphaMate's own cap; \code{selectCrosses()}'s
@@ -502,6 +476,7 @@ select_parents_ocs <- function(
     seed                          = NULL,
     verbose                       = TRUE
 ) {
+  result_call <- match.call()
   engine <- match.arg(engine)
   inp <- .ocs_validate_inputs(merit, G, family, verbose = verbose)
 
@@ -579,7 +554,40 @@ select_parents_ocs <- function(
                                  rescale_nrm = rescale_nrm, verbose = verbose)
   }
   res$engine_used <- engine
-  res
+  checks <- if (!is.null(res$constraint_checks)) {
+    unlist(res$constraint_checks, use.names = TRUE)
+  } else {
+    c(plan_reported_ok = isTRUE(res$ok))
+  }
+  .add_hapblockr_contract(
+    result = res,
+    method = "select_parents_ocs",
+    call = result_call,
+    parameters = list(
+      engine = engine, n_crosses = n_crosses,
+      n_parents_max = n_parents_max,
+      max_contrib_per_parent = max_contrib_per_parent,
+      allow_selfing = allow_selfing,
+      allow_repeated_matings = allow_repeated_matings,
+      target_degree = target_degree,
+      rescale_nrm = rescale_nrm
+    ),
+    seed = seed,
+    sample_ids = inp$ids,
+    inputs = list(merit = inp$merit, relationship_matrix = inp$G),
+    transformations = c(
+      if (rescale_nrm) "relationship-matrix rescaling" else character(),
+      paste(engine, "optimal contribution or mating allocation")
+    ),
+    quality_gates = c(success = isTRUE(res$ok), checks),
+    decision_table = if (is.data.frame(res$mating_plan)) {
+      res$mating_plan
+    } else {
+      data.frame()
+    },
+    uncertainty = data.frame(),
+    external_tools = list(engine = engine)
+  )
 }
 
 
@@ -754,6 +762,214 @@ select_parents_ocs <- function(
 #      no-repeated-matings is enforced NATIVELY by the solver, not by
 #      post-hoc filtering (assumption flagged in "Verification status": that
 #      ub.n bounds repeated matings of the same pair).
+
+.allocate_ocs_matings <- function(contributions, Kin, n_crosses,
+                                  max_contrib_per_parent = NULL,
+                                  allow_selfing = FALSE,
+                                  allow_repeated_matings = FALSE) {
+  if (!requireNamespace("lpSolve", quietly = TRUE))
+    stop("lpSolve is required to convert optimal contributions into a ",
+         "hard-constrained mating plan for engine = 'optisel'. Install with: ",
+         "install.packages('lpSolve')", call. = FALSE)
+
+  contributions <- contributions[is.finite(contributions) & contributions > 0]
+  if (!length(contributions))
+    stop("The optimal-contribution solution contains no positive ",
+         "contributions.", call. = FALSE)
+  contributions <- contributions / sum(contributions)
+  ids <- names(contributions)
+  if (is.null(ids) || any(!nzchar(ids)))
+    stop("Optimal contributions must be named with candidate IDs.",
+         call. = FALSE)
+  Kin <- Kin[ids, ids, drop = FALSE]
+
+  pairs <- if (isTRUE(allow_selfing)) {
+    which(upper.tri(Kin, diag = TRUE), arr.ind = TRUE)
+  } else {
+    which(upper.tri(Kin, diag = FALSE), arr.ind = TRUE)
+  }
+  if (!nrow(pairs))
+    stop("No feasible mating pair remains under the selfing policy.",
+         call. = FALSE)
+
+  pair_df <- data.frame(
+    parent1 = ids[pairs[, 1L]],
+    parent2 = ids[pairs[, 2L]],
+    relationship = Kin[pairs],
+    stringsAsFactors = FALSE
+  )
+  if (any(!is.finite(pair_df$relationship)))
+    stop("The relationship matrix contains non-finite values for candidate ",
+         "mating pairs.", call. = FALSE)
+
+  n_pair <- nrow(pair_df)
+  n_id <- length(ids)
+  n_var <- n_pair + 2L * n_id
+  incidence <- matrix(0, nrow = n_id, ncol = n_pair,
+                      dimnames = list(ids, NULL))
+  for (j in seq_len(n_pair)) {
+    incidence[pair_df$parent1[j], j] <-
+      incidence[pair_df$parent1[j], j] + 1
+    incidence[pair_df$parent2[j], j] <-
+      incidence[pair_df$parent2[j], j] + 1
+  }
+
+  target_slots <- contributions * (2 * n_crosses)
+  constraints <- list()
+  directions <- character(0)
+  rhs <- numeric(0)
+
+  total_row <- numeric(n_var)
+  total_row[seq_len(n_pair)] <- 1
+  constraints[[length(constraints) + 1L]] <- total_row
+  directions <- c(directions, "=")
+  rhs <- c(rhs, n_crosses)
+
+  for (i in seq_len(n_id)) {
+    row <- numeric(n_var)
+    row[seq_len(n_pair)] <- incidence[i, ]
+    row[n_pair + i] <- -1
+    row[n_pair + n_id + i] <- 1
+    constraints[[length(constraints) + 1L]] <- row
+    directions <- c(directions, "=")
+    rhs <- c(rhs, target_slots[i])
+  }
+
+  if (!is.null(max_contrib_per_parent)) {
+    for (i in seq_len(n_id)) {
+      row <- numeric(n_var)
+      row[seq_len(n_pair)] <- incidence[i, ]
+      constraints[[length(constraints) + 1L]] <- row
+      directions <- c(directions, "<=")
+      rhs <- c(rhs, max_contrib_per_parent)
+    }
+  }
+
+  if (!isTRUE(allow_repeated_matings)) {
+    for (j in seq_len(n_pair)) {
+      row <- numeric(n_var)
+      row[j] <- 1
+      constraints[[length(constraints) + 1L]] <- row
+      directions <- c(directions, "<=")
+      rhs <- c(rhs, 1)
+    }
+  }
+
+  rel <- pair_df$relationship
+  rel_scaled <- if (diff(range(rel)) > sqrt(.Machine$double.eps)) {
+    (rel - min(rel)) / diff(range(rel))
+  } else {
+    rep(0, length(rel))
+  }
+  objective <- c(rel_scaled, rep(100, 2L * n_id))
+  fit <- lpSolve::lp(
+    direction = "min",
+    objective.in = objective,
+    const.mat = do.call(rbind, constraints),
+    const.dir = directions,
+    const.rhs = rhs,
+    int.vec = seq_len(n_pair)
+  )
+  if (fit$status != 0L)
+    stop("No feasible mating plan satisfies n_crosses, selfing, repeated-",
+         "mating and per-parent contribution constraints (lpSolve status ",
+         fit$status, "). Revise the constraints or increase the candidate ",
+         "set.", call. = FALSE)
+
+  pair_counts <- as.integer(round(fit$solution[seq_len(n_pair)]))
+  used <- which(pair_counts > 0L)
+  if (!length(used))
+    stop("The mating allocator returned no crosses despite a successful ",
+         "solver status.", call. = FALSE)
+  mating_plan <- pair_df[rep(used, pair_counts[used]),
+                         c("parent1", "parent2"), drop = FALSE]
+  rownames(mating_plan) <- NULL
+  mating_plan$mean_relationship <- Kin[
+    cbind(mating_plan$parent1, mating_plan$parent2)
+  ]
+
+  actual_slots <- table(factor(
+    c(mating_plan$parent1, mating_plan$parent2), levels = ids
+  ))
+  allocation <- data.frame(
+    id = ids,
+    target_slots = as.numeric(target_slots[ids]),
+    actual_slots = as.integer(actual_slots),
+    deviation = as.integer(actual_slots) - as.numeric(target_slots[ids]),
+    stringsAsFactors = FALSE
+  )
+
+  list(
+    mating_plan = mating_plan,
+    allocation = allocation,
+    solver_status = fit$status,
+    solver_objective = fit$objval
+  )
+}
+
+
+.solve_optisel_frontier <- function(phen, Kin, target_degree, verbose) {
+  cand <- tryCatch(
+    optiSel::candes(phen = phen, Kin = Kin, cont = NULL,
+                    quiet = !isTRUE(verbose)),
+    error = function(e)
+      stop("optiSel::candes() failed: ", conditionMessage(e),
+           "\nCheck that G (after rescale_nrm) is a valid symmetric ",
+           "relationship matrix and that candidate identifiers are unique.",
+           call. = FALSE)
+  )
+  min_kin_res <- tryCatch(
+    optiSel::opticont("min.Kin", cand, con = list(), quiet = TRUE),
+    error = function(e)
+      stop("optiSel::opticont('min.Kin', ...) failed while establishing the ",
+           "max-diversity end of the frontier: ", conditionMessage(e),
+           call. = FALSE)
+  )
+  max_merit_res <- tryCatch(
+    optiSel::opticont("max.Merit", cand, con = list(), quiet = TRUE),
+    error = function(e)
+      stop("optiSel::opticont('max.Merit', ...) failed while establishing ",
+           "the max-gain end of the frontier: ", conditionMessage(e),
+           call. = FALSE)
+  )
+  kin_min <- min_kin_res$mean[["Kin"]]
+  kin_max_gain <- max_merit_res$mean[["Kin"]]
+  if (!is.finite(kin_min) || !is.finite(kin_max_gain))
+    stop("optiSel returned a non-finite frontier endpoint.", call. = FALSE)
+  span <- kin_max_gain - kin_min
+  kin_ceiling <- if (span < sqrt(.Machine$double.eps)) {
+    kin_max_gain
+  } else {
+    kin_max_gain - (target_degree / 90) * span
+  }
+  opt <- tryCatch(
+    optiSel::opticont("max.Merit", cand, con = list(ub.Kin = kin_ceiling),
+                      quiet = !isTRUE(verbose)),
+    error = function(e)
+      stop("optiSel::opticont('max.Merit', ...) failed at target_degree = ",
+           target_degree, ": ", conditionMessage(e),
+           "\nThis can indicate an infeasible kinship ceiling.",
+           call. = FALSE)
+  )
+  if (!is.null(opt$info$valid) && !isTRUE(opt$info$valid))
+    stop("optiSel::opticont() did not return a valid solution at ",
+         "target_degree = ", target_degree, ".", call. = FALSE)
+  if (is.null(opt$parent) || !("oc" %in% names(opt$parent)))
+    stop("optiSel::opticont() did not return the expected $parent$oc ",
+         "column.", call. = FALSE)
+
+  list(
+    cand = cand,
+    min_kin_result = min_kin_res,
+    max_merit_result = max_merit_res,
+    kin_min = kin_min,
+    kin_max_gain = kin_max_gain,
+    kin_ceiling = kin_ceiling,
+    opt = opt
+  )
+}
+
+
 .run_optisel_ocs <- function(inp, family, n_crosses, n_parents_max,
                              max_contrib_per_parent, allow_selfing,
                              allow_repeated_matings, target_degree,
@@ -761,7 +977,7 @@ select_parents_ocs <- function(
   if (!requireNamespace("optiSel", quietly = TRUE))
     stop("optiSel is required for engine = 'optisel'. Install with: ",
          "install.packages('optiSel')", call. = FALSE)
-  need_fns <- c("candes", "opticont", "matings", "noffspring")
+  need_fns <- c("candes", "opticont")
   missing_fns <- setdiff(need_fns, getNamespaceExports("optiSel"))
   if (length(missing_fns))
     stop("optiSel is installed (version ",
@@ -769,8 +985,8 @@ select_parents_ocs <- function(
          "export: ", paste(missing_fns, collapse = ", "), ", which engine ",
          "= 'optisel' requires. Your installed optiSel version may be too ",
          "old, or its API may have moved since this wrapper was written -- ",
-         "check ?optiSel::candes / ?optiSel::opticont / ?optiSel::matings / ",
-         "?optiSel::noffspring against your installed version.", call. = FALSE)
+         "check ?optiSel::candes and ?optiSel::opticont against your ",
+         "installed version.", call. = FALSE)
   if (is.null(target_degree) || !is.numeric(target_degree) ||
       target_degree < 0 || target_degree > 90)
     stop("target_degree must be a single numeric value in [0, 90] for ",
@@ -793,163 +1009,95 @@ select_parents_ocs <- function(
     stringsAsFactors = FALSE
   )
 
-  cand <- tryCatch(
-    optiSel::candes(phen = phen, Kin = Kmat, cont = NULL,
-                    quiet = !isTRUE(verbose)),
-    error = function(e)
-      stop("optiSel::candes() failed: ", conditionMessage(e),
-           "\nCheck that G (after rescale_nrm) is a valid symmetric ",
-           "relationship matrix -- see ?optiSel::candes. If this looks like ",
-           "an argument-name mismatch, optiSel's API may have moved since ",
-           "this wrapper was written.", call. = FALSE)
-  )
+  solved <- .solve_optisel_frontier(phen, Kmat, target_degree, verbose)
+  contrib_df <- solved$opt$parent
 
-  # -- Locate the two solved ends of the gain/diversity frontier for THIS
-  # candidate set (see the block comment above this function).
-  min_kin_res <- tryCatch(
-    optiSel::opticont("min.Kin", cand, con = list(), quiet = TRUE),
-    error = function(e)
-      stop("optiSel::opticont('min.Kin', ...) failed while establishing the ",
-           "max-diversity end of the frontier: ", conditionMessage(e),
-           call. = FALSE)
-  )
-  max_merit_res <- tryCatch(
-    optiSel::opticont("max.Merit", cand, con = list(), quiet = TRUE),
-    error = function(e)
-      stop("optiSel::opticont('max.Merit', ...) failed while establishing ",
-           "the max-gain end of the frontier: ", conditionMessage(e),
-           call. = FALSE)
-  )
-  kin_min      <- min_kin_res$mean[["Kin"]]
-  kin_max_gain <- max_merit_res$mean[["Kin"]]
-
-  span <- kin_max_gain - kin_min
-  if (!is.finite(span) || span < sqrt(.Machine$double.eps)) {
-    # Degenerate frontier (e.g. every candidate already near-equally
-    # related, or the two solved optima coincide) -- no meaningful gain/
-    # diversity trade-off to move along. Mirrors the analogous k_span guard
-    # in .run_simplemating_ocs().
-    kin_ceiling <- kin_max_gain
-    if (isTRUE(verbose))
-      message("[select_parents_ocs] engine 'optisel': the max-gain and ",
-              "max-diversity solutions have effectively identical mean ",
-              "kinship for this candidate set -- target_degree has no ",
-              "effect here.")
-  } else {
-    # Direction matches .target_degree_to_n_keep()'s own convention: 0 ->
-    # kin_ceiling = kin_max_gain (unrestricted, max-gain end); 90 ->
-    # kin_ceiling = kin_min (max-diversity end).
-    kin_ceiling <- kin_max_gain - (target_degree / 90) * span
-  }
-
-  opt <- tryCatch(
-    optiSel::opticont("max.Merit", cand, con = list(ub.Kin = kin_ceiling),
-                      quiet = !isTRUE(verbose)),
-    error = function(e)
-      stop("optiSel::opticont('max.Merit', ...) failed at target_degree = ",
-           target_degree, ": ", conditionMessage(e),
-           "\nThis can happen if the requested kinship ceiling is ",
-           "infeasible -- try a different target_degree, or check ",
-           "?optiSel::opticont.", call. = FALSE)
-  )
-  if (!is.null(opt$info$valid) && !isTRUE(opt$info$valid))
-    stop("optiSel::opticont() did not reach a valid solution at ",
-         "target_degree = ", target_degree, " (opt$info$valid is FALSE). ",
-         "Try a different target_degree, or check ?optiSel::opticont for ",
-         "solver options.", call. = FALSE)
-
-  contrib_df <- opt$parent
-  if (is.null(contrib_df) || !("oc" %in% names(contrib_df)))
-    stop("optiSel::opticont() did not return the expected $parent$oc ",
-         "column -- optiSel's return structure may have changed since this ",
-         "wrapper was written; check ?optiSel::opticont.", call. = FALSE)
-
-  # n_parents_max: optiSel's opticont() does not expose a "keep exactly K
-  # parents" constraint (AlphaMate's NumberOfParents re-solves under that
-  # cardinality restriction natively; optiSel does not). Approximated here
-  # by zeroing every contribution below the n_parents_max-th largest,
-  # WITHOUT re-solving -- see roxygen "Engine differences".
   if (!is.null(n_parents_max) && n_parents_max < sum(contrib_df$oc > 0)) {
-    ord <- order(contrib_df$oc, decreasing = TRUE)
-    contrib_df$oc[ord[(n_parents_max + 1L):length(ord)]] <- 0
+    min_required <- if (isTRUE(allow_selfing)) 1L else 2L
+    if (n_parents_max < min_required)
+      stop("n_parents_max must be at least ", min_required,
+           " under the requested selfing policy.", call. = FALSE)
+    positive <- which(is.finite(contrib_df$oc) & contrib_df$oc > 0)
+    keep_rows <- positive[
+      order(contrib_df$oc[positive], decreasing = TRUE)
+    ][seq_len(min(n_parents_max, length(positive)))]
+    keep_ids <- contrib_df$Indiv[keep_rows]
+    phen <- phen[match(keep_ids, phen$Indiv), , drop = FALSE]
+    Kmat <- Kmat[keep_ids, keep_ids, drop = FALSE]
+    solved <- .solve_optisel_frontier(phen, Kmat, target_degree, verbose)
+    contrib_df <- solved$opt$parent
     if (isTRUE(verbose))
-      message("[select_parents_ocs] engine 'optisel': n_parents_max ",
-              "applied by zeroing all but the ", n_parents_max, " largest ",
-              "solved contributions (not a re-optimised constrained ",
-              "solution -- see ?select_parents_ocs 'Engine differences').")
+      message("[select_parents_ocs] engine 'optisel': re-solved the OCS ",
+              "frontier and constrained optimum within the ",
+              length(keep_ids), " parents retained by n_parents_max.")
   }
+
+  kin_min <- solved$kin_min
+  kin_max_gain <- solved$kin_max_gain
+  kin_ceiling <- solved$kin_ceiling
+  opt <- solved$opt
 
   contributors <- data.frame(
     id = contrib_df$Indiv, contribution = contrib_df$oc,
     stringsAsFactors = FALSE
   )
   contributors <- contributors[contributors$contribution > 0, , drop = FALSE]
+  contributors$contribution <- contributors$contribution /
+    sum(contributors$contribution)
   if (!is.null(family)) contributors$family <- family[contributors$id]
 
-  # -- Continuous contributions -> discrete mating plan.
-  n_slot <- n_crosses * 2L
-  phen_n <- contrib_df
-  phen_n$n <- tryCatch(
-    optiSel::noffspring(contrib_df, N = n_slot)$parent$n,
-    error = function(e) {
-      if (isTRUE(verbose))
-        message("[select_parents_ocs] engine 'optisel': optiSel::noffspring() ",
-                "failed (", conditionMessage(e), "); falling back to ",
-                "contribution x n_slot, rounded, instead.")
-      round(contrib_df$oc * n_slot)
-    }
+  contribution_vector <- setNames(
+    contributors$contribution, contributors$id
   )
-  if (!is.null(max_contrib_per_parent))
-    phen_n$n <- pmin(phen_n$n, max_contrib_per_parent)
+  allocation <- .allocate_ocs_matings(
+    contribution_vector, Kmat, n_crosses,
+    max_contrib_per_parent = max_contrib_per_parent,
+    allow_selfing = allow_selfing,
+    allow_repeated_matings = allow_repeated_matings
+  )
+  mating_plan <- allocation$mating_plan
 
-  mating_plan <- data.frame(parent1 = character(0), parent2 = character(0),
-                            mean_relationship = numeric(0))
-  if (sum(phen_n$n, na.rm = TRUE) >= 2) {
-    mate_res <- tryCatch(
-      optiSel::matings(phen = phen_n, Kin = Kmat,
-                       ub.n = if (isTRUE(allow_repeated_matings)) NA else 1),
-      error = function(e) {
-        if (isTRUE(verbose))
-          message("[select_parents_ocs] engine 'optisel': optiSel::matings() ",
-                  "failed (", conditionMessage(e), "); mating_plan will be ",
-                  "empty -- contributors/optimal contributions are still ",
-                  "available.")
-        NULL
-      }
-    )
-    if (!is.null(mate_res) && nrow(mate_res) &&
-        all(c("Sire", "Dam", "n") %in% names(mate_res))) {
-      mp <- mate_res[rep(seq_len(nrow(mate_res)), mate_res$n),
-                    c("Sire", "Dam"), drop = FALSE]
-      names(mp) <- c("parent1", "parent2")
-      rownames(mp) <- NULL
-      if (!isTRUE(allow_selfing))
-        mp <- mp[mp$parent1 != mp$parent2, , drop = FALSE]
-      if (nrow(mp) > n_crosses) mp <- mp[seq_len(n_crosses), , drop = FALSE]
-      if (nrow(mp))
-        mp$mean_relationship <- Kmat[cbind(mp$parent1, mp$parent2)]
-      mating_plan <- mp
-    }
-  }
-
-  ok <- nrow(mating_plan) == n_crosses
-  if (nrow(mating_plan)) {
-    if (!allow_selfing && any(mating_plan$parent1 == mating_plan$parent2)) ok <- FALSE
-    pk <- ifelse(mating_plan$parent1 < mating_plan$parent2,
-                paste(mating_plan$parent1, mating_plan$parent2),
-                paste(mating_plan$parent2, mating_plan$parent1))
-    if (!allow_repeated_matings && anyDuplicated(pk) > 0L) ok <- FALSE
-    if (!is.null(max_contrib_per_parent)) {
-      counts <- table(c(mating_plan$parent1, mating_plan$parent2))
-      if (any(counts > max_contrib_per_parent)) ok <- FALSE
-    }
-  }
+  if (nrow(mating_plan) != n_crosses)
+    stop("Internal error: the constrained mating allocator returned ",
+         nrow(mating_plan), " crosses instead of ", n_crosses, ".",
+         call. = FALSE)
+  if (!allow_selfing && any(mating_plan$parent1 == mating_plan$parent2))
+    stop("Internal error: the mating allocator returned a forbidden self.",
+         call. = FALSE)
+  pair_keys <- apply(
+    t(apply(mating_plan[c("parent1", "parent2")], 1L, sort)),
+    1L, paste, collapse = "\r"
+  )
+  if (!allow_repeated_matings && anyDuplicated(pair_keys) > 0L)
+    stop("Internal error: the mating allocator returned a repeated mating.",
+         call. = FALSE)
+  parent_counts <- table(c(mating_plan$parent1, mating_plan$parent2))
+  if (!is.null(max_contrib_per_parent) &&
+      any(parent_counts > max_contrib_per_parent))
+    stop("Internal error: the mating allocator exceeded ",
+         "max_contrib_per_parent.", call. = FALSE)
+  ok <- TRUE
 
   list(mating_plan = mating_plan, contributors = contributors,
       id_map = data.frame(id = ids, merit = inp$merit, stringsAsFactors = FALSE),
       spec_file = NA_character_, out_dir = NA_character_, ok = ok,
       frontier = list(kin_min = kin_min, kin_max_gain = kin_max_gain,
                       kin_ceiling = kin_ceiling, target_degree = target_degree),
+      allocation = allocation$allocation,
+      allocation_solver = list(status = allocation$solver_status,
+                               objective = allocation$solver_objective),
+      constraint_checks = list(
+        n_crosses = nrow(mating_plan) == n_crosses,
+        no_selfing = allow_selfing ||
+          all(mating_plan$parent1 != mating_plan$parent2),
+        no_repeated_matings = allow_repeated_matings ||
+          anyDuplicated(pair_keys) == 0L,
+        parent_cap = is.null(max_contrib_per_parent) ||
+          all(parent_counts <= max_contrib_per_parent),
+        n_parents_max = is.null(n_parents_max) ||
+          length(unique(c(mating_plan$parent1, mating_plan$parent2))) <=
+          n_parents_max
+      ),
       opticont_result = opt)
 }
 
@@ -1130,7 +1278,7 @@ select_parents_ocs <- function(
     if (!is.null(max_contrib_per_parent) && !is.null(contributors) &&
         max(contributors$contribution) > max_contrib_per_parent) ok <- FALSE
     # no-repeated-matings is guaranteed by construction here, not merely
-    # checked afterward: planCross(MateDesign = "half"/"half_p") lists each
+    # checked afterwards: planCross(MateDesign = "half"/"half_p") lists each
     # unordered pair at most once, and selectCrosses()'s greedy search
     # consumes each candidate row at most once, so the same pair cannot
     # appear twice in `plan` -- see the file header.

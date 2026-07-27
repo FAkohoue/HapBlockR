@@ -16,6 +16,7 @@ fine_map_epistasis_block(
   sig_metric = c("p_simplem_sidak", "p_simplem", "p_bonf", "p_fdr"),
   meff_percent_cut = 0.995,
   lasso_nfolds = 5L,
+  lasso_seed = 42L,
   verbose = TRUE
 )
 }
@@ -52,6 +53,9 @@ eigendecomposition. Default \code{0.995}.}
 
 \item{lasso_nfolds}{Integer. CV folds for glmnet lambda selection.
 Default \code{5L}.}
+
+\item{lasso_seed}{Integer. Random seed used to construct balanced LASSO
+cross-validation folds. Default \code{42L}.}
 
 \item{verbose}{Logical. Default \code{TRUE}.}
 }

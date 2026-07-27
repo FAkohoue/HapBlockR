@@ -1,0 +1,105 @@
+name: Optional integration lanes
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 4 * * 3"
+  pull_request:
+    paths:
+      - "R/read_geno.R"
+      - "R/ocs.R"
+      - "R/epistasis.R"
+      - "R/haplotypes.R"
+      - "tests/testthat/test-io.R"
+      - "tests/testthat/test-ocs.R"
+      - "tests/testthat/test-epistasis.R"
+      - "tests/testthat/test-marker-effects.R"
+      - ".github/workflows/optional-integrations.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  optional-r-backends:
+    name: GDS, PLINK, bigmemory, optiSel, glmnet, and BGLR
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      NOT_CRAN: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          use-public-rspm: true
+
+      - name: Install Linux libraries
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libhdf5-dev libcurl4-openssl-dev \
+            libssl-dev libxml2-dev libgit2-dev libopenblas-dev \
+            liblapack-dev gfortran
+
+      - name: Install package dependencies
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          extra-packages: |
+            any::devtools
+            any::BEDMatrix
+            any::bigmemory
+            any::BGLR
+            any::glmnet
+            any::lpSolve
+            any::optiSel
+          needs: check
+
+      - name: Install Bioconductor backends
+        shell: Rscript {0}
+        run: |
+          if (!requireNamespace("BiocManager", quietly = TRUE))
+            install.packages("BiocManager")
+          BiocManager::install(
+            c("SNPRelate", "gdsfmt"),
+            ask = FALSE,
+            update = FALSE
+          )
+
+      - name: Require every configured integration
+        shell: Rscript {0}
+        run: |
+          required <- c(
+            "SNPRelate", "gdsfmt", "BEDMatrix", "bigmemory",
+            "BGLR", "glmnet", "lpSolve", "optiSel"
+          )
+          missing <- required[
+            !vapply(required, requireNamespace, logical(1L), quietly = TRUE)
+          ]
+          if (length(missing))
+            stop("Required integration missing: ", paste(missing, collapse = ", "))
+          optisel_functions <- c("candes", "opticont", "matings", "noffspring")
+          absent <- optisel_functions[
+            !vapply(optisel_functions, exists, logical(1L),
+                    where = asNamespace("optiSel"), inherits = FALSE)
+          ]
+          if (length(absent))
+            stop("optiSel API missing: ", paste(absent, collapse = ", "))
+
+      - name: Run integration tests
+        shell: Rscript {0}
+        run: |
+          devtools::load_all(quiet = TRUE)
+          for (file in c(
+            "tests/testthat/test-io.R",
+            "tests/testthat/test-ocs.R",
+            "tests/testthat/test-epistasis.R",
+            "tests/testthat/test-marker-effects.R"
+          )) {
+            testthat::test_file(
+              file,
+              reporter = "summary",
+              stop_on_failure = TRUE
+            )
+          }

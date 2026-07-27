@@ -152,8 +152,13 @@ estimate_diplotype_effects(
 
 ## Value
 
-A named list of class `c("HapBlockR_diplotype", "list")` with three
-elements:
+A `hapblockr_result` of class
+`c("HapBlockR_diplotype", "hapblockr_result", "list")` with three
+elements plus a `result_contract` (parameters, identifiers,
+transformations, quality gates, `omnibus_tests` as the decision table,
+and `diplotype_means` as the uncertainty table). Check with
+[`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
+before treating a block's effects as a recommendation.
 
 - `diplotype_means`:
 

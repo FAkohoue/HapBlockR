@@ -220,10 +220,16 @@ compare_gwas_effects(
 
 ## Value
 
-A named list of class `c("HapBlockR_effect_concordance", "list")` with
-the same structure as
-[`compare_block_effects`](https://FAkohoue.github.io/HapBlockR/reference/compare_block_effects.md).
-Additional columns in `$concordance` specific to GWAS input:
+A `hapblockr_result` of class
+`c("HapBlockR_effect_concordance", "hapblockr_result", "list")` with the
+same structure as
+[`compare_block_effects`](https://FAkohoue.github.io/HapBlockR/reference/compare_block_effects.md)
+– including a genuine 2-population, 1-df Cochran's Q for the
+single-lead-SNP-per-block case (`Q_stat` is never `NA`) – plus a
+`result_contract`. Check with
+[`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
+before treating a block as replicated. Additional columns in
+`$concordance` specific to GWAS input:
 
 - `lead_marker_pop1`, `lead_marker_pop2` - lead SNP ID from each
   population (same SNP = same tag; different SNP = different LD tag,
@@ -288,7 +294,7 @@ conc <- compare_gwas_effects(
 #> [compare_gwas_effects] Mapping PopB GWAS results to blocks ...
 #> [compare_gwas_effects] Comparing effects for blocks with hits in both populations ...
 #> [compare_gwas_effects] Traits: trait
-#> [compare_gwas_effects] Done. Blocks in both pops: 6 | Replicated (dir concordant + meta_p <= 0.05): 6
+#> [compare_gwas_effects] Done. Blocks in both pops: 6 | Replicated (dir concordant + Q_p > 0.05): 5
 print(conc)
 #> HapBlockR Cross-Population Effect Concordance
 #>   Populations: PopA vs PopB
@@ -296,8 +302,9 @@ print(conc)
 #>   Blocks compared:           6 
 #>   With enough shared alleles: 6 
 #>   Directionally concordant:   6 
-#>   Replicated (dir + Q_p>0.05): 6 
+#>   Replicated (dir + Q_p>0.05): 5 
 #>   Boundary warnings:          0 (overlap ratio < 0.8 )
+#>   Median I2 (heterogeneity):  32.6 %
 #>   Shared allele comparisons:  6 
 
 # Path 2: pre-mapped QTL tables (recommended)
@@ -317,49 +324,43 @@ conc2 <- compare_gwas_effects(
 #> [compare_gwas_effects]   PopB: lead_se absent - deriving from lead_beta + lead_p
 #> [compare_gwas_effects] Comparing effects for blocks with hits in both populations ...
 #> [compare_gwas_effects] Traits: trait
-#> [compare_gwas_effects] Done. Blocks in both pops: 6 | Replicated (dir concordant + meta_p <= 0.05): 6
+#> [compare_gwas_effects] Done. Blocks in both pops: 6 | Replicated (dir concordant + Q_p > 0.05): 5
 conc2$concordance[conc2$concordance$replicated, ]
 #>                block_id CHR start_bp end_bp trait lead_marker_pop1
 #> 1    block_1_1000_25027   1     1000  25027 trait           rs1005
 #> 2   block_1_81064_99022   1    81064  99022 trait           rs1048
 #> 3 block_1_155368_179371   1   155368 179371 trait           rs1070
-#> 4    block_2_1000_30023   2     1000  30023 trait           rs2004
 #> 5  block_2_86236_105290   2    86236 105290 trait           rs2050
 #> 6    block_3_1000_19068   3     1000  19068 trait           rs3004
 #>   lead_marker_pop2  lead_p_pop1  lead_p_pop2 se_derived_pop1 se_derived_pop2
 #> 1           rs1005 4.023280e-07 4.023280e-07            TRUE            TRUE
 #> 2           rs1048 3.493586e-07 3.493586e-07            TRUE            TRUE
 #> 3           rs1070 3.653110e-09 3.653110e-09            TRUE            TRUE
-#> 4           rs2004 1.726081e-05 1.726081e-05            TRUE            TRUE
 #> 5           rs2050 3.857636e-04 3.857636e-04            TRUE            TRUE
 #> 6           rs3004 2.215581e-02 2.215581e-02            TRUE            TRUE
 #>   n_alleles_pop1 n_alleles_pop2 n_shared_alleles enough_shared
 #> 1              1              1                1          TRUE
 #> 2              1              1                1          TRUE
 #> 3              1              1                1          TRUE
-#> 4              1              1                1          TRUE
 #> 5              1              1                1          TRUE
 #> 6              1              1                1          TRUE
 #>   effect_correlation direction_agreement directionally_concordant meta_effect
 #> 1                 NA                   1                     TRUE    0.511102
 #> 2                 NA                   1                     TRUE    0.377802
 #> 3                 NA                   1                     TRUE    0.462585
-#> 4                 NA                   1                     TRUE    0.379837
 #> 5                 NA                   1                     TRUE    0.453007
 #> 6                 NA                   1                     TRUE    0.481742
-#>    meta_SE meta_z       meta_p Q_stat Q_df Q_p I2 replicated both_pleiotropic
-#> 1 0.071374 7.1609 8.016005e-13     NA   NA  NA NA       TRUE            FALSE
-#> 2 0.053127 7.1112 1.150019e-12     NA   NA  NA NA       TRUE            FALSE
-#> 3 0.056073 8.2496 1.588641e-16     NA   NA  NA NA       TRUE            FALSE
-#> 4 0.067388 5.6366 1.734364e-08     NA   NA  NA NA       TRUE            FALSE
-#> 5 0.090458 5.0079 5.502050e-07     NA   NA  NA NA       TRUE            FALSE
-#> 6 0.149185 3.2292 1.241580e-03     NA   NA  NA NA       TRUE            FALSE
-#>   boundary_overlap_ratio boundary_warning match_type
-#> 1                      1            FALSE      exact
-#> 2                      1            FALSE      exact
-#> 3                      1            FALSE      exact
-#> 4                      1            FALSE      exact
-#> 5                      1            FALSE      exact
-#> 6                      1            FALSE      exact
+#>    meta_SE meta_z       meta_p     Q_stat Q_df       Q_p       I2 replicated
+#> 1 0.071374 7.1609 8.016005e-13 0.08804689    1 0.7666750  0.00000       TRUE
+#> 2 0.053127 7.1112 1.150019e-12 1.34143420    1 0.2467812 25.45292       TRUE
+#> 3 0.056073 8.2496 1.588641e-16 1.54400309    1 0.2140229 35.23329       TRUE
+#> 5 0.090458 5.0079 5.502050e-07 0.12054211    1 0.7284473  0.00000       TRUE
+#> 6 0.149185 3.2292 1.241580e-03 0.03959328    1 0.8422779  0.00000       TRUE
+#>   both_pleiotropic boundary_overlap_ratio boundary_warning match_type
+#> 1            FALSE                      1            FALSE      exact
+#> 2            FALSE                      1            FALSE      exact
+#> 3            FALSE                      1            FALSE      exact
+#> 5            FALSE                      1            FALSE      exact
+#> 6            FALSE                      1            FALSE      exact
 # }
 ```

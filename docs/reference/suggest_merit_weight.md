@@ -1,19 +1,16 @@
-# Suggest a Starting merit_weight for select_parents_ga()
+# Suggest a Starting merit_weight for select_parents_ga_ts()
 
-[`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
-`merit_weight` and `coancestry_weight` arguments have no universal
-correct value: the block-coverage term and the merit term live on
-different, problem-specific scales, so a raw multiplier that works for
-one dataset can be meaningless for another. This function estimates a
-sensible starting point directly from your own data, in two ways: call
-it with `merit_priority` left `NULL` to see the raw diagnostic numbers
-(the realistic spread of each term, and the ratio between them), or
-supply `merit_priority` (0-100, "how much do you care about merit vs.
-coverage") to also get a literal `merit_weight` value ready to pass
-straight into
-[`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md).
+The block-coverage and whole-genome merit terms used by
+[`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+are expressed on dataset-specific scales. This function calibrates their
+relative scale directly from the analysed candidate pool. Call it with
+`merit_priority` left `NULL` to see the raw diagnostic numbers (the
+realistic spread of each term, and the ratio between them), or supply
+`merit_priority` (0-100) to also get a literal `merit_weight` value
+ready to pass straight into
+[`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md).
 This is the same calculation
-[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
+[`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)'s
 own `merit_priority` argument uses internally – calling this function
 first just lets you see the numbers before committing to them.
 
@@ -34,8 +31,9 @@ suggest_merit_weight(
 
 - value_matrix:
 
-  Numeric matrix (individuals x blocks), identical in shape/meaning to
-  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
+  Numeric matrix (individuals x blocks), identical in shape and meaning
+  to
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)'s
   own argument – ideally the exact same, already-filtered matrix you are
   about to pass to that call (after any `min_sel_value`/`top_candidates`
   filtering), so the calibration reflects the real candidate pool the GA
@@ -44,28 +42,30 @@ suggest_merit_weight(
 - merit_score:
 
   Named numeric vector, whole-genome merit – same as
-  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)'s
   argument of the same name. Must cover every individual in
-  `value_matrix`.
+  `value_matrix` and be directionally aligned so that larger values
+  always mean greater breeding merit.
 
 - n_founders:
 
   Integer. Same as
-  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)'s
   argument of the same name – the founder group size to calibrate for.
 
 - strategy:
 
-  One of `"no_selfing"` (default), `"selfing"`, `"OHS"`, `"OPV"`,
+  One of `"no_selfing"` (default), `"selfing"`, `"OHS"` (Optimal
+  Haplotype Selection), `"OPV"` (Optimal Population Value), or
   `"Haploid_OHS"` – must match the `strategy` you intend to run
-  [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
+  [`select_parents_ga_ts()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
   with, since it changes how a block's achievable value is computed.
 
 - block_weights:
 
   Numeric vector, length `ncol(value_matrix)`, or `NULL` (default: equal
   weight 1) – same as
-  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)'s
   argument of the same name. Must be non-negative.
 
 - merit_priority:
@@ -74,7 +74,12 @@ suggest_merit_weight(
   diagnostic spread/scale numbers, with `suggested_merit_weight = NULL`.
   A number computes `suggested_merit_weight` too – `0` is always
   equivalent to `merit_weight = 0`; `100` sets merit's spread comparable
-  to coverage's spread; values between scale linearly.
+  to coverage's spread; values between scale linearly. A zero value is
+  useful for scale diagnostics but is not accepted by
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md);
+  use
+  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
+  for coverage-only selection.
 
 ## Value
 
@@ -104,7 +109,7 @@ Named list:
 - `suggested_merit_weight`:
 
   `merit_priority / 100 * scale_factor`, ready to pass to
-  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)'s
   `merit_weight` argument. `NULL` if `merit_priority` was `NULL`.
 
 - `ok`:
@@ -130,10 +135,9 @@ best-vs-worst achievable spread of mean `merit_score`, *for this
 specific dataset*. `merit_priority = 100` sets `merit_weight` so that
 merit's spread becomes comparable in magnitude to coverage's spread;
 `merit_priority = 0` is identical to `merit_weight = 0` (no merit term
-at all); values in between scale linearly. This is one reasonable,
-explicitly-stated definition of "comparable" – not the only possible one
-(matching standard deviation instead of spread, for instance, would give
-a different number) – see *What this does not solve* below.
+at all); values in between scale linearly. This gives the breeder a
+reproducible definition of relative emphasis based on attainable
+contrasts in the supplied data.
 
 The "best achievable" coverage reference is not a naive per-block sum of
 each block's own maximum value across all candidates (which is usually
@@ -154,45 +158,37 @@ error) cannot single-handedly deflate the floor and distort the
 estimated spread. Trimming is skipped entirely on small candidate pools
 (under ~20), where it would not be meaningful.
 
-## What this does not solve
+## Interpreting the calibration
 
-Two limits are inherent to *any* scale-matching approach, not specific
-to the method used here, and cannot be resolved by more engineering –
-they are documented rather than hidden:
+The calibration has two interpretation properties:
 
-- Matching spread is a choice, not a universal truth:
+- Attainable-span scaling:
 
-  A different, equally defensible definition of "comparable" (e.g.
-  matching standard deviation across many realistic groups, rather than
-  the best-vs-worst achievable span) would produce a different scale
-  factor. Treat `merit_priority`'s suggestion as a well-reasoned
-  starting point to inspect and adjust, not a uniquely correct answer –
-  the literal `merit_weight` argument remains available in
-  [`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-  for full manual control.
+  `merit_priority` uses the best-vs-worst attainable span of each term.
+  The returned diagnostics show the exact contrasts used. A programme
+  with an established raw numerical policy may instead supply a positive
+  `merit_weight` to
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md).
 
 - A single span number does not capture distribution shape:
 
   If `merit_score` or the block-coverage values are unusually shaped
-  (e.g. strongly bimodal), the dial's practical effect may not feel
-  perfectly linear across its 0-100 range even though the underlying
-  calculation is exact for what it measures.
+  (e.g. strongly bimodal), equal changes in `merit_priority` need not
+  yield equal changes in the selected parent set because selection
+  depends on candidate combinations, not only marginal distributions.
 
-This calibration also only weighs merit against coverage; if
-`coancestry_weight` is also active in your
-[`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-call, its effect is held fixed rather than jointly recalibrated – use
-[`select_parents_pareto`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_pareto.md)'s
-sweep to explore that trade-off separately, as already recommended for
-tuning `coancestry_weight` on its own.
+The calibration scales merit against coverage. Any relationship control
+is applied as the separately declared third component of the complete
+objective and is reported in `objective_components`.
 
 ## See also
 
-[`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)'s
-*Merit-weighted fitness (GA+TS hybrid, optional)* section for the
-fitness function this feeds into, and
+[`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+for the joint objective,
+[`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
+for coverage-only selection, and
 [`select_parents_pareto`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_pareto.md)
-for exploring the `coancestry_weight` trade-off the same way.
+for exploring coverage-relatedness trade-offs.
 
 ## Examples
 
@@ -204,7 +200,9 @@ vmat <- res$local_gebv[, top$block_id, drop = FALSE]
 cal  <- suggest_merit_weight(vmat, res$gebv, n_founders = 20,
                              merit_priority = 50)
 cal$merit_span; cal$coverage_span; cal$suggested_merit_weight
-ga_out <- select_parents_ga(vmat, n_founders = 20, merit_score = res$gebv,
-                            merit_weight = cal$suggested_merit_weight)
+ga_out <- select_parents_ga_ts(
+  vmat, n_founders = 20, merit_score = res$gebv,
+  merit_weight = cal$suggested_merit_weight
+)
 } # }
 ```

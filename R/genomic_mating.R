@@ -79,6 +79,116 @@
   mean(top_means)
 }
 
+.augment_uc_uncertainty <- function(
+    out,
+    gebv_se,
+    gebv_reliability,
+    phasing_reliability,
+    require_phasing_reliability,
+    n_progeny,
+    downside_quantile,
+    min_reliability
+) {
+  parent_ids <- unique(c(out$parent1, out$parent2))
+  .validate_named_metric <- function(x, label, lower = 0, upper = Inf) {
+    if (is.null(x)) return(NULL)
+    if (!is.numeric(x) || is.null(names(x)))
+      stop(label, " must be a named numeric vector.", call. = FALSE)
+    missing_ids <- setdiff(parent_ids, names(x))
+    if (length(missing_ids))
+      stop(label, " is missing ", length(missing_ids), " parent(s).",
+           call. = FALSE)
+    if (any(!is.finite(x[parent_ids])) ||
+        any(x[parent_ids] < lower | x[parent_ids] > upper))
+      stop(label, " values must be finite and in [", lower, ", ", upper,
+           "].", call. = FALSE)
+    x
+  }
+  gebv_se <- .validate_named_metric(gebv_se, "gebv_se", 0, Inf)
+  gebv_reliability <- .validate_named_metric(
+    gebv_reliability, "gebv_reliability", 0, 1
+  )
+  phasing_reliability <- .validate_named_metric(
+    phasing_reliability, "phasing_reliability", 0, 1
+  )
+  if (length(downside_quantile) != 1L || !is.finite(downside_quantile) ||
+      downside_quantile <= 0 || downside_quantile >= 0.5)
+    stop("downside_quantile must be a single number in (0, 0.5).",
+         call. = FALSE)
+  if (length(min_reliability) != 1L || !is.finite(min_reliability) ||
+      min_reliability < 0 || min_reliability > 1)
+    stop("min_reliability must be a single number in [0, 1].",
+         call. = FALSE)
+
+  out$predicted_sd <- sqrt(pmax(out$predicted_variance, 0))
+  out$downside_quantile <- downside_quantile
+  out$downside_value <- out$mid_parent_gebv +
+    stats::qnorm(downside_quantile) * out$predicted_sd
+
+  if (is.null(gebv_se)) {
+    out$mid_parent_SE <- NA_real_
+  } else {
+    out$mid_parent_SE <- sqrt(
+      gebv_se[out$parent1]^2 + gebv_se[out$parent2]^2
+    ) / 2
+  }
+  progeny_mean_se <- if (is.null(n_progeny)) {
+    rep(0, nrow(out))
+  } else {
+    out$predicted_sd / sqrt(as.integer(n_progeny))
+  }
+  out$UC_SE <- sqrt(out$mid_parent_SE^2 + progeny_mean_se^2)
+  out$UC_lower_95 <- out$UC - stats::qnorm(0.975) * out$UC_SE
+  out$UC_upper_95 <- out$UC + stats::qnorm(0.975) * out$UC_SE
+
+  if (is.null(gebv_reliability)) {
+    out$prediction_reliability <- NA_real_
+  } else {
+    out$prediction_reliability <- pmin(
+      gebv_reliability[out$parent1],
+      gebv_reliability[out$parent2]
+    )
+  }
+  if (is.null(phasing_reliability)) {
+    out$phasing_reliability <- NA_real_
+  } else {
+    out$phasing_reliability <- pmin(
+      phasing_reliability[out$parent1],
+      phasing_reliability[out$parent2]
+    )
+  }
+  out$cross_reliability <- if (isTRUE(require_phasing_reliability)) {
+    pmin(out$prediction_reliability, out$phasing_reliability)
+  } else if (!is.null(phasing_reliability)) {
+    pmin(out$prediction_reliability, out$phasing_reliability)
+  } else {
+    out$prediction_reliability
+  }
+  out$min_reliability <- min_reliability
+  out$recommendation_eligible <- is.finite(out$UC) &
+    is.finite(out$cross_reliability) &
+    out$cross_reliability >= min_reliability
+  out$eligibility_reason <- ifelse(
+    !is.finite(out$UC),
+    "cross_not_scored",
+    ifelse(
+      !is.finite(out$cross_reliability),
+      ifelse(
+        isTRUE(require_phasing_reliability) &
+          !is.finite(out$phasing_reliability),
+        "phasing_reliability_not_supplied",
+        "prediction_reliability_not_supplied"
+      ),
+      ifelse(
+        out$cross_reliability < min_reliability,
+        "below_minimum_reliability",
+        "eligible"
+      )
+    )
+  )
+  out
+}
+
 # -- Internal: SNP IDs of one block, in the SAME order extract_haplotypes()'s
 # C++ backend uses when it builds hap strings (position-ascending within the
 # block's CHR / [start_bp, end_bp] window). Re-sorted explicitly here rather
@@ -855,6 +965,26 @@
 #'   once per candidate cross -- a large value here scales with the number
 #'   of crosses being scored, unlike \code{n_sim}. \code{seed}, if supplied,
 #'   is reused for both Monte Carlo procedures.
+#' @param gebv_se Optional named numeric vector of GEBV standard errors.
+#'   When supplied, the function propagates parental uncertainty to
+#'   \code{mid_parent_SE} and the 95 percent UC interval.
+#' @param gebv_reliability Optional named numeric vector in [0, 1], for
+#'   example the \code{reliability} column returned by
+#'   \code{\link{run_haplotype_prediction}}. Cross reliability is the
+#'   conservative minimum of its two parental reliabilities.
+#' @param phasing_reliability Optional named numeric vector in [0, 1].
+#'   For \code{variance_model = "phased"} or \code{"linked"} -- both build
+#'   progeny variance from phased haplotype blocks and depend equally on
+#'   phasing accuracy -- each cross uses the conservative minimum of
+#'   parental prediction and phasing reliability. Missing phasing
+#'   reliability therefore cannot pass the recommendation gate in either
+#'   mode.
+#' @param downside_quantile Numeric in (0, 0.5). Progeny-distribution
+#'   quantile reported as \code{downside_value}. Default \code{0.10}.
+#' @param min_reliability Numeric in [0, 1]. A cross is marked
+#'   \code{recommendation_eligible} only when its two-parent reliability
+#'   meets this threshold. Missing reliability never passes the gate.
+#'   Default \code{0.30}.
 #' @param verbose Logical, default \code{TRUE}. Print progress and a summary
 #'   of how many candidate crosses could not be scored (e.g. due to missing
 #'   genotype or phase data at target blocks).
@@ -874,6 +1004,16 @@
 #'       sqrt(predicted_variance)}. \code{NA} if the cross could not be
 #'       scored.}
 #'     \item{\code{rank}}{Rank by descending UC (\code{NA} rows sort last).}
+#'     \item{\code{downside_value}}{The requested lower progeny-distribution
+#'       quantile, showing downside risk alongside expected selected gain.}
+#'     \item{\code{mid_parent_SE}, \code{UC_SE}, \code{UC_lower_95},
+#'       \code{UC_upper_95}}{Propagated uncertainty when \code{gebv_se} is
+#'       supplied; the finite-progeny contribution is included when
+#'       \code{n_progeny} is supplied.}
+#'     \item{\code{prediction_reliability},
+#'       \code{phasing_reliability}, \code{cross_reliability},
+#'       \code{recommendation_eligible}, \code{eligibility_reason}}{Explicit
+#'       reliability gate for promoting a ranked cross to a recommendation.}
 #'   }
 #'
 #' @references
@@ -937,6 +1077,11 @@ usefulness_criterion <- function(
     generation                = 1L,
     n_threads                 = 1L,
     n_sim_linked              = 2000L,
+    gebv_se                    = NULL,
+    gebv_reliability           = NULL,
+    phasing_reliability        = NULL,
+    downside_quantile          = 0.10,
+    min_reliability            = 0.30,
     verbose               = TRUE
 ) {
   variance_model <- match.arg(variance_model)
@@ -980,6 +1125,11 @@ usefulness_criterion <- function(
                                 n_threads = n_threads, verbose = verbose)
     ord <- order(-out$UC, na.last = TRUE)
     out <- out[ord, , drop = FALSE]
+    out <- .augment_uc_uncertainty(
+      out, gebv_se, gebv_reliability, phasing_reliability, FALSE,
+      n_progeny,
+      downside_quantile, min_reliability
+    )
     out$rank <- seq_len(nrow(out))
     rownames(out) <- NULL
     return(out)
@@ -1237,6 +1387,15 @@ usefulness_criterion <- function(
   )
   ord <- order(-out$UC, na.last = TRUE)
   out <- out[ord, , drop = FALSE]
+  out <- .augment_uc_uncertainty(
+    out, gebv_se, gebv_reliability, phasing_reliability,
+    # "linked" depends on phased-haplotype accuracy just as much as "phased"
+    # (both build progeny variance from phased haplotype blocks), so both
+    # get the strict phasing-reliability gate; "block_independent" and
+    # "simplemating" do not use phased haplotypes for progeny variance.
+    variance_model %in% c("phased", "linked"), n_progeny,
+    downside_quantile, min_reliability
+  )
   out$rank <- seq_len(nrow(out))
   rownames(out) <- NULL
   out

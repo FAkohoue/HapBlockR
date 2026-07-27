@@ -1,0 +1,4 @@
+metric,maximum
+median_elapsed_one_thread_seconds,120
+median_elapsed_two_threads_seconds,120
+peak_resident_mb,4096

@@ -12,7 +12,7 @@
 #
 #   "vcf"      .vcf          Standard VCF v4.2; GT field parsed to 0/1/2/NA;
 #              .vcf.gz       phased (0|1) and unphased (0/1) both accepted;
-#                            multi-allelic -> first ALT; missing ./. -> NA
+#                            multiallelic policy is explicit; missing ./. -> NA
 #
 #   "gds"      .gds          SNPRelate GDS file (Bioconductor)
 #
@@ -75,8 +75,9 @@
 #'     columns with two-character nucleotide calls (\code{AA}, \code{AT},
 #'     \code{NN} for missing). Extension: \code{.hmp.txt}.}
 #'   \item{\code{"vcf"}}{VCF v4.2. Both phased (\code{0|1}) and unphased
-#'     (\code{0/1}) GT fields are accepted. Multi-allelic sites use first ALT.
-#'     Missing (\code{./.}) becomes \code{NA}. Extension: \code{.vcf},
+#'     (\code{0/1}) GT fields are accepted. Multiallelic sites are rejected,
+#'     dropped, or reduced to the first alternative allele according to
+#'     \code{multiallelic}. Missing (\code{./.}) becomes \code{NA}. Extension: \code{.vcf},
 #'     \code{.vcf.gz}.}
 #'   \item{\code{"gds"}}{SNPRelate GDS file. Requires
 #'     \code{BiocManager::install("SNPRelate")}. Extension: \code{.gds}.}
@@ -97,7 +98,8 @@
 #'   \code{format = "matrix"}.
 #' @param sample_ids Character vector. Override sample IDs extracted from the
 #'   file. Length must equal number of samples.
-#' @param sep Character. Field separator for \code{"numeric"} format.
+#' @param sep Character. Field separator for \code{"numeric"} format. Default
+#'   \code{","}.
 #' @param clean_malformed Logical. If \code{TRUE}, the input file is
 #'   stream-cleaned before reading: any line whose delimiter-separated column
 #'   count does not match the header is silently removed. This adds one extra
@@ -112,7 +114,11 @@
 #'   and read the VCF fully into memory instead. When the cache file already
 #'   exists it is reused without re-converting (fast subsequent calls).
 #'   Ignored for all non-VCF formats.
-#'   Default \code{","}.
+#' @param multiallelic Character. Policy for VCF records with more than one
+#'   alternative allele: \code{"error"} (default) rejects the input,
+#'   \code{"drop"} excludes those records, and \code{"first_alt"} retains only
+#'   the first alternative allele while treating other allele indices as
+#'   missing. The selected policy is recorded in the import report.
 #' @param na_strings Character vector. Strings treated as NA. Default
 #'   \code{c("NA", "N", "NN", "./.", ".", "")}.
 #' @param verbose Logical. Print progress messages.
@@ -151,8 +157,12 @@ read_geno <- function(
     na_strings     = c("NA", "N", "NN", "./.", ".", ""),
     gds_cache      = NULL,
     clean_malformed = FALSE,
+    multiallelic   = c("error", "drop", "first_alt"),
     verbose        = FALSE
 ) {
+  multiallelic <- match.arg(multiallelic)
+  original_path <- if (is.character(path) && length(path) == 1L) path else NULL
+  cleaning_report <- NULL
   # -- Dispatch on format ------------------------------------------------------
   if (is.matrix(path) || is.data.frame(path)) {
     fmt <- "matrix"
@@ -178,7 +188,9 @@ read_geno <- function(
     )
     cleaned_path <- tempfile(fileext = ext_clean)
     on.exit(if (file.exists(cleaned_path)) unlink(cleaned_path), add = TRUE)
-    .clean_genotype_file(path, cleaned_path, sep = sep_clean, verbose = verbose)
+    cleaning_report <- .clean_genotype_file(
+      path, cleaned_path, sep = sep_clean, verbose = verbose
+    )
     path <- cleaned_path
   }
 
@@ -187,18 +199,48 @@ read_geno <- function(
   # GDS is placed next to the source file (same directory, .gds extension)
   # unless the user supplies a custom path via gds_cache. Subsequent calls
   # reuse the cached GDS without re-converting.
-  if (fmt %in% c("vcf", "hapmap") && !isFALSE(gds_cache) &&
+  use_gds_cache <- fmt %in% c("vcf", "hapmap") && !isFALSE(gds_cache) &&
+    requireNamespace("SNPRelate", quietly = TRUE)
+  if (use_gds_cache && fmt == "vcf") {
+    n_multiallelic <- .count_vcf_multiallelic(path)
+    if (n_multiallelic > 0L && multiallelic == "error")
+      stop("VCF contains ", n_multiallelic, " multiallelic variant(s). ",
+           "Use multiallelic = 'drop' or 'first_alt' explicitly.",
+           call. = FALSE)
+    if (n_multiallelic > 0L && multiallelic == "first_alt")
+      use_gds_cache <- FALSE
+  }
+  if (use_gds_cache &&
       requireNamespace("SNPRelate", quietly = TRUE)) {
 
     cache_path <- if (is.null(gds_cache)) {
-      sub("\\.(vcf(\\.gz)?|hmp\\.txt)$", ".gds", path, ignore.case = TRUE)
+      sub("\\.(vcf(\\.gz)?|hmp\\.txt)$", ".gds",
+          original_path, ignore.case = TRUE)
     } else {
       as.character(gds_cache)
     }
+    if (length(cache_path) != 1L || is.na(cache_path) || !nzchar(cache_path))
+      stop("gds_cache must be FALSE, NULL, or one non-empty file path.",
+           call. = FALSE)
+    cache_manifest <- .geno_source_manifest(
+      original_path, fmt,
+      import_options = list(
+        na_strings = as.character(na_strings),
+        clean_malformed = isTRUE(clean_malformed),
+        multiallelic = multiallelic
+      )
+    )
 
     # Validate any existing cache: a .gds created by SeqArray has
     # FileFormat=SEQ_ARRAY and cannot be opened by SNPRelate's snpgdsOpen().
     # If that happens, delete the stale file and re-convert.
+    if (file.exists(cache_path) &&
+        !.geno_cache_current(cache_path, cache_manifest)) {
+      if (isTRUE(verbose))
+        message("[read_geno] Source or import options changed; rebuilding ",
+                "the GDS cache.")
+      unlink(c(cache_path, paste0(cache_path, ".manifest.rds")))
+    }
     if (file.exists(cache_path)) {
       ok <- tryCatch({
         gf <- SNPRelate::snpgdsOpen(cache_path, readonly = TRUE, allow.fork = TRUE)
@@ -207,7 +249,7 @@ read_geno <- function(
       }, error = function(e) FALSE)
       if (!ok) {
         message("[read_geno] Stale or incompatible GDS cache detected -- removing and re-converting.")
-        unlink(cache_path)
+        unlink(c(cache_path, paste0(cache_path, ".manifest.rds")))
       }
     }
 
@@ -231,8 +273,10 @@ read_geno <- function(
         )
       } else {
         # HapMap: decode to VCF then convert via SNPRelate
-        .hapmap_to_gds(path, cache_path, na_strings, verbose)
+        .hapmap_to_gds(path, cache_path, na_strings, verbose,
+                       multiallelic = multiallelic)
       }
+      .write_geno_cache_manifest(cache_path, cache_manifest)
 
     } else if (isTRUE(verbose)) {
       message("[read_geno] Reusing GDS cache: ", cache_path)
@@ -245,15 +289,19 @@ read_geno <- function(
 
   be <- switch(fmt,
                numeric = .read_numeric(path, sep, na_strings, verbose),
-               hapmap  = .read_hapmap(path, na_strings, verbose),
-               vcf     = .read_vcf(path, na_strings, verbose),
+               hapmap  = .read_hapmap(path, na_strings, verbose,
+                                      multiallelic = multiallelic),
+               vcf     = .read_vcf(path, na_strings, verbose,
+                                   multiallelic = multiallelic),
                gds     = .read_gds(path, verbose),
                bed     = .read_bed(path, verbose),
                matrix  = .wrap_matrix(path, snp_info, verbose),
                stop("Unknown format '", fmt, "'. Choose: numeric, hapmap, vcf, gds, bed, matrix.")
   )
 
-  # -- Override sample IDs if supplied ----------------------------------------
+  be$physical_sample_ids <- be$physical_sample_ids %||% be$sample_ids
+
+  # -- Override display sample IDs if supplied --------------------------------
   if (!is.null(sample_ids)) {
     if (length(sample_ids) != be$n_samples)
       stop("length(sample_ids) [", length(sample_ids), "] != n_samples [",
@@ -263,8 +311,118 @@ read_geno <- function(
 
   # -- Normalise chromosome names ----------------------------------------------
   be$snp_info$CHR <- .norm_chr(be$snp_info$CHR)
+  be$import_report <- be$import_report %||% list()
+  be$import_report$clean_malformed <- cleaning_report
+  be$import_report$multiallelic_policy <- multiallelic
+  be$provenance <- list(
+    source = if (is.null(original_path)) "<in-memory>" else
+      normalizePath(original_path, winslash = "/", mustWork = TRUE),
+    requested_format = format,
+    backend_type = be$type,
+    cache = if (exists("cache_path", inherits = FALSE)) cache_path else NULL,
+    import_options = list(
+      sep = sep,
+      na_strings = as.character(na_strings),
+      clean_malformed = isTRUE(clean_malformed),
+      multiallelic = multiallelic
+    )
+  )
+  be <- .validate_geno_backend(be)
 
   structure(be, class = "HapBlockR_backend")
+}
+
+
+.geno_source_manifest <- function(path, format, import_options = list()) {
+  canonical <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  info <- file.info(canonical)
+  list(
+    schema_version = 1L,
+    source_path = canonical,
+    source_size = unname(info$size),
+    source_mtime = as.numeric(info$mtime),
+    source_sha256 = digest::digest(
+      canonical, algo = "sha256", file = TRUE, serialize = FALSE
+    ),
+    format = format,
+    import_options = import_options
+  )
+}
+
+
+.geno_cache_current <- function(cache_path, manifest) {
+  manifest_path <- paste0(cache_path, ".manifest.rds")
+  if (!file.exists(cache_path) || !file.exists(manifest_path))
+    return(FALSE)
+  cached <- tryCatch(readRDS(manifest_path), error = function(e) NULL)
+  identical(cached, manifest)
+}
+
+
+.write_geno_cache_manifest <- function(cache_path, manifest) {
+  manifest_path <- paste0(cache_path, ".manifest.rds")
+  tmp <- tempfile(pattern = "hapblockr-cache-manifest-",
+                  tmpdir = dirname(manifest_path), fileext = ".rds")
+  on.exit(if (file.exists(tmp)) unlink(tmp), add = TRUE)
+  saveRDS(manifest, tmp, version = 3)
+  if (!file.rename(tmp, manifest_path))
+    stop("Could not write GDS cache manifest: ", manifest_path,
+         call. = FALSE)
+  invisible(manifest_path)
+}
+
+
+.validate_geno_backend <- function(be) {
+  if (length(be$sample_ids) != be$n_samples)
+    stop("Backend sample-ID count does not equal n_samples.", call. = FALSE)
+  if (anyNA(be$sample_ids) || any(!nzchar(be$sample_ids)))
+    stop("Sample IDs must be non-missing and non-empty.", call. = FALSE)
+  if (anyDuplicated(be$sample_ids))
+    stop("Sample IDs must be unique; duplicated ID: ",
+         be$sample_ids[anyDuplicated(be$sample_ids)], call. = FALSE)
+  if (nrow(be$snp_info) != be$n_snps)
+    stop("snp_info row count does not equal n_snps.", call. = FALSE)
+  if (anyNA(be$snp_info$SNP) || any(!nzchar(be$snp_info$SNP)))
+    stop("Variant IDs must be non-missing and non-empty.", call. = FALSE)
+  if (anyDuplicated(be$snp_info$SNP))
+    stop("Variant IDs must be unique; duplicated ID: ",
+         be$snp_info$SNP[anyDuplicated(be$snp_info$SNP)], call. = FALSE)
+  if (any(!is.finite(be$snp_info$POS)) || any(be$snp_info$POS < 0))
+    stop("Variant positions must be finite, non-negative numbers.",
+         call. = FALSE)
+
+  split_pos <- split(be$snp_info$POS, be$snp_info$CHR)
+  sorted <- all(vapply(split_pos, function(x) {
+    length(x) < 2L || all(diff(x) >= 0)
+  }, logical(1)))
+  be$import_report$positions_sorted_within_chromosome <- sorted
+  if (!sorted)
+    warning("Variants are not sorted by position within chromosome. ",
+            "Their input order is retained and recorded in import_report.",
+            call. = FALSE)
+  be
+}
+
+
+.count_vcf_multiallelic <- function(path, chunk_size = 100000L) {
+  con <- if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    gzfile(path, open = "rt")
+  } else {
+    file(path, open = "rt")
+  }
+  on.exit(close(con), add = TRUE)
+  count <- 0L
+  repeat {
+    lines <- readLines(con, n = chunk_size, warn = FALSE)
+    if (!length(lines)) break
+    lines <- lines[!startsWith(lines, "#") & nzchar(lines)]
+    if (!length(lines)) next
+    fields <- strsplit(lines, "\t", fixed = TRUE)
+    count <- count + sum(vapply(fields, function(x) {
+      length(x) >= 5L && grepl(",", x[5L], fixed = TRUE)
+    }, logical(1)))
+  }
+  count
 }
 
 
@@ -428,7 +586,9 @@ read_geno <- function(
 
 
 # -- 2. HapMap ----------------------------------------------------------------
-.read_hapmap <- function(path, na_strings, verbose) {
+.read_hapmap <- function(path, na_strings, verbose,
+                         multiallelic = c("error", "drop", "first_alt")) {
+  multiallelic <- match.arg(multiallelic)
   if (isTRUE(verbose)) message("[read_geno] Reading HapMap: ", path)
   .require_pkg("data.table", "HapMap reader")
 
@@ -454,6 +614,15 @@ read_geno <- function(
   # Parse alleles column "A/T" -> REF=A, ALT=T
   if ("alleles" %in% names(dt)) {
     parts <- strsplit(as.character(dt$alleles), "/", fixed = TRUE)
+    is_multi <- lengths(parts) > 2L
+    if (any(is_multi) && multiallelic == "error")
+      stop("HapMap input contains ", sum(is_multi),
+           " multiallelic variant(s). Use multiallelic = 'drop' or ",
+           "'first_alt' explicitly.", call. = FALSE)
+    if (any(is_multi) && multiallelic == "drop") {
+      dt <- dt[!is_multi]
+      parts <- parts[!is_multi]
+    }
     dt[, REF := vapply(parts, function(x) x[1L], character(1L))]
     dt[, ALT := vapply(parts, function(x) if (length(x) > 1L) x[2L] else NA_character_, character(1L))]
   } else {
@@ -486,8 +655,13 @@ read_geno <- function(
         geno_dos[j, i] <- NA_real_
       } else {
         a1 <- substr(call, 1L, 1L); a2 <- substr(call, 2L, 2L)
-        dos <- sum(c(a1, a2) == alt, na.rm = TRUE)
-        geno_dos[j, i] <- dos
+        alleles <- c(a1, a2)
+        if (length(call) != 1L || nchar(call) != 2L ||
+            any(!alleles %in% c(ref, alt))) {
+          geno_dos[j, i] <- NA_real_
+        } else {
+          geno_dos[j, i] <- sum(alleles == alt)
+        }
       }
     }
   }
@@ -499,7 +673,9 @@ read_geno <- function(
 
 
 # -- 3. VCF / VCF.GZ ---------------------------------------------------------
-.read_vcf <- function(path, na_strings, verbose) {
+.read_vcf <- function(path, na_strings, verbose,
+                      multiallelic = c("error", "drop", "first_alt")) {
+  multiallelic <- match.arg(multiallelic)
   if (isTRUE(verbose)) message("[read_geno] Reading VCF: ", path)
   .require_pkg("data.table", "VCF reader")
 
@@ -529,6 +705,17 @@ read_geno <- function(
                           sep = "\t", header = TRUE, na.strings = na_strings,
                           showProgress = verbose, data.table = TRUE)
   data.table::setnames(dt, names(dt)[1L], "CHROM")   # handle leading #
+  is_multi <- grepl(",", as.character(dt$ALT), fixed = TRUE)
+  if (any(is_multi) && multiallelic == "error")
+    stop("VCF contains ", sum(is_multi), " multiallelic variant(s). ",
+         "Use multiallelic = 'drop' or 'first_alt' explicitly.",
+         call. = FALSE)
+  if (any(is_multi) && multiallelic == "drop") {
+    dt <- dt[!is_multi]
+    is_multi <- rep(FALSE, nrow(dt))
+  } else if (any(is_multi) && multiallelic == "first_alt") {
+    dt[is_multi, ALT := sub(",.*$", "", ALT)]
+  }
 
   snp_info <- data.frame(
     SNP = ifelse(is.na(dt$ID) | dt$ID == ".", paste0(dt$CHROM,"_",dt$POS), dt$ID),
@@ -549,7 +736,7 @@ read_geno <- function(
   for (i in seq_len(n_samp)) {
     gt_raw <- as.character(dt[[samp_hdr[i]]])
     gt_raw <- sub(":.*", "", gt_raw)   # keep only GT sub-field
-    geno_dos[, i] <- .parse_gt(gt_raw)
+    geno_dos[, i] <- .parse_gt(gt_raw, multiallelic = multiallelic)
   }
 
   geno_mat <- t(geno_dos)   # samples x SNPs
@@ -557,16 +744,25 @@ read_geno <- function(
 }
 
 # Parse GT strings ("0/0", "0/1", "1|1", "./.", "0|1") -> dosage 0/1/2/NA
-.parse_gt <- function(gt) {
+.parse_gt <- function(gt, multiallelic = c("error", "drop", "first_alt")) {
+  multiallelic <- match.arg(multiallelic)
   gt  <- as.character(gt)
-  sep <- ifelse(grepl("|", gt, fixed = TRUE), "|", "/")
   vapply(gt, function(g) {
     if (is.na(g) || g %in% c(".", "./.", ".|.")) return(NA_real_)
     s <- strsplit(g, "[|/]")[[1L]]
     a <- suppressWarnings(as.integer(s))
     if (any(is.na(a))) return(NA_real_)
-    # dosage = number of ALT alleles (any non-zero integer treated as ALT)
-    as.numeric(sum(a > 0L))
+    if (length(a) != 2L)
+      stop("Only diploid GT fields are supported by the VCF dosage reader; ",
+           "found '", g, "'.", call. = FALSE)
+    if (any(a > 1L)) {
+      if (multiallelic == "first_alt")
+        return(NA_real_)
+      stop("A GT field references an alternative allele beyond ALT1 ('", g,
+           "'). Set multiallelic = 'first_alt' to encode it as missing, or ",
+           "'drop' to remove its variant.", call. = FALSE)
+    }
+    as.numeric(sum(a == 1L))
   }, numeric(1L), USE.NAMES = FALSE)
 }
 
@@ -612,6 +808,7 @@ read_geno <- function(
     n_samples  = length(sample_ids),
     n_snps     = length(var_ids),
     sample_ids = as.character(sample_ids),
+    physical_sample_ids = as.character(sample_ids),
     snp_info   = snp_info,
     .gds       = gds,
     .var_ids   = var_ids       # integer SNPRelate snp.id vector
@@ -648,6 +845,7 @@ read_geno <- function(
     n_samples  = nrow(fam_dt),
     n_snps     = nrow(bim_dt),
     sample_ids = sample_ids,
+    physical_sample_ids = sample_ids,
     snp_info   = snp_info,
     .bed       = bed
   )
@@ -683,6 +881,7 @@ read_geno <- function(
     n_samples  = nrow(mat),
     n_snps     = ncol(mat),
     sample_ids = as.character(sample_ids),
+    physical_sample_ids = as.character(sample_ids),
     snp_info   = snp_info,
     .mat       = mat
   )
@@ -721,8 +920,18 @@ read_geno <- function(
 read_chunk <- function(backend, col_idx) {
   if (!inherits(backend, "HapBlockR_backend"))
     stop("backend must be an HapBlockR_backend object from read_geno().")
+  if (!is.numeric(col_idx) || !length(col_idx) || any(!is.finite(col_idx)) ||
+      any(col_idx != as.integer(col_idx)))
+    stop("col_idx must be a non-empty vector of finite integer indices.",
+         call. = FALSE)
+  col_idx <- as.integer(col_idx)
+  if (any(col_idx < 1L | col_idx > backend$n_snps))
+    stop("col_idx contains an index outside [1, ", backend$n_snps, "].",
+         call. = FALSE)
+  if (anyDuplicated(col_idx))
+    stop("col_idx must not contain duplicate indices.", call. = FALSE)
 
-  switch(backend$type,
+  out <- switch(backend$type,
          numeric = ,
          hapmap  = ,
          vcf     = ,
@@ -735,7 +944,7 @@ read_chunk <- function(backend, col_idx) {
            .require_pkg("SNPRelate", "GDS chunk reader")
            snp_int_ids <- backend$.var_ids[col_idx]
 
-           samp_ids <- backend$sample_ids
+           samp_ids <- backend$physical_sample_ids %||% backend$sample_ids
 
            if (is.null(samp_ids) || length(samp_ids) == 0L) {
              stop("No sample IDs found in GDS backend.", call. = FALSE)
@@ -795,6 +1004,16 @@ read_chunk <- function(backend, col_idx) {
 
          stop("Unknown backend type: ", backend$type)
   )
+  if (!is.matrix(out))
+    out <- as.matrix(out)
+  storage.mode(out) <- "numeric"
+  if (any(is.infinite(out)) ||
+      any(out[!is.na(out)] < 0 | out[!is.na(out)] > 2))
+    stop("Genotype dosage values must be finite or missing and within [0, 2].",
+         call. = FALSE)
+  rownames(out) <- backend$sample_ids
+  colnames(out) <- backend$snp_info$SNP[col_idx]
+  out
 }
 
 
@@ -870,7 +1089,9 @@ summary.HapBlockR_backend <- function(object, ...) {
 #   Column 4  : pos        (position)
 #   Columns 12+: sample columns with two-character nucleotide calls
 #
-.hapmap_to_gds <- function(hmp_path, gds_path, na_strings, verbose) {
+.hapmap_to_gds <- function(hmp_path, gds_path, na_strings, verbose,
+                           multiallelic = c("error", "drop", "first_alt")) {
+  multiallelic <- match.arg(multiallelic)
   # Strategy: read HapMap in full with data.table, convert nucleotide calls to
   # 0/1/2, write a minimal VCF to a temp file, then use seqVCF2GDS() which
   # snpgdsVCF2GDS is the SNPRelate equivalent.
@@ -892,6 +1113,15 @@ summary.HapBlockR_backend <- function(object, ...) {
     stop("HapMap file missing rs#, chrom, pos, or alleles columns.", call.=FALSE)
 
   parts <- strsplit(as.character(dt$alleles), "/", fixed=TRUE)
+  is_multi <- lengths(parts) > 2L
+  if (any(is_multi) && multiallelic == "error")
+    stop("HapMap input contains ", sum(is_multi),
+         " multiallelic variant(s). Use multiallelic = 'drop' or ",
+         "'first_alt' explicitly.", call. = FALSE)
+  if (any(is_multi) && multiallelic == "drop") {
+    dt <- dt[!is_multi]
+    parts <- parts[!is_multi]
+  }
   ref_v  <- vapply(parts, `[`, character(1L), 1L)
   alt_v  <- vapply(parts, function(x) if (length(x)>1L) x[2L] else NA_character_,
                    character(1L))
@@ -1087,7 +1317,8 @@ read_geno_bigmemory <- function(source,
     )
 
     # Suppress bigmemory typecast warning (integer->char is intentional)
-    options(bigmemory.typecast.warning = FALSE)
+    op_tc <- options(bigmemory.typecast.warning = FALSE)
+    on.exit(options(op_tc), add = TRUE)
     # Fill chromosome by chromosome to stay within RAM budget
     chrs     <- unique(si$CHR)
     col_done <- 0L
@@ -1168,6 +1399,7 @@ read_geno_bigmemory <- function(source,
     n_samples   = nrow(bm),
     n_snps      = ncol(bm),
     sample_ids  = as.character(sample_ids),
+    physical_sample_ids = as.character(sample_ids),
     snp_info    = snp_info,
     .bm         = bm,          # bigmemory big.matrix object
     .backingfile = backingfile,

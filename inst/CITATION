@@ -1,0 +1,8 @@
+bibentry(
+  bibtype = "Manual",
+  title = "HapBlockR: LD Blocks, Haplotype Analysis, and Breeding Decisions",
+  author = person("Félicien", "Akohoue"),
+  year = format(Sys.Date(), "%Y"),
+  note = sprintf("R package version %s", utils::packageVersion("HapBlockR")),
+  url = "https://github.com/FAkohoue/HapBlockR"
+)

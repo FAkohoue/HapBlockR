@@ -313,6 +313,93 @@ test_that("GDS backend: read from SNPRelate GDS file", {
   unlink(c(tmp_vcf, tmp_gds))
 })
 
+test_that("GDS backend: display sample relabelling preserves physical lookup IDs", {
+  skip_if_not_installed("SNPRelate")
+  G <- make_tiny()
+  info <- data.frame(
+    SNP = colnames(G), CHR = "1",
+    POS = seq(1000L, by = 2000L, length.out = ncol(G)),
+    REF = "A", ALT = "T", stringsAsFactors = FALSE
+  )
+  tmp_vcf <- tempfile(fileext = ".vcf")
+  tmp_gds <- tempfile(fileext = ".gds")
+  write_vcf(G, info, tmp_vcf)
+  SNPRelate::snpgdsVCF2GDS(
+    tmp_vcf, tmp_gds, method = "biallelic.only",
+    snpfirstdim = FALSE, verbose = FALSE
+  )
+  display_ids <- paste0("display_", seq_len(nrow(G)))
+  be <- read_geno(tmp_gds, sample_ids = display_ids)
+
+  expect_equal(be$sample_ids, display_ids)
+  expect_false(identical(be$physical_sample_ids, display_ids))
+  chunk <- read_chunk(be, 1:3)
+  expect_equal(rownames(chunk), display_ids)
+  expect_equal(dim(chunk), c(nrow(G), 3L))
+  close_backend(be)
+  unlink(c(tmp_vcf, tmp_gds))
+})
+
+test_that("VCF GDS cache is rebuilt when source content changes", {
+  skip_if_not_installed("SNPRelate")
+  G <- make_tiny(6L, 4L)
+  info <- data.frame(
+    SNP = colnames(G), CHR = "1", POS = seq_len(ncol(G)) * 1000L,
+    REF = "A", ALT = "T", stringsAsFactors = FALSE
+  )
+  tmp_vcf <- tempfile(fileext = ".vcf")
+  tmp_gds <- tempfile(fileext = ".gds")
+  write_vcf(G, info, tmp_vcf)
+  be1 <- read_geno(tmp_vcf, gds_cache = tmp_gds)
+  close_backend(be1)
+  manifest1 <- readRDS(paste0(tmp_gds, ".manifest.rds"))
+
+  G[1, 1] <- if (G[1, 1] == 0) 2 else 0
+  write_vcf(G, info, tmp_vcf)
+  be2 <- read_geno(tmp_vcf, gds_cache = tmp_gds)
+  manifest2 <- readRDS(paste0(tmp_gds, ".manifest.rds"))
+
+  expect_false(identical(manifest1$source_sha256, manifest2$source_sha256))
+  expect_equal(read_chunk(be2, 1L)[1, 1], G[1, 1])
+  close_backend(be2)
+  unlink(c(tmp_vcf, tmp_gds, paste0(tmp_gds, ".manifest.rds")))
+})
+
+test_that("VCF multiallelic policy is explicit and backend-independent", {
+  tmp <- tempfile(fileext = ".vcf")
+  writeLines(c(
+    "##fileformat=VCFv4.2",
+    "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">",
+    "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\ta\tb",
+    "1\t100\tbiallelic\tA\tC\t.\tPASS\t.\tGT\t0/1\t1/1",
+    "1\t200\tmulti\tA\tC,G\t.\tPASS\t.\tGT\t0/1\t1/2"
+  ), tmp)
+
+  expect_error(
+    read_geno(tmp, gds_cache = FALSE, multiallelic = "error"),
+    "multiallelic"
+  )
+  dropped <- read_geno(tmp, gds_cache = FALSE, multiallelic = "drop")
+  expect_equal(dropped$n_snps, 1L)
+  first <- read_geno(tmp, gds_cache = FALSE, multiallelic = "first_alt")
+  expect_equal(first$n_snps, 2L)
+  expect_equal(read_chunk(first, 2L)[1, 1], 1)
+  expect_true(is.na(read_chunk(first, 2L)[2, 1]))
+  unlink(tmp)
+})
+
+test_that("read_chunk rejects invalid and duplicated indices", {
+  G <- make_tiny()
+  info <- data.frame(
+    SNP = colnames(G), CHR = "1", POS = seq_len(ncol(G)),
+    REF = "A", ALT = "T", stringsAsFactors = FALSE
+  )
+  be <- read_geno(G, format = "matrix", snp_info = info)
+  expect_error(read_chunk(be, c(1, 1)), "duplicate")
+  expect_error(read_chunk(be, 0), "outside")
+  expect_error(read_chunk(be, 1.5), "integer")
+})
+
 # -- PLINK BED backend ---------------------------------------------------------
 
 test_that("BED backend: read from PLINK BED/BIM/FAM files", {

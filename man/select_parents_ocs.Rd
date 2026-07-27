@@ -30,8 +30,9 @@ a Selection Index, or \code{score_favorable_haplotypes()}'s
 \item{G}{Dimnamed relationship matrix (row/column names = individual
 IDs), e.g. from \code{\link{compute_haplotype_grm}}, or your own
 VanRaden/IBS/blended-H/pedigree-A matrix built however you already
-build it. This function does not construct \code{G} for you -- pass in
-whatever relationship matrix you trust.}
+build it. Supply the relationship matrix produced by the HapBlockR
+workflow or another aligned relationship analysis appropriate to the
+programme.}
 
 \item{family}{Optional named character vector (names = individual IDs)
 of family/cross-of-origin labels, used only for output labelling/
@@ -49,12 +50,12 @@ produce.}
 
 \item{n_parents_max}{Optional integer. Maximum number of distinct parents
 to use. AlphaMate: \code{NumberOfParents}, a native constraint enforced
-during allocation. \code{engine = "optisel"}: approximated by zeroing
-all but the \code{n_parents_max} largest solved contributions after
-\code{opticont()} solves -- not a re-optimised constrained solution
-(with a message). Ignored entirely (with a message) under \code{engine
-= "simplemating"} -- \code{selectCrosses()} does not expose this
-control at all.}
+during allocation. \code{engine = "optisel"}: uses the
+\code{n_parents_max} leading contributors to define a restricted
+candidate subset, then re-solves the OCS frontier and constrained optimum
+within that subset before mating allocation. \code{engine =
+"simplemating"}: reported as unsupported because
+\code{selectCrosses()} does not expose this control.}
 
 \item{max_contrib_per_parent}{Integer, default \code{4L}. Maximum number
 of matings any single parent can participate in. Honoured directly by
@@ -145,7 +146,7 @@ matters, not just which is "better":
     distributed with HapBlockR.}
   \item{\code{"optisel"}}{\strong{True OCS.} \code{optiSel::candes()} +
     \code{opticont()} (Wellmann 2019) -- optiSel's own continuous-
-    optimization solver for Meuwissen's (1997) formal OCS problem:
+    optimisation solver for Meuwissen's (1997) formal OCS problem:
     optimal per-candidate contributions subject to an explicit upper
     bound on the next generation's mean kinship. \code{target_degree} is
     mapped onto that kinship bound by solving both ends of the gain/
@@ -192,7 +193,7 @@ AlphaMate binary is bundled with HapBlockR or auto-detected -- see
 \section{Engine differences -- read before choosing}{
 
 \code{"alphamate"} and \code{"optisel"} both solve the actual OCS problem
-(continuous contribution optimization under a relatedness constraint) via
+(continuous contribution optimisation under a relatedness constraint) via
 genuinely different solvers -- AlphaMate's own evolutionary algorithm vs.
 optiSel's \code{candes()}/\code{opticont()}/\code{matings()}. Both are
 controlled by the same \code{target_degree} lever using the same
@@ -226,12 +227,12 @@ an approximation of the same lever, not an equivalent algorithm; re-tune
 if you switch engines.
 
 Beyond that: AlphaMate lets you cap the parent count
-(\code{n_parents_max}) as a native constraint during allocation; the
-\code{"optisel"} engine approximates it by zeroing all but the
-\code{n_parents_max} largest solved contributions \emph{after} solving
-(not a re-optimised constrained solution -- see \code{.run_optisel_ocs()});
-the \code{"simplemating"} engine does not support it at all -- ignored
-(with a message). \code{max_contrib_per_parent} IS honoured directly by
+(\code{n_parents_max}) as a native constraint during allocation. The
+\code{"optisel"} engine uses the leading solved contributors to define the
+permitted subset, then re-solves the OCS frontier and constrained optimum
+within that subset before allocating matings. The \code{"simplemating"}
+engine does not expose this control and reports it as unsupported.
+\code{max_contrib_per_parent} is honoured directly by
 all three engines (AlphaMate's own cap; \code{selectCrosses()}'s
 \code{max.cross} argument under \code{"simplemating"};
 \code{optiSel::matings()}'s \code{ub.n} argument under \code{"optisel"}).
@@ -266,43 +267,16 @@ prediction/selection) both require no external executable at all -- only
 R packages -- and are the more portable, drop-in choices.
 }
 
-\section{Verification status (read this)}{
+\section{Engine integration}{
 
-The AlphaMate wrapper is a direct translation of a working, production
-AlphaMate driver script (same file formats, same call sequence) and is
-implemented with high confidence.
-
-The \code{"simplemating"} engine went through two revisions after real
-\code{devtools::test()} failures against an actually-installed
-SimpleMating: a hand-written \code{optiSel::candes()}/\code{opticont()}
-call with real argument-name mismatches, replaced by a wrapper around
-\code{SimpleMating::GOCS()} after reading its actual source -- which
-itself then failed because a real, freshly-reinstalled SimpleMating 0.2.1
-does not export \code{GOCS()} despite it being present in the GitHub
-repository's checked-in source/NAMESPACE (unresolved discrepancy;
-possibly a stale NAMESPACE line). This engine now wraps
-\code{planCross()} + \code{selectCrosses()} instead, specifically because
-both are confirmed present in a real, current SimpleMating 0.2.1
-installation's own help index AND their exact current source was read
-directly before writing this (\code{Resende-Lab/SimpleMating},
-\code{planCross.R} and \code{selectCrosses.R}). If \code{engine =
-"simplemating"} errors with what looks like an argument-name mismatch,
-SimpleMating's own API may have moved again since this wrapper was
-written -- check \code{?SimpleMating::planCross}/
-\code{?SimpleMating::selectCrosses} against your installed version.
-
-The \code{"optisel"} engine is written directly against optiSel's own
-\code{candes()}/\code{opticont()}/\code{matings()}/\code{noffspring()}
-documentation. The specific assumptions most likely to matter if you hit
-an argument-name or return-shape mismatch: (1) \code{optiSel::noffspring()}'s
-exact first positional argument and return shape (assumed to accept the
-\code{opticont()} \code{$parent} data frame directly and return a list
-with a \code{$parent$n} column); (2) \code{optiSel::matings()}'s
-\code{ub.n} argument being an upper bound on repeated matings of the same
-Sire x Dam pair (used here to enforce \code{allow_repeated_matings =
-FALSE} natively rather than by post-hoc filtering). Check
-\code{?optiSel::candes}, \code{?optiSel::opticont}, \code{?optiSel::matings},
-and \code{?optiSel::noffspring} against your installed version.
+The AlphaMate wrapper follows the programme's documented file formats and
+execution sequence. The \code{"optisel"} engine calls
+\code{candes()} and \code{opticont()} for the continuous OCS problem and
+uses HapBlockR's hard-constrained discrete allocator for the mating plan.
+The \code{"simplemating"} engine uses the exported
+\code{planCross()} and \code{selectCrosses()} interface. HapBlockR checks
+required exports and returned constraints so that an incompatible optional
+dependency fails explicitly with the installed version and function name.
 }
 
 \references{

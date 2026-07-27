@@ -496,22 +496,21 @@ test_that("select_parents_ocs (optisel): runs and returns the documented structu
                             verbose = FALSE)
   expect_true(all(c("mating_plan", "contributors", "engine_used", "ok") %in% names(res)))
   expect_equal(res$engine_used, "optisel")
-  expect_true(is.logical(res$ok))
+  expect_true(res$ok)
+  expect_equal(nrow(res$mating_plan), 4L)
+  expect_true(all(unlist(res$constraint_checks)))
   expect_true(all(c("kin_min", "kin_max_gain") %in% names(res$frontier)))
   # kin_min must not exceed kin_max_gain (the max-diversity end of the
   # frontier cannot have a HIGHER mean kinship than the max-gain end) --
   # a basic sanity check on the two opticont()-solved reference points this
   # engine's target_degree interpolates between.
   expect_true(res$frontier$kin_min <= res$frontier$kin_max_gain + 1e-6)
-  if (!is.null(res$mating_plan) && nrow(res$mating_plan)) {
-    expect_true(all(c("parent1", "parent2", "mean_relationship") %in% names(res$mating_plan)))
-    expect_true(all(res$mating_plan$parent1 %in% .ocs_ids))
-    expect_true(all(res$mating_plan$parent2 %in% .ocs_ids))
-    if (!is.null(res$mating_plan) && nrow(res$mating_plan))
-      expect_true(all(res$mating_plan$parent1 != res$mating_plan$parent2))  # allow_selfing = FALSE
-  }
-  if (!is.null(res$contributors))
-    expect_true(all(c("id", "contribution") %in% names(res$contributors)))
+  expect_true(all(c("parent1", "parent2", "mean_relationship") %in% names(res$mating_plan)))
+  expect_true(all(res$mating_plan$parent1 %in% .ocs_ids))
+  expect_true(all(res$mating_plan$parent2 %in% .ocs_ids))
+  expect_true(all(res$mating_plan$parent1 != res$mating_plan$parent2))
+  expect_true(all(c("id", "contribution") %in% names(res$contributors)))
+  expect_equal(sum(res$contributors$contribution), 1, tolerance = 1e-10)
 })
 
 test_that("select_parents_ocs (optisel): runs at target_degree boundaries 0 and 90 without erroring", {
@@ -522,10 +521,10 @@ test_that("select_parents_ocs (optisel): runs at target_degree boundaries 0 and 
   skip_if_optisel_missing_fn("noffspring")
   res0 <- select_parents_ocs(merit = .ocs_merit, G = .ocs_G, engine = "optisel",
                              n_crosses = 4L, target_degree = 0, verbose = FALSE)
-  expect_true(is.logical(res0$ok))
+  expect_true(res0$ok)
   res90 <- select_parents_ocs(merit = .ocs_merit, G = .ocs_G, engine = "optisel",
                               n_crosses = 4L, target_degree = 90, verbose = FALSE)
-  expect_true(is.logical(res90$ok))
+  expect_true(res90$ok)
 })
 
 test_that("select_parents_ocs (optisel): higher target_degree does not increase realised mean kinship", {
@@ -558,22 +557,38 @@ test_that("select_parents_ocs (optisel): higher target_degree does not increase 
   expect_equal(res90$frontier$kin_ceiling, res90$frontier$kin_min, tolerance = 1e-6)
 })
 
-test_that("select_parents_ocs (optisel): n_parents_max is applied by message, not silently ignored", {
+test_that("select_parents_ocs (optisel): n_parents_max re-solves and is enforced", {
   skip_if_not_installed("optiSel")
   skip_if_optisel_missing_fn("candes")
   skip_if_optisel_missing_fn("opticont")
   skip_if_optisel_missing_fn("matings")
   skip_if_optisel_missing_fn("noffspring")
-  # Unlike engine = "simplemating" (where n_parents_max is entirely
-  # unsupported and always ignored), engine = "optisel" DOES apply it, via
-  # post-hoc truncation of the solved contributions -- flagged with its own
-  # distinct message so callers can tell the two situations apart.
+  # Unlike engine = "simplemating" (where n_parents_max is unsupported),
+  # engine = "optisel" retains the leading contributors and re-solves the
+  # OCS problem on that restricted candidate set.
   expect_message(
     res <- select_parents_ocs(merit = .ocs_merit, G = .ocs_G, engine = "optisel",
-                              n_crosses = 4L, target_degree = 30,
+                              n_crosses = 3L, target_degree = 30,
                               n_parents_max = 3L, verbose = TRUE),
-    "n_parents_max"
+    "re-solved"
   )
-  if (!is.null(res$contributors) && nrow(res$contributors))
-    expect_true(nrow(res$contributors) <= 3L)
+  expect_true(res$ok)
+  expect_lte(nrow(res$contributors), 3L)
+  expect_lte(length(unique(c(res$mating_plan$parent1,
+                             res$mating_plan$parent2))), 3L)
+  expect_true(all(unlist(res$constraint_checks)))
+})
+
+test_that("select_parents_ocs (optisel): infeasible hard constraints error", {
+  skip_if_not_installed("optiSel")
+  skip_if_not_installed("lpSolve")
+  expect_error(
+    select_parents_ocs(
+      merit = .ocs_merit, G = .ocs_G, engine = "optisel",
+      n_crosses = 4L, target_degree = 30, n_parents_max = 3L,
+      allow_selfing = FALSE, allow_repeated_matings = FALSE,
+      verbose = FALSE
+    ),
+    "No feasible mating plan"
+  )
 })

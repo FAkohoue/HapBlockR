@@ -19,7 +19,7 @@ Core per-chromosome LD block detection. Two LD metrics are supported:
 By default, SNP-index gaps between adjacent LD blocks are resolved using
 an LD-informed boundary assignment procedure. This ensures that every
 SNP passing quality-control filters is assigned to exactly one LD block,
-preventing unassigned markers between neighboring blocks while
+preventing unassigned markers between neighbouring blocks while
 preserving biologically meaningful physical gaps where no SNPs are
 present.
 
@@ -112,8 +112,8 @@ Big_LD(
   SNPs are expanded so that every SNP passing MAF filtering is assigned
   to a block. Gap SNPs are allocated to the flanking LD blocks using an
   LD-informed boundary rule based on their relative correlation with
-  representative SNPs from each neighboring block. Physical gaps without
-  SNPs remain unchanged. Default `TRUE`.
+  representative SNPs from each neighbouring block. Physical gaps
+  without SNPs remain unchanged. Default `TRUE`.
 
 - gap_k_rep:
 
@@ -121,7 +121,7 @@ Big_LD(
   inter-block gap when `close_gaps_with_snps = TRUE`. Representatives
   are chosen closest to the gap boundary and are used to evaluate
   whether each gap SNP is more strongly associated with the left or
-  right neighboring block. Larger values provide more stable boundary
+  right neighbouring block. Larger values provide more stable boundary
   assignment at increased computational cost. Default `2L`.
 
 - checkLargest:

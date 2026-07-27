@@ -54,7 +54,7 @@ no seed needed) or \code{"kmeans"} (\code{\link[stats]{kmeans}},
 \item{n_clusters}{Integer \code{>= 2}. Number of clusters to cut the
 population into. \strong{Required} -- this package does not silently
 guess a number of clusters for you. If you don't already have a
-biological reason for a specific number (e.g. "this program has 3
+biological reason for a specific number (e.g. "this programme has 3
 founder families"), a reasonable starting point is to try a small range
 (e.g. 2-6) and look at \code{cluster_fit} (the \code{hclust}/
 \code{kmeans} object returned) with standard diagnostics

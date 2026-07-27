@@ -135,6 +135,55 @@ test_that("cv_haplotype_prediction: print method works without error", {
   expect_no_error(print(cv))
 })
 
+test_that("cv_haplotype_prediction: stores complete pooled out-of-fold predictions", {
+  skip_if_not_installed("rrBLUP")
+  cv <- cv_haplotype_prediction(
+    geno_matrix = ldx_geno, snp_info = ldx_snp_info, blocks = ldx_blocks,
+    blues = .blues_vec, k = 3L, n_rep = 1L, verbose = FALSE
+  )
+  expect_equal(nrow(cv$gebv_all), length(.blues_vec))
+  expect_setequal(cv$gebv_all$id, names(.blues_vec))
+  expect_true(all(cv$gebv_all$status == "ok"))
+  expect_true(all(is.finite(cv$gebv_all$gebv)))
+  expect_true(all(is.finite(cv$gebv_all$breeding_value)))
+  expect_equal(
+    cv$pa_pooled$PA,
+    stats::cor(cv$gebv_all$observed, cv$gebv_all$gebv),
+    tolerance = 1e-12
+  )
+})
+
+test_that("cv_haplotype_prediction: grouped validation prevents group leakage", {
+  skip_if_not_installed("rrBLUP")
+  ids <- rownames(ldx_geno)
+  groups <- setNames(rep(sprintf("family_%02d", 1:12), each = 10L), ids)
+  cv <- cv_haplotype_prediction(
+    geno_matrix = ldx_geno, snp_info = ldx_snp_info, blocks = ldx_blocks,
+    blues = .blues_vec, k = 3L, n_rep = 1L,
+    validation = "grouped", groups = groups, verbose = FALSE
+  )
+  assigned <- split(cv$gebv_all$fold, groups[cv$gebv_all$id])
+  expect_true(all(vapply(assigned, function(x) length(unique(x)) == 1L,
+                         logical(1L))))
+  expect_equal(cv$validation, "grouped")
+})
+
+test_that("cv_haplotype_prediction: forward validation uses only earlier periods", {
+  skip_if_not_installed("rrBLUP")
+  ids <- rownames(ldx_geno)
+  time <- setNames(rep(seq_len(12L), each = 10L), ids)
+  cv <- cv_haplotype_prediction(
+    geno_matrix = ldx_geno, snp_info = ldx_snp_info, blocks = ldx_blocks,
+    blues = .blues_vec, k = 3L, n_rep = 1L,
+    validation = "forward", time = time, verbose = FALSE
+  )
+  fold_periods <- split(time[cv$gebv_all$id], cv$gebv_all$fold)
+  expect_true(max(fold_periods[["1"]]) < min(fold_periods[["2"]]))
+  expect_true(max(fold_periods[["2"]]) < min(fold_periods[["3"]]))
+  expect_true(all(diff(cv$pa_summary$n_train) > 0L))
+  expect_equal(cv$validation, "forward")
+})
+
 # ==============================================================================
 # 2. compare_haplotype_populations
 # ==============================================================================
@@ -202,6 +251,12 @@ test_that("compare_haplotype_populations: sorted by CHR and start_bp", {
 
 test_that("plot_haplotype_network: returns igraph object invisibly", {
   skip_if_not_installed("igraph")
+  plot_file <- tempfile(fileext = ".pdf")
+  grDevices::pdf(plot_file)
+  on.exit({
+    grDevices::dev.off()
+    unlink(plot_file)
+  }, add = TRUE)
   # Use a block known to have multiple alleles
   block_nm <- names(.haps)[1]
   result <- withVisible(
@@ -221,6 +276,12 @@ test_that("plot_haplotype_network: errors for non-existent block_id", {
 
 test_that("plot_haplotype_network: MST has correct number of vertices", {
   skip_if_not_installed("igraph")
+  plot_file <- tempfile(fileext = ".pdf")
+  grDevices::pdf(plot_file)
+  on.exit({
+    grDevices::dev.off()
+    unlink(plot_file)
+  }, add = TRUE)
   block_nm <- names(.haps)[1]
   hap <- .haps[[block_nm]]
   valid <- hap[!grepl(".", hap, fixed = TRUE)]
@@ -235,6 +296,12 @@ test_that("plot_haplotype_network: MST has correct number of vertices", {
 
 test_that("plot_haplotype_network: works with groups argument", {
   skip_if_not_installed("igraph")
+  plot_file <- tempfile(fileext = ".pdf")
+  grDevices::pdf(plot_file)
+  on.exit({
+    grDevices::dev.off()
+    unlink(plot_file)
+  }, add = TRUE)
   ids <- names(.haps[[1]])
   groups <- setNames(rep(c("A","B"), length.out = length(ids)), ids)
   block_nm <- names(.haps)[1]

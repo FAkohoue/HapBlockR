@@ -52,15 +52,12 @@ original, unrounded dosage for a less biased estimate.
 
 This function computes \code{D} only -- it does not itself fit a
 dual-kernel (\eqn{G_A + G_D}) mixed model. \code{rrBLUP::kin.blup()}, the
-solver \code{\link{run_haplotype_prediction}} uses for its default GBLUP
-path, only accepts a single relationship matrix and cannot fit
-\eqn{G_A} and \eqn{G_D} simultaneously. Pair the output of this function
-with the output of \code{\link{compute_haplotype_grm}} (or
-\code{\link{prepare_gblup_inputs}()$G}) and fit both as random effects in
-\code{sommer::mmer()}, ASReml, or another dual-kernel-capable solver --
-mirroring how \code{\link{prepare_gblup_inputs}} already hands off a
-single \code{G} matrix for external GBLUP fitting rather than fitting the
-model itself.
+default single-kernel solver only accepts one relationship matrix.
+However, \code{\link{run_haplotype_prediction}} fits this dominance
+kernel jointly with the additive haplotype kernel through its
+\code{include_dominance = TRUE} BGLR pathway. The two matrices may also be
+passed to another dual-kernel-capable solver when a programme requires a
+different model specification.
 
 Diploid only (\code{ploidy = 2}): the dominance coding below is specific
 to biallelic diploid loci. Computed from the raw per-SNP genotype matrix

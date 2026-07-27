@@ -2,7 +2,7 @@
 % Please edit documentation in R/parent_selection.R
 \name{suggest_merit_weight}
 \alias{suggest_merit_weight}
-\title{Suggest a Starting merit_weight for select_parents_ga()}
+\title{Suggest a Starting merit_weight for select_parents_ga_ts()}
 \usage{
 suggest_merit_weight(
   value_matrix,
@@ -15,27 +15,30 @@ suggest_merit_weight(
 }
 \arguments{
 \item{value_matrix}{Numeric matrix (individuals x blocks), identical in
-shape/meaning to \code{\link{select_parents_ga}}'s own argument --
+shape and meaning to \code{\link{select_parents_ga_ts}}'s own argument --
 ideally the exact same, already-filtered matrix you are about to pass
 to that call (after any \code{min_sel_value}/\code{top_candidates}
 filtering), so the calibration reflects the real candidate pool the GA
 will search.}
 
 \item{merit_score}{Named numeric vector, whole-genome merit -- same as
-\code{\link{select_parents_ga}}'s argument of the same name. Must cover
-every individual in \code{value_matrix}.}
+\code{\link{select_parents_ga_ts}}'s argument of the same name. Must cover
+every individual in \code{value_matrix} and be directionally aligned so
+that larger values always mean greater breeding merit.}
 
-\item{n_founders}{Integer. Same as \code{\link{select_parents_ga}}'s
+\item{n_founders}{Integer. Same as \code{\link{select_parents_ga_ts}}'s
 argument of the same name -- the founder group size to calibrate for.}
 
 \item{strategy}{One of \code{"no_selfing"} (default), \code{"selfing"},
-\code{"OHS"}, \code{"OPV"}, \code{"Haploid_OHS"} -- must match the
-\code{strategy} you intend to run \code{select_parents_ga()} with, since
+\code{"OHS"} (Optimal Haplotype Selection),
+\code{"OPV"} (Optimal Population Value), or \code{"Haploid_OHS"} -- must match the
+\code{strategy} you intend to run \code{select_parents_ga_ts()} with,
+since
 it changes how a block's achievable value is computed.}
 
 \item{block_weights}{Numeric vector, length \code{ncol(value_matrix)}, or
 \code{NULL} (default: equal weight 1) -- same as
-\code{\link{select_parents_ga}}'s argument of the same name. Must be
+\code{\link{select_parents_ga_ts}}'s argument of the same name. Must be
 non-negative.}
 
 \item{merit_priority}{Numeric in \code{[0, 100]}, or \code{NULL} (default).
@@ -43,7 +46,10 @@ non-negative.}
 \code{suggested_merit_weight = NULL}. A number computes
 \code{suggested_merit_weight} too -- \code{0} is always equivalent to
 \code{merit_weight = 0}; \code{100} sets merit's spread comparable to
-coverage's spread; values between scale linearly.}
+coverage's spread; values between scale linearly. A zero value is useful
+for scale diagnostics but is not accepted by
+\code{\link{select_parents_ga_ts}}; use
+\code{\link{select_parents_ga}} for coverage-only selection.}
 }
 \value{
 Named list:
@@ -62,7 +68,7 @@ Named list:
     small to divide by safely (see \code{ok}).}
   \item{\code{merit_priority}}{Echoes the argument.}
   \item{\code{suggested_merit_weight}}{\code{merit_priority / 100 *
-    scale_factor}, ready to pass to \code{\link{select_parents_ga}}'s
+    scale_factor}, ready to pass to \code{\link{select_parents_ga_ts}}'s
     \code{merit_weight} argument. \code{NULL} if \code{merit_priority}
     was \code{NULL}.}
   \item{\code{ok}}{Logical. \code{FALSE} if \code{merit_span} was too
@@ -76,18 +82,16 @@ Named list:
 }
 }
 \description{
-\code{\link{select_parents_ga}}'s \code{merit_weight} and
-\code{coancestry_weight} arguments have no universal correct value: the
-block-coverage term and the merit term live on different, problem-specific
-scales, so a raw multiplier that works for one dataset can be meaningless
-for another. This function estimates a sensible starting point directly
-from your own data, in two ways: call it with \code{merit_priority} left
+The block-coverage and whole-genome merit terms used by
+\code{\link{select_parents_ga_ts}} are expressed on dataset-specific
+scales. This function calibrates their relative scale directly from the
+analysed candidate pool. Call it with \code{merit_priority} left
 \code{NULL} to see the raw diagnostic numbers (the realistic spread of
 each term, and the ratio between them), or supply \code{merit_priority}
-(0-100, "how much do you care about merit vs. coverage") to also get a
+(0-100) to also get a
 literal \code{merit_weight} value ready to pass straight into
-\code{\link{select_parents_ga}}. This is the same calculation
-\code{select_parents_ga()}'s own \code{merit_priority} argument uses
+\code{\link{select_parents_ga_ts}}. This is the same calculation
+\code{select_parents_ga_ts()}'s own \code{merit_priority} argument uses
 internally -- calling this function first just lets you see the numbers
 before committing to them.
 }
@@ -100,10 +104,8 @@ the realistic best-vs-worst achievable spread of mean \code{merit_score},
 \code{merit_weight} so that merit's spread becomes comparable in
 magnitude to coverage's spread; \code{merit_priority = 0} is identical to
 \code{merit_weight = 0} (no merit term at all); values in between scale
-linearly. This is one reasonable, explicitly-stated definition of
-"comparable" -- not the only possible one (matching standard deviation
-instead of spread, for instance, would give a different number) -- see
-\emph{What this does not solve} below.
+linearly. This gives the breeder a reproducible definition of relative
+emphasis based on attainable contrasts in the supplied data.
 
 The "best achievable" coverage reference is not a naive per-block sum of
 each block's own maximum value across all candidates (which is usually
@@ -124,32 +126,24 @@ data-entry error) cannot single-handedly deflate the floor and distort
 the estimated spread. Trimming is skipped entirely on small candidate
 pools (under ~20), where it would not be meaningful.
 }
-\section{What this does not solve}{
+\section{Interpreting the calibration}{
 
-Two limits are inherent to \emph{any} scale-matching approach, not
-specific to the method used here, and cannot be resolved by more
-engineering -- they are documented rather than hidden:
+The calibration has two interpretation properties:
 \describe{
-  \item{Matching spread is a choice, not a universal truth}{A different,
-    equally defensible definition of "comparable" (e.g. matching standard
-    deviation across many realistic groups, rather than the best-vs-worst
-    achievable span) would produce a different scale factor. Treat
-    \code{merit_priority}'s suggestion as a well-reasoned starting point
-    to inspect and adjust, not a uniquely correct answer -- the literal
-    \code{merit_weight} argument remains available in
-    \code{\link{select_parents_ga}} for full manual control.}
+  \item{Attainable-span scaling}{\code{merit_priority} uses the
+    best-vs-worst attainable span of each term. The returned diagnostics
+    show the exact contrasts used. A programme with an established raw
+    numerical policy may instead supply a positive \code{merit_weight}
+    to \code{\link{select_parents_ga_ts}}.}
   \item{A single span number does not capture distribution shape}{If
     \code{merit_score} or the block-coverage values are unusually shaped
-    (e.g. strongly bimodal), the dial's practical effect may not feel
-    perfectly linear across its 0-100 range even though the underlying
-    calculation is exact for what it measures.}
+    (e.g. strongly bimodal), equal changes in \code{merit_priority} need
+    not yield equal changes in the selected parent set because selection
+    depends on candidate combinations, not only marginal distributions.}
 }
-This calibration also only weighs merit against coverage; if
-\code{coancestry_weight} is also active in your \code{select_parents_ga()}
-call, its effect is held fixed rather than jointly recalibrated -- use
-\code{\link{select_parents_pareto}}'s sweep to explore that trade-off
-separately, as already recommended for tuning \code{coancestry_weight} on
-its own.
+The calibration scales merit against coverage. Any relationship control is
+applied as the separately declared third component of the complete
+objective and is reported in \code{objective_components}.
 }
 
 \examples{
@@ -160,14 +154,16 @@ vmat <- res$local_gebv[, top$block_id, drop = FALSE]
 cal  <- suggest_merit_weight(vmat, res$gebv, n_founders = 20,
                              merit_priority = 50)
 cal$merit_span; cal$coverage_span; cal$suggested_merit_weight
-ga_out <- select_parents_ga(vmat, n_founders = 20, merit_score = res$gebv,
-                            merit_weight = cal$suggested_merit_weight)
+ga_out <- select_parents_ga_ts(
+  vmat, n_founders = 20, merit_score = res$gebv,
+  merit_weight = cal$suggested_merit_weight
+)
 }
 
 }
 \seealso{
-\code{\link{select_parents_ga}}'s \emph{Merit-weighted fitness
-  (GA+TS hybrid, optional)} section for the fitness function this feeds
-  into, and \code{\link{select_parents_pareto}} for exploring the
-  \code{coancestry_weight} trade-off the same way.
+\code{\link{select_parents_ga_ts}} for the joint objective,
+  \code{\link{select_parents_ga}} for coverage-only selection, and
+  \code{\link{select_parents_pareto}} for exploring coverage-relatedness
+  trade-offs.
 }

@@ -1,0 +1,113 @@
+name: Breeder guide accessibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "inst/guide/HapBlockR_Breeder_Guide.md"
+      - "inst/extdata/HapBlockR_Breeder_Guide.pdf"
+      - "inst/extdata/HapBlockR_Breeder_Guide.docx"
+      - "tools/build_breeder_guide_accessible.cjs"
+      - "tools/build_breeder_guide_docx.py"
+      - "tools/package.json"
+      - "tools/pnpm-lock.yaml"
+      - ".github/workflows/guide-accessibility.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  accessible-editions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked guide-builder dependencies
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.9.0 --activate
+          pnpm --dir tools install --frozen-lockfile
+          pnpm --dir tools exec playwright install --with-deps chromium
+
+      - name: Rebuild tagged guide
+        shell: bash
+        run: |
+          node tools/build_breeder_guide_accessible.cjs
+          python -m pip install python-docx==1.2.0
+          python tools/build_breeder_guide_docx.py
+
+      - name: Verify tags, structure tree, metadata, and text
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y poppler-utils
+          pdfinfo inst/extdata/HapBlockR_Breeder_Guide.pdf | tee guide-info.txt
+          grep -Eq '^Tagged:[[:space:]]+yes$' guide-info.txt
+          grep -Eq "^Title:[[:space:]]+The HapBlockR Breeder's Guide$" guide-info.txt
+          grep -Eq '^Author:[[:space:]]+Félicien Akohoue$' guide-info.txt
+          pdftotext inst/extdata/HapBlockR_Breeder_Guide.pdf guide-text.txt
+          grep -q 'Decision sign-off' guide-text.txt
+          node - <<'NODE'
+          const fs = require("fs");
+          const { PDFDocument, PDFName } = require("./tools/node_modules/pdf-lib");
+          (async () => {
+            const bytes = fs.readFileSync(
+              "inst/extdata/HapBlockR_Breeder_Guide.pdf"
+            );
+            const pdf = await PDFDocument.load(bytes);
+            const structure = pdf.catalog.get(PDFName.of("StructTreeRoot"));
+            const language = pdf.catalog.get(PDFName.of("Lang"));
+            if (!structure) throw new Error("PDF structure tree is missing.");
+            if (!language || !language.toString().includes("en-GB")) {
+              throw new Error("PDF language is not en-GB.");
+            }
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          path = Path("inst/extdata/HapBlockR_Breeder_Guide.docx")
+          if not path.is_file():
+              raise SystemExit("Word guide was not built.")
+          with ZipFile(path) as archive:
+              document = archive.read("word/document.xml").decode("utf-8")
+              styles = archive.read("word/styles.xml").decode("utf-8")
+          required = (
+              "Interpreting results and defining their scope",
+              "Optimal Haplotype Selection",
+              "Optimal Population Value",
+          )
+          for phrase in required:
+              if phrase not in document:
+                  raise SystemExit(f"Word guide is missing: {phrase}")
+          if "w:tblHeader" not in document:
+              raise SystemExit("Word guide has no repeating table headers.")
+          if "Heading1" not in styles or "Heading2" not in styles:
+              raise SystemExit("Word guide heading styles are missing.")
+          PY
+
+      - name: Upload verified guide
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: HapBlockR-tagged-breeder-guide
+          path: |
+            inst/extdata/HapBlockR_Breeder_Guide.pdf
+            inst/extdata/HapBlockR_Breeder_Guide.docx

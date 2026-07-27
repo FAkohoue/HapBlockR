@@ -75,7 +75,8 @@ estimate_marker_effects(
   bglr_dir = NULL,
   seed = NULL,
   verbose = FALSE,
-  ploidy = 2L
+  ploidy = 2L,
+  weights = NULL
 )
 ```
 
@@ -134,23 +135,30 @@ estimate_marker_effects(
   Integer \>= 2. Ploidy level of `geno_matrix`'s dosage encoding.
   Default `2L` (diploid). See
   [`backsolve_snp_effects`](https://FAkohoue.github.io/HapBlockR/reference/backsolve_snp_effects.md)
-  for the generalised centering used. Passed through to
+  for the generalised centring used. Passed through to
   [`backsolve_snp_effects()`](https://FAkohoue.github.io/HapBlockR/reference/backsolve_snp_effects.md)
   for `method = "gblup"`; for `"rrblup"`/Bayesian methods it only
-  affects the `gebv` centering (\\M\hat\alpha\\), since those solvers
-  fit directly on the raw dosage matrix and are otherwise
-  ploidy-agnostic. **In practice this centering step is
-  ploidy-invariant**: the centring term is \\\text{ploidy} \cdot \hat
-  p\\, and \\\hat p = \text{colMeans(geno\\matrix)} / \text{ploidy}\\,
-  so \\\text{ploidy} \cdot \hat p\\ always simplifies to
-  `colMeans(geno_matrix)` regardless of `ploidy` (as long as the
-  internal safety clamp on \\\hat p\\ does not engage, which it will not
-  for realistic dosage ranges). So changing `ploidy` will *not* change
-  `"rrblup"`/Bayesian `gebv` in practice – this is a mathematical
-  property of mean-centering, not a bug. `ploidy`'s real, discriminating
-  effect elsewhere in the package is on *scaling* terms (e.g.
+  affects the `gebv` centring (\\M\hat\alpha\\), since those solvers fit
+  directly on the raw dosage matrix and are otherwise ploidy-agnostic.
+  **In practice this centring step is ploidy-invariant**: the centring
+  term is \\\text{ploidy} \cdot \hat p\\, and \\\hat p =
+  \text{colMeans(geno\\matrix)} / \text{ploidy}\\, so \\\text{ploidy}
+  \cdot \hat p\\ always simplifies to `colMeans(geno_matrix)` regardless
+  of `ploidy` (as long as the internal safety clamp on \\\hat p\\ does
+  not engage, which it will not for realistic dosage ranges). So
+  changing `ploidy` will *not* change `"rrblup"`/Bayesian `gebv` in
+  practice – this is a mathematical property of mean-centring, not a
+  bug. `ploidy`'s real, discriminating effect elsewhere in the package
+  is on *scaling* terms (e.g.
   [`compute_haplotype_grm()`](https://FAkohoue.github.io/HapBlockR/reference/compute_haplotype_grm.md)'s
   \\\text{ploidy} \cdot \sum \hat p (1-\hat p)\\ denominator).
+
+- weights:
+
+  Optional named positive precision weights. If \`y\` is a result from
+  [`prepare_breeding_targets`](https://FAkohoue.github.io/HapBlockR/reference/prepare_breeding_targets.md),
+  \`model_value\` and its normalised precision weights are used
+  automatically.
 
 ## Value
 

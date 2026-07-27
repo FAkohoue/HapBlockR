@@ -103,7 +103,7 @@ selection).
 
 \references{
 Kim S-A et al. (2018). A new haplotype block detection method for dense
-genome sequencing data based on interval graph modeling and dynamic
+genome sequencing data based on interval graph modelling and dynamic
 programming. \emph{Bioinformatics} \strong{34}(4):588-596.
 \doi{10.1093/bioinformatics/btx609}
 

@@ -1,4 +1,4 @@
-# Harmonize Haplotype Allele Labels Across Panels or Analysis Runs
+# Harmonise Haplotype Allele Labels Across Panels or Analysis Runs
 
 Ensures that haplotype allele labels are biologically comparable across
 different datasets, analysis runs, or training/validation splits.
@@ -39,7 +39,7 @@ harmonize_haplotypes(
 
   Named list from
   [`extract_haplotypes`](https://FAkohoue.github.io/HapBlockR/reference/extract_haplotypes.md)
-  (the panel to harmonize - validation set, new environment, etc.).
+  (the panel to harmonise - validation set, new environment, etc.).
 
 - haplotypes_ref:
 

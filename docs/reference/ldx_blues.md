@@ -105,7 +105,7 @@ cv <- cv_haplotype_prediction(
   verbose     = FALSE
 )
 cv$pa_mean
-#>   trait         PA     RMSE     PA_sd    RMSE_sd
-#> 1   YLD 0.08409993 1.073279 0.1879066 0.03967989
+#>   trait         PA     RMSE PA_sd RMSE_sd
+#> 1   YLD -0.0842114 1.100226    NA      NA
 # }
 ```

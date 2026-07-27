@@ -14,7 +14,8 @@ estimate_marker_effects(
   bglr_dir = NULL,
   seed = NULL,
   verbose = FALSE,
-  ploidy = 2L
+  ploidy = 2L,
+  weights = NULL
 )
 }
 \arguments{
@@ -54,12 +55,12 @@ sampler runs (via \code{set.seed()}), for reproducibility. Ignored for
 
 \item{ploidy}{Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 encoding. Default \code{2L} (diploid). See
-\code{\link{backsolve_snp_effects}} for the generalised centering used.
+\code{\link{backsolve_snp_effects}} for the generalised centring used.
 Passed through to \code{backsolve_snp_effects()} for \code{method =
 "gblup"}; for \code{"rrblup"}/Bayesian methods it only affects the
-\code{gebv} centering (\eqn{M\hat\alpha}), since those solvers fit
+\code{gebv} centring (\eqn{M\hat\alpha}), since those solvers fit
 directly on the raw dosage matrix and are otherwise ploidy-agnostic.
-\strong{In practice this centering step is ploidy-invariant}: the
+\strong{In practice this centring step is ploidy-invariant}: the
 centring term is \eqn{\text{ploidy} \cdot \hat p}, and \eqn{\hat p =
 \text{colMeans(geno\_matrix)} / \text{ploidy}}, so \eqn{\text{ploidy}
 \cdot \hat p} always simplifies to \code{colMeans(geno_matrix)}
@@ -67,10 +68,14 @@ regardless of \code{ploidy} (as long as the internal safety clamp on
 \eqn{\hat p} does not engage, which it will not for realistic dosage
 ranges). So changing \code{ploidy} will \emph{not} change
 \code{"rrblup"}/Bayesian \code{gebv} in practice -- this is a
-mathematical property of mean-centering, not a bug. \code{ploidy}'s
+mathematical property of mean-centring, not a bug. \code{ploidy}'s
 real, discriminating effect elsewhere in the package is on
 \emph{scaling} terms (e.g. \code{compute_haplotype_grm()}'s
 \eqn{\text{ploidy} \cdot \sum \hat p (1-\hat p)} denominator).}
+
+\item{weights}{Optional named positive precision weights. If `y` is a
+result from \code{\link{prepare_breeding_targets}}, `model_value` and its
+normalised precision weights are used automatically.}
 }
 \value{
 A named list:

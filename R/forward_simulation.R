@@ -30,7 +30,7 @@
 #     by both schemes, and keeps each scheme's simulation fully independent.
 #   - ga_vs_ts_simulation() therefore takes exclusive ownership of
 #     genomicSimulation's global state for the duration of the call and
-#     always leaves it cleared afterward (via on.exit). Do not call this
+#     always leaves it cleared afterwards (via on.exit). Do not call this
 #     function from multiple threads/processes sharing one R session, and
 #     do not rely on genomicSimulation state surviving after this function
 #     returns -- everything needed is copied into this function's return
@@ -164,7 +164,7 @@
 # "1" (our alt-dosage symbol, see .gs_write_genotype_file) gets the
 # backsolved SNP effect; allele "0" gets an explicit effect of 0. Per-marker
 # centring (to reproduce HapBlockR's 2p-centred convention) is set
-# separately afterward via change.eff.set.centres(), not via this file.
+# separately afterwards via change.eff.set.centres(), not via this file.
 .gs_write_effect_file <- function(common_snp, alpha) {
   df <- data.frame(
     marker = rep(common_snp, 2L),

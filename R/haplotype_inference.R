@@ -405,7 +405,7 @@ collapse_haplotypes <- function(
 # 3. harmonize_haplotypes
 # ==============================================================================
 
-#' Harmonize Haplotype Allele Labels Across Panels or Analysis Runs
+#' Harmonise Haplotype Allele Labels Across Panels or Analysis Runs
 #'
 #' @description
 #' Ensures that haplotype allele labels are biologically comparable across
@@ -428,7 +428,7 @@ collapse_haplotypes <- function(
 #' }
 #'
 #' @param haplotypes_target Named list from \code{\link{extract_haplotypes}}
-#'   (the panel to harmonize - validation set, new environment, etc.).
+#'   (the panel to harmonise - validation set, new environment, etc.).
 #' @param haplotypes_ref    Named list from \code{\link{extract_haplotypes}}
 #'   (the reference panel - training set, base population, etc.).
 #'   Must cover the same blocks as \code{haplotypes_target} (extra blocks

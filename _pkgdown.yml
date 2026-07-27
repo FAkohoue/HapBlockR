@@ -49,9 +49,36 @@ authors:
 
 navbar:
   structure:
-    left:  [intro, reference, articles, news]
+    left:  [reference, tutorial, articles, guide, news]
     right: [search, github]
   components:
+    tutorial:
+      text: Tutorial
+      href: articles/HapBlockR-intro.html
+    articles:
+      text: Vignettes
+      menu:
+        - text: Full pipeline walkthrough
+          href: articles/HapBlockR-full-pipeline.html
+        - text: -------
+        - text: "Methods"
+        - text: "LD Metrics: Standard r² and Kinship-Adjusted rV²"
+          href: articles/HapBlockR-ld-metrics.html
+        - text: From Local GEBV to a Crossing Decision
+          href: articles/HapBlockR-breeding-decisions.html
+        - text: -------
+        - text: "Advanced"
+        - text: Large-Data Backends and Reproducible Performance Evidence
+          href: articles/HapBlockR-large-scale.html
+        - text: Statistical Phasing with External Beagle 5.x
+          href: articles/HapBlockR-phasing.html
+        - text: Programme-Level Models, Feasibility, and Data Exchange
+          href: articles/HapBlockR-programme-operations.html
+        - text: From Genotypes to a Validated Breeding Decision
+          href: articles/HapBlockR-workflow.html
+    guide:
+      text: Breeder guide
+      href: breeder-guide.html
     github:
       icon: fab fa-github fa-lg
       href: https://github.com/FAkohoue/HapBlockR
@@ -86,6 +113,7 @@ articles:
     navbar: ~
     contents:
       - HapBlockR-intro
+      - HapBlockR-full-pipeline
   - title: "Methods"
     navbar: "Methods"
     contents:
@@ -96,6 +124,7 @@ articles:
     contents:
       - HapBlockR-large-scale
       - HapBlockR-phasing
+      - HapBlockR-programme-operations
       - HapBlockR-workflow
 
 reference:
@@ -178,6 +207,7 @@ reference:
     contents:
       - read_phased_vcf
       - phase_with_beagle
+      - assess_phasing_accuracy
 
 
 # ------------------------------------------------------------
@@ -283,6 +313,25 @@ reference:
 
 
 # ------------------------------------------------------------
+# Breeding targets, multi-trait models, and GxE
+# ------------------------------------------------------------
+
+  - title: "Breeding targets and multi-trait prediction"
+    desc: >
+      Validate externally analysed genotype-level target values, propagate
+      their uncertainty through genomic models, construct internal
+      multi-trait selection indices, and fit environment-specific or
+      across-environment genomic predictions.
+    contents:
+      - breeding_target_types
+      - prepare_breeding_targets
+      - fit_multitrait_gblup
+      - build_selection_index
+      - build_environment_kernel
+      - fit_gxe_gblup
+
+
+# ------------------------------------------------------------
 # Breeding decision tools
 # ------------------------------------------------------------
 
@@ -304,10 +353,11 @@ reference:
 
   - title: "Parent selection and mate allocation"
     desc: >
-      Genetic-algorithm founder-parent optimiser (select_parents_ga, via the
-      GA package) searching for the combination of individuals maximising
-      coverage of favourable local GEBV/haplotype values across target
-      blocks, under crossing-scheme constraints (no_selfing/selfing/OHS/
+      Separate coverage-only (select_parents_ga) and joint GA plus
+      whole-genome-merit (select_parents_ga_ts) founder-parent optimisers,
+      both using the GA package to search combinations that cover favourable
+      local GEBV/haplotype values across target blocks under crossing-scheme
+      constraints (no_selfing/selfing/OHS/
       OPV/Haploid_OHS), with a truncation-selection baseline, a calibration
       helper for its optional merit-weighted fitness (suggest_merit_weight),
       and a PCA visualisation for comparing parent sets. Family- (or
@@ -330,6 +380,7 @@ reference:
       cases (select_core_collection).
     contents:
       - select_parents_ga
+      - select_parents_ga_ts
       - suggest_merit_weight
       - truncation_selection
       - select_parents_by_family
@@ -342,6 +393,8 @@ reference:
       - usefulness_criterion
       - validate_crosses_exact
       - select_core_collection
+      - screen_candidate_crosses
+      - certify_mating_plan
 
 
 # ------------------------------------------------------------
@@ -371,9 +424,27 @@ reference:
     contents:
       - compare_haplotype_populations
       - run_haplotype_stability
+      - assess_decision_stability
       - scan_diversity_windows
       - decompose_block_effects
       - export_candidate_regions
+
+
+# ------------------------------------------------------------
+# Metadata, exchange, and result validation
+# ------------------------------------------------------------
+
+  - title: "Metadata, exchange, and result validation"
+    desc: >
+      Validate breeding metadata and HapBlockR result contracts, and create,
+      write, or read checksum-protected breeding exchange objects.
+    contents:
+      - validate
+      - validate_hapblockr_result
+      - validate_breeding_metadata
+      - build_breeding_exchange
+      - write_breeding_exchange
+      - read_breeding_exchange
 
 
 # ------------------------------------------------------------

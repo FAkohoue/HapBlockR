@@ -60,6 +60,27 @@ test_that("estimate_marker_effects(): method='gblup' without G errors", {
   expect_error(estimate_marker_effects(G, y, method = "gblup"), "G")
 })
 
+test_that("estimate_marker_effects(): prepared targets apply precision weights", {
+  G <- make_geno(n = 40, p = 15, seed = 112L)
+  ids <- rownames(G)
+  set.seed(113)
+  target_data <- data.frame(
+    id = ids,
+    trait = "yield",
+    value = rnorm(length(ids)),
+    SE = seq(0.15, 0.60, length.out = length(ids))
+  )
+  targets <- prepare_breeding_targets(
+    target_data,
+    input_type = "BLUE",
+    se_col = "SE"
+  )
+  result <- estimate_marker_effects(G, targets, method = "rrblup")
+  expect_equal(mean(result$precision_weights), 1)
+  expect_gt(stats::sd(result$precision_weights), 0)
+  expect_equal(names(result$precision_weights), ids)
+})
+
 test_that("estimate_marker_effects(): fewer than 10 phenotyped individuals errors", {
   G <- make_geno(n = 40, p = 15, seed = 4L)
   y <- setNames(rep(NA_real_, nrow(G)), rownames(G))
@@ -241,6 +262,36 @@ test_that("compute_local_gebv(): ploidy=4 local GEBVs sum to the hand-computed g
 
   recon <- rowSums(res$local_gebv)
   expect_equal(unname(recon[rownames(G)]), unname(expected_gebv), tolerance = 1e-8)
+})
+
+test_that("compute_local_gebv(): propagates marker-effect standard errors", {
+  G <- matrix(c(
+    0, 0,
+    1, 2,
+    2, 1
+  ), nrow = 3L, byrow = TRUE,
+  dimnames = list(paste0("i", 1:3), c("s1", "s2")))
+  snp_info <- data.frame(
+    SNP = c("s1", "s2"), CHR = "1", POS = c(100L, 200L)
+  )
+  blocks <- data.frame(
+    CHR = "1", start.bp = 50L, end.bp = 250L
+  )
+  alpha <- c(s1 = 0.4, s2 = -0.2)
+  alpha_se <- c(s1 = 0.10, s2 = 0.20)
+  result <- compute_local_gebv(
+    G, snp_info, blocks, alpha, snp_effect_se = alpha_se
+  )
+  centred <- sweep(G, 2L, colMeans(G), "-")
+  expected_se <- sqrt(rowSums(
+    sweep(centred^2, 2L, alpha_se^2, "*")
+  ))
+  expect_equal(as.numeric(result$local_gebv_se[, 1L]), unname(expected_se))
+  expect_identical(
+    result$uncertainty_assumption,
+    "independent_marker_effect_errors"
+  )
+  expect_true(all(is.finite(result$block_importance$mean_local_gebv_se)))
 })
 
 test_that("compute_local_gebv(): complete_decomposition=TRUE creates singleton blocks for SNPs outside every block window", {

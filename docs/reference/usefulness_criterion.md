@@ -42,6 +42,11 @@ usefulness_criterion(
   generation = 1L,
   n_threads = 1L,
   n_sim_linked = 2000L,
+  gebv_se = NULL,
+  gebv_reliability = NULL,
+  phasing_reliability = NULL,
+  downside_quantile = 0.1,
+  min_reliability = 0.3,
   verbose = TRUE
 )
 ```
@@ -257,6 +262,40 @@ usefulness_criterion(
   unlike `n_sim`. `seed`, if supplied, is reused for both Monte Carlo
   procedures.
 
+- gebv_se:
+
+  Optional named numeric vector of GEBV standard errors. When supplied,
+  the function propagates parental uncertainty to `mid_parent_SE` and
+  the 95 percent UC interval.
+
+- gebv_reliability:
+
+  Optional named numeric vector in \[0, 1\], for example the
+  `reliability` column returned by
+  [`run_haplotype_prediction`](https://FAkohoue.github.io/HapBlockR/reference/run_haplotype_prediction.md).
+  Cross reliability is the conservative minimum of its two parental
+  reliabilities.
+
+- phasing_reliability:
+
+  Optional named numeric vector in \[0, 1\]. For
+  `variance_model = "phased"` or `"linked"` – both build progeny
+  variance from phased haplotype blocks and depend equally on phasing
+  accuracy – each cross uses the conservative minimum of parental
+  prediction and phasing reliability. Missing phasing reliability
+  therefore cannot pass the recommendation gate in either mode.
+
+- downside_quantile:
+
+  Numeric in (0, 0.5). Progeny-distribution quantile reported as
+  `downside_value`. Default `0.10`.
+
+- min_reliability:
+
+  Numeric in \[0, 1\]. A cross is marked `recommendation_eligible` only
+  when its two-parent reliability meets this threshold. Missing
+  reliability never passes the gate. Default `0.30`.
+
 - verbose:
 
   Logical, default `TRUE`. Print progress and a summary of how many
@@ -294,6 +333,22 @@ columns:
 - `rank`:
 
   Rank by descending UC (`NA` rows sort last).
+
+- `downside_value`:
+
+  The requested lower progeny-distribution quantile, showing downside
+  risk alongside expected selected gain.
+
+- `mid_parent_SE`, `UC_SE`, `UC_lower_95`, `UC_upper_95`:
+
+  Propagated uncertainty when `gebv_se` is supplied; the finite-progeny
+  contribution is included when `n_progeny` is supplied.
+
+- `prediction_reliability`, `phasing_reliability`, `cross_reliability`,
+  `recommendation_eligible`, `eligibility_reason`:
+
+  Explicit reliability gate for promoting a ranked cross to a
+  recommendation.
 
 ## The Usefulness Criterion
 

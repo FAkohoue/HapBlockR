@@ -1,0 +1,17 @@
+.run_desired_gain_index_Joukhadar2024_legacy
+                        Run a desired-gain selection index with
+                        optional trait scaling and threshold-based or
+                        top-N selection
+.run_qgsi_desired_gain_legacy
+                        Desired-gain QGSI using trait GEBVs
+compare_dg_and_qgsi     Merge desired-gain index and desired-gain QGSI
+                        outputs into one comparison table
+construct_Wd_from_dg    Construct a quadratic desired-gain matrix 'W_d'
+                        automatically for QGSI
+run_desired_gain_index_Joukhadar2024
+                        Fit an optimised desired-gain selection index
+run_dgsi_qgsi_pipeline
+                        Run a full desired-gain index and desired-gain
+                        QGSI pipeline
+run_qgsi                Score candidates with a quadratic genomic
+                        selection index

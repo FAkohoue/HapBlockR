@@ -2,7 +2,7 @@
 % Please edit documentation in R/parent_selection.R
 \name{select_parents_ga}
 \alias{select_parents_ga}
-\title{Genetic-Algorithm Founder-Parent Selection}
+\title{Select Parents by Genetic-Algorithm Haplotype Coverage}
 \usage{
 select_parents_ga(
   value_matrix,
@@ -18,543 +18,139 @@ select_parents_ga(
   penalty_weight = NULL,
   seed = NULL,
   verbose = FALSE,
-  merit_score = NULL,
-  min_sel_value = NULL,
-  min_sel_mode = c("value", "percentile", "sd_below_mean"),
   n_reps = 5L,
   G = NULL,
   coancestry_weight = 0,
-  merit_weight = 0,
-  merit_priority = NULL,
   target_degree = NULL
 )
 }
 \arguments{
-\item{value_matrix}{Numeric matrix (individuals x blocks): local GEBV
-(\code{run_haplotype_prediction()$local_gebv}), haplotype allele dosage
-scaled to [0,1] (dosage / ploidy), or any comparable per-block
-favourable-value score. Row names = candidate individual IDs.
-\strong{Pre-filter to a manageable set of top-ranked blocks first} (e.g.
-via \code{\link{select_top_blocks}}) -- exactly as HapSelect's own
-documented workflow does before calling its parent-selection GA -- since
-the fitness function is evaluated \code{popSize * maxiter} times.}
+\item{value_matrix}{Numeric matrix with candidates in rows and target
+blocks in columns. Row names must contain unique candidate identifiers.
+Values may be local genomic estimated breeding values (local GEBV),
+directionally aligned favourable-haplotype scores or comparable
+per-block values for which larger is better.}
 
-\item{n_founders}{Integer. Target number of founders to select.}
+\item{n_founders}{Positive integer giving the required number of parents.}
 
-\item{strategy}{One of \code{"no_selfing"} (default), \code{"selfing"},
-\code{"OHS"}, \code{"OPV"}, \code{"Haploid_OHS"}. See
+\item{strategy}{One of \code{"no_selfing"}, \code{"selfing"},
+\code{"OHS"}, \code{"OPV"} or \code{"Haploid_OHS"}. See
 \emph{Crossing-scheme strategies}.}
 
-\item{block_weights}{Numeric vector, length \code{ncol(value_matrix)}, or
-\code{NULL} (default: equal weight 1 for every block). E.g. pass the
-\code{var_scaled} column from \code{\link{select_top_blocks}} to weight
-higher-variance blocks more heavily.}
+\item{block_weights}{Optional non-negative numeric vector of length
+\code{ncol(value_matrix)}. The default gives every block weight one.}
 
-\item{top_candidates}{Integer or \code{NULL} (default). If supplied,
-restricts the GA's candidate pool to the top \code{top_candidates}
-individuals by their own row-max value in \code{value_matrix} before
-searching -- a heuristic prefilter to keep the binary chromosome length
-(and therefore search time) manageable for large populations. Set
-\code{NULL} to search the full population in \code{value_matrix}.}
+\item{top_candidates}{Optional positive integer. Before optimisation,
+restrict the search to this number of candidates ranked by their
+greatest value across target blocks. It must be at least
+\code{n_founders}. Leave \code{NULL} to search all candidates.}
 
-\item{popSize, maxiter, run, pmutation, pcrossover}{Passed to
-\code{GA::ga()}. Defaults \code{100}, \code{200}, \code{50}, \code{0.1},
-\code{0.8} respectively.}
+\item{popSize, maxiter, run, pmutation, pcrossover}{Controls passed to
+\code{GA::ga()}. They define population size, maximum generations,
+generations without improvement before stopping, mutation probability
+and crossover probability.}
 
-\item{penalty_weight}{Numeric. Quadratic penalty coefficient for deviating
-from exactly \code{n_founders} selected individuals. Default \code{10}
-times the largest single block weight, scaled so the penalty dominates
-the fitness for any deviation while not distorting the optimum for
-correctly-sized subsets. Increase if the GA returns solutions with the
-wrong count.}
+\item{penalty_weight}{Optional positive coefficient used internally to
+penalise deviations from exactly \code{n_founders}. The default is
+calibrated from the block weights.}
 
-\item{seed}{Integer or \code{NULL}. Random seed for reproducibility. When
-\code{n_reps > 1}, this seeds replicate 1 and replicates
-\code{2..n_reps} use \code{seed + 1}, \code{seed + 2}, ... (deterministic
-and reproducible as a set, but each replicate explores a different
-starting point).}
+\item{seed}{Optional integer seed. With repeated searches, replicate
+\eqn{i} uses \code{seed + i - 1}.}
 
-\item{verbose}{Logical. Print \code{GA::ga()}'s iteration monitor for the
-first replicate only (silent for replicates \code{2..n_reps} to avoid
-flooding the console). Default \code{FALSE}.}
+\item{verbose}{Logical. If \code{TRUE}, show the GA monitor for the first
+replicate.}
 
-\item{merit_score}{Named numeric vector (e.g.
-\code{run_haplotype_prediction()$gebv}), or \code{NULL} (default).
-Whole-genome merit, used for up to two independent purposes depending on
-which of \code{min_sel_value}/\code{merit_weight} are set: (1) the
-\code{min_sel_value} eligibility floor below, a hard pre-search
-exclusion; and (2) when \code{merit_weight > 0}, a soft, additive term
-\emph{inside} the GA fitness function itself -- see \emph{Merit-weighted
-fitness (GA+TS hybrid, optional)}. The two are independent and
-commonly used together (a floor to exclude clearly ineligible
-candidates, plus a weight so merit keeps pulling on the search among
-those who remain), but either can be used alone. Required whenever
-\code{min_sel_value} is not \code{NULL}, or \code{merit_weight > 0}.}
+\item{n_reps}{Positive integer number of independent GA searches. Default
+\code{5L}. The best feasible replicate is selected automatically.}
 
-\item{min_sel_value, min_sel_mode}{Merit floor applied to
-\code{value_matrix}'s candidate pool \emph{before} the GA searches, using
-\code{merit_score} to evaluate it. Same semantics as
-\code{\link{truncation_selection}}'s arguments of the same name; default
-\code{min_sel_value = NULL} applies no floor at all (the historical
-behaviour of this function). Existing from an earlier finding: without a
-floor, a genuinely poor overall performer who happens to uniquely carry
-one target block's favourable value will still be selected, purely to
-cover that block -- setting a floor here is the fix.}
+\item{G}{Optional named relationship matrix covering all candidates. It is
+required when \code{coancestry_weight > 0} or \code{target_degree} is
+supplied and may otherwise be provided to report realised mean
+relationship.}
 
-\item{n_reps}{Integer >= 1. Default \code{5L}. Number of independent GA
-replicates to run (see \emph{GA rigour: replication and convergence}
-below); the replicate with the best fitness is returned as
-\code{selected}/\code{fitness}/\code{per_block}/\code{ga_fit}. Set to
-\code{1L} for the fastest, single-run legacy behaviour.}
+\item{coancestry_weight}{Non-negative numeric weight on mean pairwise
+relationship. Default zero. A positive value produces a weighted
+coverage-relatedness objective. Do not combine it with
+\code{target_degree}.}
 
-\item{G}{Relationship/kinship matrix (n x n, dimnames = individual IDs
-covering every candidate in \code{value_matrix}), e.g.
-\code{run_haplotype_prediction()$G} or
-\code{\link{compute_haplotype_grm}} output, or \code{NULL} (default).
-Required whenever \code{coancestry_weight > 0} or \code{target_degree}
-is supplied; see \emph{Coancestry penalty (optional)} below. Unused (may
-be left \code{NULL}) otherwise.}
-
-\item{coancestry_weight}{Numeric >= 0. Default \code{0} (no coancestry
-term at all -- the historical behaviour of this function, block coverage
-only). When positive, subtracts \code{coancestry_weight} times the mean
-off-diagonal pairwise relationship of the chosen set (from \code{G})
-from the fitness function, so the GA trades off block coverage against
-relatedness directly rather than leaving relatedness as an after-the-
-fact diagnostic. There is no universal default scale for this argument
--- it must be tuned against your own \code{block_weights}/fitness scale
-(see \emph{Coancestry penalty (optional)}). Mutually exclusive with
-\code{target_degree} -- do not supply both.}
-
-\item{merit_weight}{Numeric >= 0. Default \code{0} (no merit term at all
--- the historical behaviour of this function, block coverage only, with
-\code{merit_score} usable purely as a pre-search eligibility floor via
-\code{min_sel_value}). When positive, \strong{adds}
-\code{merit_weight} times the chosen set's mean \code{merit_score} to
-the fitness function, so the GA rewards whole-genome merit directly
-inside the search itself, rather than only using it to exclude clearly
-ineligible candidates beforehand. See \emph{Merit-weighted fitness
-(GA+TS hybrid, optional)} below. Requires \code{merit_score}. Mutually
-exclusive with \code{merit_priority} -- do not supply both.}
-
-\item{merit_priority}{Numeric in \code{[0, 100]}, or \code{NULL} (default
--- no effect, historical behaviour unchanged). The easy alternative to
-\code{merit_weight}: instead of a raw, unscaled multiplier, state how
-much you care about merit vs. coverage as a plain percentage, and this
-function calibrates the right \code{merit_weight} from your own data
-before running the search -- see \code{\link{suggest_merit_weight}} for
-exactly what "comparable scale" means here and its documented limits.
-\code{0} is identical to \code{merit_weight = 0}; \code{100} scales
-merit's realistic influence on the fitness function to match coverage's;
-values between scale linearly. Requires \code{merit_score}. Mutually
-exclusive with an explicitly-supplied \code{merit_weight} (ambiguous
-otherwise) -- supplying both is an error.}
-
-\item{target_degree}{Numeric in \code{[0, 90]}, or \code{NULL} (default --
-no effect, historical behaviour unchanged). The easy alternative to
-\code{coancestry_weight}: instead of a raw, unscaled penalty multiplier,
-state your relatedness-vs-gain preference on the SAME \code{[0, 90]}
-scale \code{\link{select_parents_ocs}} already uses (\code{0} = max
-gain, prioritising coverage/merit and accepting more relatedness;
-\code{90} = max diversity, minimising relatedness), and this function
-converts it into an internal relatedness-ceiling penalty from your own
-data before running the search -- see \emph{Relatedness ceiling
-(target_degree, optional)} below for exactly how, and its documented
-limits. Requires \code{G}. Mutually exclusive with an explicitly-supplied
-\code{coancestry_weight} (ambiguous otherwise) -- supplying both is an
-error.}
+\item{target_degree}{Optional number in \code{[0, 90]}. Zero favours the
+unconstrained coverage end and 90 favours the diversity end. It is
+converted to a relationship ceiling using the supplied \code{G}. Do not
+combine it with \code{coancestry_weight}.}
 }
 \value{
-Named list:
-\describe{
-  \item{\code{selected}}{Character vector of the selected individual IDs
-    from the best-fitness replicate (length \code{n_founders}, or as close
-    as the GA achieved -- check \code{length(selected) == n_founders}).}
-  \item{\code{fitness}}{Numeric. Best fitness value found (raw block-value
-    sum, after subtracting the cardinality penalty), best-fitness
-    replicate.}
-  \item{\code{per_block}}{Data frame for the best-fitness replicate:
-    \code{block_id}, \code{best_value}, \code{contributor_1},
-    \code{contributor_2} (equal to \code{contributor_1} under a
-    self-allowed strategy).}
-  \item{\code{strategy}}{Character, echoes the \code{strategy} argument.}
-  \item{\code{ga_fit}}{The raw \code{GA::ga()} S4 result object for the
-    best-fitness replicate, for convergence diagnostics (e.g.
-    \code{plot(ga_fit)}).}
-  \item{\code{converged}}{Logical. \code{TRUE} if the best-fitness
-    replicate's GA stopped because fitness plateaued for \code{run}
-    consecutive generations (\code{ga_fit@iter < maxiter}), rather than
-    being cut off at \code{maxiter} without plateauing. \code{FALSE} means
-    consider raising \code{maxiter}.}
-  \item{\code{cutoff}}{Numeric. The \code{min_sel_value} cutoff actually
-    applied to \code{merit_score} (\code{-Inf} when
-    \code{min_sel_value = NULL}).}
-  \item{\code{stability}}{List describing agreement across all
-    \code{n_reps} replicates -- see \emph{GA rigour} below. Present even
-    when \code{n_reps = 1} (trivially: every selected individual has
-    \code{selection_freq = 1}). Also includes \code{$mean_relationship}
-    (realised mean pairwise relationship of each replicate's chosen set,
-    \code{NA} unless \code{G} was supplied) and \code{$mean_merit}
-    (realised mean \code{merit_score} of each replicate's chosen set,
-    \code{NA} unless \code{merit_score} was supplied).}
-  \item{\code{mean_relationship}}{Numeric. The best-fitness replicate's
-    realised mean off-diagonal pairwise relationship (from \code{G}) among
-    the final \code{selected} set. \code{NA} unless \code{G} was supplied
-    -- present regardless of whether \code{coancestry_weight > 0} or
-    \code{target_degree} was set, so you can inspect relatedness even when
-    the GA wasn't asked to optimise for it (compare against an
-    unconstrained run to see the effect).}
-  \item{\code{mean_merit}}{Numeric. The best-fitness replicate's realised
-    mean \code{merit_score} among the final \code{selected} set. \code{NA}
-    unless \code{merit_score} was supplied -- present regardless of
-    whether \code{merit_weight > 0}, so you can inspect the chosen set's
-    whole-genome merit even when the GA wasn't asked to optimise for it
-    directly (compare against a \code{merit_weight = 0} run to see the
-    term's effect).}
-  \item{\code{merit_weight}}{Numeric. The merit weight actually used --
-    either your explicit argument, or the value calibrated from
-    \code{merit_priority} if that was supplied instead.}
-  \item{\code{merit_priority}}{Echoes the \code{merit_priority} argument
-    (\code{NULL} unless supplied).}
-  \item{\code{coancestry_weight}}{Numeric. Echoes the \code{coancestry_weight}
-    argument as actually used (\code{0} when \code{target_degree} was
-    supplied instead -- the relatedness constraint is enforced via
-    \code{relatedness_ceiling} in that case, not this argument).}
-  \item{\code{target_degree}}{Echoes the \code{target_degree} argument
-    (\code{NULL} unless supplied).}
-  \item{\code{relatedness_ceiling}}{Numeric. The interpolated mean-
-    relationship ceiling actually enforced when \code{target_degree} was
-    supplied (\code{NULL} otherwise) -- see \emph{Relatedness ceiling
-    (target_degree, optional)}. Compare against \code{mean_relationship}
-    to check whether the search respected it.}
-}
+A \code{hapblockr_result} list. Principal components are
+  \code{selected}, \code{fitness}, \code{coverage_fitness},
+  \code{objective_components}, \code{per_block}, \code{mean_relationship},
+  \code{stability}, \code{feasible}, \code{converged} and
+  \code{result_contract}. \code{stability$best_rep} identifies the
+  automatically selected replicate.
 }
 \description{
-Searches for the set of \code{n_founders} individuals that jointly
-maximises coverage of favourable per-block values (local GEBV, haplotype
-allele dosage, or any comparable score) across a set of target blocks,
-via \code{GA::ga(type = "binary")}. This is HapBlockR's answer to
-HapSelect's \code{local_gebv_parent_selection()} /
-\code{haplotype_parent_selection()} -- the single biggest capability gap
-identified against HapSelect (see \code{vignette} / gap-analysis notes):
-turning "here is what's good" (block importance, stacking scores) into
-"here is the actual founder set", instead of leaving a breeder to eyeball
-a ranked list.
+Selects a fixed-size parent set that jointly covers favourable values
+across target haplotype blocks. This is the coverage-only genetic-algorithm
+(GA) tool. Use \code{\link{select_parents_ga_ts}} when whole-genome merit
+must also contribute directly to the optimisation objective, or
+\code{\link{truncation_selection}} when parents should be selected only by
+a whole-genome score.
 }
 \details{
-The fitness function, for a candidate founder subset \eqn{S} of size
-\code{n_founders}, is:
-\deqn{\text{fitness}(S) = \sum_{j \in \text{blocks}} w_j \cdot \text{best}_j(S)}
-where \eqn{\text{best}_j(S)} is the best value block \eqn{j} can achieve
-from the founders in \eqn{S}, and \eqn{w_j} is that block's weight
-(\code{block_weights}, default 1 for every block). How
-\eqn{\text{best}_j(S)} is computed depends on \code{strategy} -- see the
-\emph{Crossing-scheme strategies} section. This directly generalises the
-pair-average formula shown in HapSelect's own documentation diagram
-(\eqn{\sum_j \max((\text{localGEBV}_{j,1} + \text{localGEBV}_{j,2})/2)}),
-but is HapBlockR's own implementation -- HapSelect's exact GA fitness
-function and constraint semantics are not available beyond its published
-documentation, so this is not a byte-for-byte port.
+For a candidate set \eqn{S}, the core objective is
+\deqn{\mathrm{coverage}(S) =
+\sum_j w_j\,\mathrm{best}_j(S),}
+where \eqn{w_j} is the weight of target block \eqn{j}. The definition of
+\eqn{\mathrm{best}_j(S)} follows \code{strategy}. When
+\code{coancestry_weight > 0}, mean pairwise relationship is subtracted
+from the objective. When \code{target_degree} is supplied, the search
+instead enforces the corresponding internally calibrated relatedness
+ceiling.
 
-A binary GA chromosome (one bit per candidate individual) is used rather
-than a fixed-cardinality representation, with a quadratic penalty for
-deviating from \code{n_founders} selected bits -- standard practice for
-subset-selection problems with the \pkg{GA} package, since it has no
-native hard-cardinality constraint.
+The function conducts \code{n_reps} independent searches, checks founder
+count and any relatedness ceiling, and automatically returns the feasible
+replicate with the greatest complete objective. Breeders do not choose
+manually among GA replicates. The \code{stability} component reports
+agreement, convergence and achieved objective values across all searches.
 }
 \section{Crossing-scheme strategies}{
 
 \describe{
-  \item{\code{"no_selfing"} (default)}{Each block's value is the mean of
-    the \strong{two largest} values among the chosen founders -- two
-    distinct parents must jointly contribute it. Mirrors HapSelect's
-    localGEBV-mode \code{"no_selfing"}.}
-  \item{\code{"selfing"}}{Each block's value is the \strong{single
-    largest} value among the chosen founders -- a parent may be selfed to
-    realise its own value alone, without needing a complementary partner.
-    Mirrors HapSelect's localGEBV-mode \code{"selfing"}.}
-  \item{\code{"OHS"}}{Same computation as \code{"no_selfing"}
-    (two distinct parents required), named for haplotype-mode use where
-    each parent contributes one haplotype copy.}
-  \item{\code{"OPV"}}{Same computation as \code{"selfing"} (single best
-    value) -- "population value" framing: any one founder carrying the
-    favourable haplotype is enough, poolable across the whole founder set
-    rather than requiring a specific complementary pairing.}
-  \item{\code{"Haploid_OHS"}}{Same computation as \code{"selfing"} -- a
-    single (heterozygous) parent may donate two non-homologous gametes.}
+  \item{\code{"no_selfing"}}{Uses the mean of the two greatest block
+    values among distinct selected parents.}
+  \item{\code{"OHS"}}{Optimal Haplotype Selection (OHS); uses the same
+    distinct-parent calculation as \code{"no_selfing"}.}
+  \item{\code{"selfing"}}{Uses the single greatest block value because a
+    selected parent may contribute the block without a distinct partner.}
+  \item{\code{"OPV"}}{Optimal Population Value (OPV); uses the same
+    single-best-value calculation as \code{"selfing"}, interpreted as
+    favourable value available in the selected population.}
+  \item{\code{"Haploid_OHS"}}{Uses the same single-best-value calculation;
+    one heterozygous parent may provide non-homologous gametes.}
 }
-\strong{Why \code{"selfing"}, \code{"OPV"}, and \code{"Haploid_OHS"}
-compute identically:} under the max-pair-average formulation, allowing a
-founder to pair with itself can never do worse than any distinct pair,
-because the largest value in a set is always \eqn{\geq} the mean of
-itself and anything smaller. This is a direct mathematical consequence of
-the fitness formula, not a simplification of convenience -- documented
-here so it isn't mistaken for the three strategies being unimplemented.
-}
-
-\section{Coancestry penalty (optional)}{
-
-By default (\code{coancestry_weight = 0}) this function optimises block
-coverage only, exactly as described in \emph{Details} -- relatedness among
-the chosen founders plays no role in the search, which is why
-\code{\link{plot_parent_selection_pca}} and a manual family-balance check
-are recommended \emph{after} calling this function (see \emph{Choosing
-between this function and truncation_selection()} below). Setting
-\code{coancestry_weight > 0} (with \code{G} supplied) moves that check
-\emph{into} the search itself: the fitness function becomes
-\deqn{\text{fitness}(S) = \sum_j w_j \cdot \text{best}_j(S) -
-\text{coancestry\_weight} \cdot \overline{G}(S)}
-where \eqn{\overline{G}(S)} is the mean off-diagonal pairwise relationship
-among the chosen set \eqn{S} (each individual's own diagonal
-self-relationship/inbreeding term is excluded -- the penalty reflects
-relatedness \emph{between} chosen parents, not their own inbreeding). This
-is a direct, minimal extension of the existing block-coverage GA -- not a
-full optimal-contribution-selection (OCS) formulation (see \emph{Choosing
-between this function and truncation_selection()} for what a full OCS/
-mate-allocation tool adds beyond this).
-
-\strong{Tuning \code{coancestry_weight}:} there is no universal correct
-value -- \eqn{\overline{G}(S)} and the block-coverage sum are on different,
-problem-specific scales (a VanRaden-style GRM is typically much smaller in
-magnitude than a sum of local-GEBV values across many blocks). Start by
-running with \code{coancestry_weight = 0} and inspecting \code{$fitness}'s
-typical magnitude, then choose a weight that makes the coancestry term
-large enough to visibly compete with it; increase further if the
-resulting \code{selected} set is still too related for your program, and
-compare \code{$mean_relationship} across a few candidate weights to see
-the trade-off curve directly. An easier alternative to tuning this by
-hand is \code{target_degree}, described next.
-}
-
-\section{Relatedness ceiling (target_degree, optional)}{
-
-\code{coancestry_weight} has the same scale problem \code{merit_weight}
-does (see \emph{Merit-weighted fitness} below): there is no universal
-correct multiplier, because \eqn{\overline{G}(S)} and the block-coverage
-sum live on different, dataset-specific scales. Rather than estimating a
-matching scale for a weighted trade-off (the approach
-\code{merit_priority} takes for the merit term), \code{target_degree}
-sidesteps the scale problem altogether: it converts your \code{[0, 90]}
-preference into a relatedness CEILING -- a bound in \code{G}'s own real
-units, not an abstract multiplier -- interpolated between two genuinely
-constructed reference groups for your actual candidate pool, exactly
-mirroring how \code{\link{select_parents_ocs}}'s \code{engine = "optisel"}
-interpolates its own kinship bound between two solved frontier extremes:
-\itemize{
-  \item \strong{Gain end (\code{target_degree = 0})}: the feasible,
-    greedy-built high-coverage group (see \emph{Details}) -- extended to
-    also account for \code{merit_weight} when merit is active in this same
-    call, so this reference reflects what the search would actually
-    converge to with no relatedness constraint, not a coverage-only proxy.
-    Its own mean pairwise relationship becomes the ceiling at
-    \code{target_degree = 0} (i.e. no additional constraint beyond what
-    that group naturally has).
-  \item \strong{Diversity end (\code{target_degree = 90})}:
-    \code{\link{select_core_collection}(strategy = "maximin")} run on
-    \code{G} for your candidate pool -- a proven 2-approximation for
-    maximizing the minimum pairwise distance (Gonzalez 1985), built
-    ignoring merit entirely. Its own mean pairwise relationship becomes
-    the ceiling at \code{target_degree = 90}.
-}
-The ceiling at any \code{target_degree} in between is a linear
-interpolation between these two real, feasible reference points. Inside
-the search, exceeding the ceiling is penalised by a squared-violation term
-scaled to dominate any possible coverage/merit gain from crossing it (the
-same soft-constraint idiom already used for the cardinality penalty) --
-so no separate penalty-strength argument is needed.
-
-\strong{Honest limits:} the gain-end reference is a plain greedy hill-
-climb, not a formally guaranteed-near-optimal one, once
-\code{merit_weight > 0} (adding a mean-based merit term breaks the strict
-submodularity argument that gives the coverage-only greedy its proof) --
-still a real, feasible group, just without that guarantee. Separately,
-\code{select_core_collection}'s 2-approximation guarantee covers the
-MINIMUM pairwise distance in its chosen group, not directly the MEAN
-pairwise relationship used here as the diversity-end reference -- a
-principled, reused building block, not a proof about the specific number
-reported. Neither limitation is unique to this feature; they mirror the
-same kind of honestly-stated approximation caveats already documented for
-\code{merit_priority} (see \code{\link{suggest_merit_weight}}) and for
-\code{select_parents_ocs}'s own \code{target_degree}.
-}
-
-\section{Merit-weighted fitness (GA+TS hybrid, optional)}{
-
-By default (\code{merit_weight = 0}) this function's search rewards block
-coverage only, exactly as described in \emph{Details} -- \code{merit_score},
-if supplied at all, only ever acts as a pre-search eligibility floor via
-\code{min_sel_value} (a hard yes/no cutoff), never as something the search
-itself is rewarded for pursuing further. That matters because a floor
-alone does not distinguish between a candidate that barely clears it and
-one that clears it by a wide margin -- both are equally "eligible," and
-among the eligible pool the search optimises purely for which target
-blocks each candidate happens to carry good value at. On a real panel,
-where per-block/local-GEBV estimates carry real estimation noise (they
-are themselves statistical estimates, not ground truth), this can let the
-search lean on a candidate whose apparent block coverage is partly or
-wholly a noisy artefact, provided that candidate clears the floor at all.
-
-Setting \code{merit_weight > 0} closes this gap directly: the fitness
-function becomes
-\deqn{\text{fitness}(S) = \sum_j w_j \cdot \text{best}_j(S) +
-\text{merit\_weight} \cdot \overline{\text{merit\_score}}(S)}
-(combined with the coancestry penalty, when both are active, as a third
-additive term). The search now has a direct, continuous incentive to
-prefer higher-merit candidates \emph{throughout} the eligible pool, not
-merely to avoid excluding low-merit ones -- pulling the result back
-toward \code{\link{truncation_selection}}'s whole-genome-merit ranking
-while still searching for joint block coverage, rather than treating
-merit and coverage as two entirely separate stages (a floor, then an
-unconstrained coverage search). This is the recommended way to combine
-this function with a truncation-selection-style merit signal when you are
-specifically concerned that block-coverage-only selection, run on noisy
-per-block estimates, could otherwise select on noise: a nonzero
-\code{merit_weight} keeps whole-genome merit -- typically a more stable,
-better-estimated signal than any single block's local GEBV -- pulling on
-every candidate's desirability throughout the search, not only at its
-entry gate.
-
-\strong{Tuning \code{merit_weight}:} the same scale caveat as
-\code{coancestry_weight} applies, and for the same reason --
-\eqn{\overline{\text{merit\_score}}(S)} and the block-coverage sum are on
-different, problem-specific scales, so there is no universal correct
-value. Start by running with \code{merit_weight = 0} and inspecting
-\code{$fitness}'s typical magnitude and \code{$mean_merit}'s typical
-magnitude, then choose a weight that makes the merit term large enough to
-visibly compete with the block-coverage sum; compare \code{$selected} and
-\code{$mean_merit} across a few candidate weights (and against a plain
-\code{\link{truncation_selection}} run on the same \code{merit_score}) to
-see the effect directly, exactly as recommended for \code{coancestry_weight}
-above. \code{min_sel_value} and \code{merit_weight} address different
-failure modes and are not substitutes for each other: keep using
-\code{min_sel_value} for a hard floor against candidates you never want
-to consider at all, and add \code{merit_weight} on top of it when you also
-want merit to keep influencing the choice among everyone who clears that
-floor.
-
-\strong{An easier alternative to tuning \code{merit_weight} by hand:} set
-\code{merit_priority} instead (a plain 0-100 "how much do I care about
-merit vs. coverage" dial) and let this function calibrate the matching
-\code{merit_weight} from your own data automatically -- see
-\code{\link{suggest_merit_weight}} for exactly what it computes, why (a
-greedy, provably near-optimal reachable high-coverage group as the
-reference point, not an inflated unreachable one), and what it honestly
-does not solve (there is no single universally "correct" notion of
-comparable scale -- \code{merit_priority}'s suggestion is a well-reasoned
-starting point, not the only defensible number). \code{merit_weight} and
-\code{merit_priority} are mutually exclusive -- pick whichever style suits
-you; you can also call \code{\link{suggest_merit_weight}} first to inspect
-the calibration numbers, then pass a literal \code{merit_weight} yourself
-if you want to fine-tune from there.
-}
-
-\section{GA rigour}{
- replication and convergence:
-A single GA run, taken at face value, tells you nothing about whether its
-answer is a robust optimum or one of several near-equally-good solutions a
-stochastic search happened to land on. This function addresses that
-directly rather than leaving it to the caller:
-\describe{
-  \item{Convergence}{Every replicate's \code{ga_fit@iter} (generations
-    actually run) is checked against \code{maxiter}. Stopping early means
-    \pkg{GA}'s own \code{run}-generations-without-improvement criterion
-    triggered -- a real plateau. Running the full \code{maxiter} without
-    stopping early means the search may not have converged; \code{$converged}
-    surfaces this instead of silently returning a possibly-unconverged
-    result.}
-  \item{Replication}{With \code{n_reps > 1} (default \code{5}), the search
-    is repeated from \code{n_reps} different starting populations/seeds.
-    \code{$stability$selection_freq} reports, for every candidate selected
-    in at least one replicate, the fraction of replicates that selected
-    them -- individuals at \code{1.0} are robustly supported regardless of
-    the GA's random starting point; individuals selected in only one
-    replicate out of several are borderline and worth a second look before
-    committing to them. \code{$stability$fitness_range} shows how much the
-    best achievable fitness varied across replicates -- a narrow range
-    alongside high selection frequencies is the signature of a stable,
-    trustworthy search.}
-}
-This is deliberately more rigorous by default than a single fixed-seed GA
-run: HapSelect's own documented parent-selection GA (see \emph{Description})
-does not report replication stability or a convergence flag at all. Set
-\code{n_reps = 1} only once you have separately confirmed stability, or for
-quick iteration during exploratory analysis.
-}
-
-\section{Choosing between this function and truncation_selection()}{
-
-\code{\link{truncation_selection}} ranks by a single whole-genome score and
-takes the top \code{n_founders}; this function instead searches for the
-\emph{set} of \code{n_founders} that jointly covers the most favourable
-value across a chosen set of target blocks (typically the output of
-\code{\link{select_top_blocks}}). They answer genuinely different
-questions and neither is a strict improvement on the other:
-\describe{
-  \item{\code{truncation_selection()} ignores}{which haplotype blocks each
-    individual carries -- its top-N list can concentrate on the same
-    favourable blocks while leaving others uncovered.}
-  \item{\code{select_parents_ga()} ignores}{whole-genome merit by default,
-    unless \code{merit_score} is supplied via \code{min_sel_value} (a hard
-    pre-search floor), \code{merit_weight} (a soft, continuous term
-    rewarded throughout the search -- see \emph{Merit-weighted fitness
-    (GA+TS hybrid, optional)}), or both together. Without either, a
-    genuinely poor-performing individual who happens to uniquely carry one
-    target block's favourable value will still be selected, purely to
-    cover that block -- and, even with only a floor and no weight, a
-    candidate who barely clears the floor is treated identically to one
-    who clears it by a wide margin. Setting \code{merit_weight > 0} is the
-    tool's own built-in "GA+TS hybrid" mode: it keeps searching for joint
-    block coverage while also rewarding whole-genome merit directly inside
-    the search, which matters most when block-level/local-GEBV estimates
-    carry real estimation noise and a coverage-only search risks selecting
-    on that noise rather than on genuine signal.}
-  \item{\strong{Neither function, by default}}{manages coancestry/
-    inbreeding risk in the chosen set, assigns differential contributions,
-    or decides who mates whom. This function's optional
-    \code{coancestry_weight}/\code{target_degree}/\code{G} arguments (see
-    \emph{Coancestry penalty (optional)} and \emph{Relatedness ceiling
-    (target_degree, optional)}) add a relatedness term to the search
-    itself, but still stop at a flat founder set -- no differential
-    contributions, no mating list. Dedicated optimal-contribution-selection (OCS) and
-    mate-allocation tools (e.g. AlphaMate, Gorjanc lab) solve all three
-    problems jointly, typically maximising gain subject to an explicit
-    coancestry constraint plus continuous contribution optimisation. A
-    practical combined workflow: use this function (or
-    \code{truncation_selection()}) to shortlist candidates worth
-    considering, then hand that shortlist to a dedicated OCS tool for the
-    coancestry-managed contribution and mating decision, rather than
-    treating either function's output as a final mating plan.}
-}
-In practice, run both and compare with
-\code{intersect(ga_out$selected, ts_out$selected)}: a high overlap means
-truncation selection was already close to the GA's answer for this panel;
-a low overlap means block coverage and whole-genome ranking disagree and
-both founder sets are worth inspecting (including a family/diversity check
-via \code{\link{plot_parent_selection_pca}}) before committing to either.
-See the \emph{From Local GEBV to a Crossing Decision} vignette for a full
-worked comparison.
 }
 
 \examples{
 \dontrun{
-res  <- run_haplotype_prediction(geno, snp_info, blocks, blues = blues_vec)
-top  <- select_top_blocks(res$block_importance, n = 15)
-vmat <- res$local_gebv[, top$block_id, drop = FALSE]
-ga_out <- select_parents_ga(vmat, n_founders = 20, strategy = "no_selfing",
-                            seed = 1)
-ga_out$selected
+prediction <- run_haplotype_prediction(
+  geno, snp_info, blocks, blues = phenotype_values
+)
+target <- select_top_blocks(prediction$block_importance, n = 15)
+block_values <- prediction$local_gebv[, target$block_id, drop = FALSE]
+
+selected <- select_parents_ga(
+  value_matrix = block_values,
+  n_founders = 20,
+  strategy = "OHS",
+  n_reps = 5,
+  seed = 2026
+)
+selected$selected
+selected$stability
 }
 
 }
-\references{
-Scrucca L (2013). GA: A Package for Genetic Algorithms in R.
-\emph{Journal of Statistical Software} 53(4):1-37. \doi{10.18637/jss.v053.i04}
-}
 \seealso{
-\code{\link{truncation_selection}}, \code{\link{select_top_blocks}},
-  \code{\link{plot_parent_selection_pca}}, \code{\link{ga_vs_ts_simulation}},
-  \code{\link{suggest_merit_weight}}, \code{\link{select_parents_ocs}} (the
-  \code{target_degree} convention this function reuses),
-  \code{\link{select_core_collection}} (\code{target_degree}'s
-  diversity-end reference)
+\code{\link{select_parents_ga_ts}},
+\code{\link{truncation_selection}},
+\code{\link{select_parents_ocs}},
+\code{\link{select_parents_pareto}}
 }

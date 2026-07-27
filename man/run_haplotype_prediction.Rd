@@ -24,6 +24,7 @@ run_haplotype_prediction(
   n_iter = 6000L,
   burn_in = 1000L,
   seed = NULL,
+  min_reliability = 0.3,
   verbose = TRUE,
   ploidy = 2L
 )
@@ -101,6 +102,12 @@ Defaults \code{6000}/\code{1000}.}
 \item{seed}{Integer or \code{NULL}. Random seed for the Bayesian
 methods (ignored otherwise). Default \code{NULL}.}
 
+\item{min_reliability}{Numeric in [0, 1]. Minimum GEBV reliability for an
+individual to be marked \code{recommendable} in
+\code{gebv_uncertainty}. Default \code{0.30}. Methods that do not expose
+prediction error variance return missing reliability and are not
+promoted as recommendations.}
+
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
 
 \item{ploidy}{Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
@@ -108,7 +115,7 @@ encoding. Default \code{2L} (diploid, unchanged from previous releases).
 Passed to \code{\link{backsolve_snp_effects}}/
 \code{\link{estimate_marker_effects}}/\code{\link{compute_local_gebv}}
 so marker effects and local GEBVs use ploidy-generalised VanRaden
-centering (\eqn{\text{ploidy} \cdot p} instead of \eqn{2p}). Does
+centring (\eqn{\text{ploidy} \cdot p} instead of \eqn{2p}). Does
 \strong{not} affect the shared GRM (\code{G}), which is always built
 from the haplotype-allele feature matrix -- itself derived from
 HapBlockR's diploid-only \code{hap1}/\code{hap2} phased representation,
@@ -129,6 +136,9 @@ Named list. For single-trait runs, contains:
     dominance)"} when \code{include_dominance = TRUE}.}
   \item{\code{include_dominance}}{Logical, echoes the argument.}
   \item{\code{gebv}}{Named numeric vector of (additive) GEBV.}
+  \item{\code{gebv_uncertainty}}{Data frame containing individual GEBV,
+    prediction error variance, reliability, and the minimum-reliability
+    recommendation gate.}
   \item{\code{dominance_deviation}}{Named numeric vector of dominance
     deviations, or \code{NULL} when \code{include_dominance = FALSE}.}
   \item{\code{total_genetic_value}}{\code{gebv + dominance_deviation}, or

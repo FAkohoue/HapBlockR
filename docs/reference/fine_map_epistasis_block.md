@@ -36,6 +36,7 @@ fine_map_epistasis_block(
   sig_metric = c("p_simplem_sidak", "p_simplem", "p_bonf", "p_fdr"),
   meff_percent_cut = 0.995,
   lasso_nfolds = 5L,
+  lasso_seed = 42L,
   verbose = TRUE
 )
 ```
@@ -93,6 +94,11 @@ fine_map_epistasis_block(
 - lasso_nfolds:
 
   Integer. CV folds for glmnet lambda selection. Default `5L`.
+
+- lasso_seed:
+
+  Integer. Random seed used to construct balanced LASSO cross-validation
+  folds. Default `42L`.
 
 - verbose:
 

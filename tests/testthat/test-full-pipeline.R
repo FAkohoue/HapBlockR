@@ -63,6 +63,9 @@ test_that("full pipeline: prediction through mate allocation and diversity check
     seed        = 1L,
     verbose     = FALSE
   )
+  expect_true(all(c("id", "gebv", "PEV", "reliability",
+                    "recommendable") %in% names(pred$gebv_uncertainty)))
+  expect_equal(pred$gebv_uncertainty$id, names(pred$gebv))
   expect_type(pred$gebv, "double")
   expect_false(is.null(names(pred$gebv)))
   expect_true(all(ids %in% names(pred$gebv)))
@@ -116,7 +119,6 @@ test_that("full pipeline: prediction through mate allocation and diversity check
       run            = 8L,
       seed           = 1L,
       verbose        = FALSE,
-      merit_score    = pred$gebv,
       n_reps         = 1L
     )
     expect_equal(length(ga_sel$selected), n_founders)
@@ -148,8 +150,9 @@ test_that("full pipeline: prediction through mate allocation and diversity check
   expect_true(length(unique(family[fam_pct$selected])) <= 3L)
   expect_true(all(fam_pct$selected %in% ids))
 
-  # "sd_threshold": within-family members within 1 SD of that family's own
-  # best -- a threshold rule, not a fixed count/percentage
+  # "sd_threshold": members of retained families scoring at least one SD
+  # above the eligible population mean -- a threshold rule, not a fixed
+  # count/percentage
   fam_sd <- select_parents_by_family(
     score = pred$gebv, family = family, n_families = 3L,
     family_select_mode = "sd_threshold", sd_threshold = 1,

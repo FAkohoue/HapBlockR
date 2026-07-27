@@ -20,8 +20,10 @@ select_core_collection(
   strategy = c("maximin", "mean_distance"),
   merit = NULL,
   min_sel_value = NULL,
-  min_sel_mode = c("value", "percentile", "sd_below_mean"),
+  min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+    "sd_below_mean"),
   seed = NULL,
+  metric_tolerance = sqrt(.Machine$double.eps),
   verbose = TRUE
 )
 ```
@@ -42,10 +44,10 @@ select_core_collection(
 
   Character, one of `"relationship"` (default) or `"distance"`. If
   `"relationship"`, `G` is converted to a genetic distance matrix via
-  \\D\_{ij} = G\_{ii} + G\_{jj} - 2G\_{ij}\\ (the exact identity
-  relating a Gram/relationship matrix to squared Euclidean distance in
-  the space it represents – not an approximation). If `"distance"`, `G`
-  is used as a distance matrix directly.
+  \\D\_{ij} = \sqrt{G\_{ii} + G\_{jj} - 2G\_{ij}}\\. The expression
+  inside the square root is squared Euclidean distance; taking the
+  square root is necessary for the metric guarantee used by the maximin
+  strategy. If `"distance"`, `G` is used as a distance matrix directly.
 
 - strategy:
 
@@ -58,15 +60,19 @@ select_core_collection(
   = individual IDs. Only used together with `min_sel_value` to
   pre-filter the candidate pool; does not otherwise influence which
   individuals are chosen (this function optimizes diversity, not merit,
-  among whichever candidates remain eligible).
+  among whichever candidates remain eligible). Values must be
+  directionally aligned so that larger always means greater breeding
+  merit; reverse lower-is-better traits before constructing this vector.
 
 - min_sel_value, min_sel_mode:
 
   Optional merit floor applied to `merit` before diversity selection,
   via the same `.apply_merit_floor()` logic used by
-  [`truncation_selection`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)/[`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
-  – `min_sel_mode` one of `"value"`, `"percentile"`, `"sd_below_mean"`.
-  Both ignored if `merit` is `NULL`.
+  [`truncation_selection`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)
+  and
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md)
+  – `min_sel_mode` one of `"value"`, `"percentile"`, `"sd_above_mean"`,
+  or `"relaxed_pool"`. Both ignored if `merit` is `NULL`.
 
 - seed:
 
@@ -74,6 +80,12 @@ select_core_collection(
   `n_core = 1` case (no merit supplied), where the single selected
   individual is otherwise chosen at random; included for reproducibility
   and API consistency with this package's other selection functions.
+
+- metric_tolerance:
+
+  Numeric tolerance used for symmetry, positive-semidefiniteness,
+  zero-diagonal, and triangle-inequality validation. Default
+  `sqrt(.Machine$double.eps)`.
 
 - verbose:
 

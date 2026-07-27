@@ -210,6 +210,38 @@ test_that("usefulness_criterion (block_independent): output is ranked by descend
   expect_true(all(diff(uc$UC) <= 1e-8))  # non-increasing
 })
 
+test_that("usefulness_criterion reports downside risk and enforces reliability", {
+  parents <- rownames(.pred_u$local_gebv)[1:6]
+  gebv_se <- setNames(rep(0.2, length(.pred_u$gebv)), names(.pred_u$gebv))
+  reliability <- setNames(rep(0.8, length(.pred_u$gebv)),
+                          names(.pred_u$gebv))
+  reliability[parents[1]] <- 0.1
+  uc <- usefulness_criterion(
+    parent_ids = parents,
+    gebv = .pred_u$gebv,
+    variance_model = "block_independent",
+    block_importance = .pred_u$block_importance,
+    local_gebv = .pred_u$local_gebv,
+    n_progeny = 50L,
+    n_sim = 500L,
+    seed = 11L,
+    gebv_se = gebv_se,
+    gebv_reliability = reliability,
+    downside_quantile = 0.10,
+    min_reliability = 0.30,
+    verbose = FALSE
+  )
+  expect_true(all(c(
+    "downside_value", "UC_SE", "UC_lower_95", "UC_upper_95",
+    "cross_reliability", "recommendation_eligible", "eligibility_reason"
+  ) %in% names(uc)))
+  expect_true(all(uc$downside_value <= uc$mid_parent_gebv))
+  expect_true(all(uc$UC_lower_95 <= uc$UC))
+  includes_low_parent <- uc$parent1 == parents[1] | uc$parent2 == parents[1]
+  expect_false(any(uc$recommendation_eligible[includes_low_parent]))
+  expect_true(all(uc$recommendation_eligible[!includes_low_parent]))
+})
+
 test_that("usefulness_criterion: cross_pairs argument scores a specific, non-exhaustive list", {
   parents <- rownames(.pred_u$local_gebv)[1:6]
   pairs <- data.frame(parent1 = parents[1:3], parent2 = parents[4:6],
@@ -290,6 +322,55 @@ test_that("usefulness_criterion (phased): runs on phased haplotypes and returns 
            "selection_intensity", "UC", "rank")
   expect_true(all(req %in% names(uc)))
   expect_equal(nrow(uc), choose(length(parents), 2L))
+})
+
+test_that("usefulness_criterion (phased): propagates phasing reliability", {
+  parents <- paste0("ind", 1:5)
+  prediction_reliability <- setNames(
+    rep(0.85, length(.gebv40)), names(.gebv40)
+  )
+  phase_reliability <- setNames(
+    rep(0.75, length(.gebv40)), names(.gebv40)
+  )
+  phase_reliability[parents[1]] <- 0.20
+  uc <- usefulness_criterion(
+    parent_ids = parents,
+    gebv = .gebv40,
+    variance_model = "phased",
+    block_importance = .bi_ph,
+    haplotypes = .haps_ph,
+    snp_info = .si20,
+    snp_effects = .snpfx20,
+    gebv_reliability = prediction_reliability,
+    phasing_reliability = phase_reliability,
+    min_reliability = 0.30,
+    verbose = FALSE
+  )
+  low_phase <- uc$parent1 == parents[1] | uc$parent2 == parents[1]
+  expect_false(any(uc$recommendation_eligible[low_phase]))
+  expect_true(all(uc$recommendation_eligible[!low_phase]))
+  expect_equal(
+    uc$cross_reliability[!low_phase],
+    rep(0.75, sum(!low_phase))
+  )
+
+  missing_phase <- usefulness_criterion(
+    parent_ids = parents,
+    gebv = .gebv40,
+    variance_model = "phased",
+    block_importance = .bi_ph,
+    haplotypes = .haps_ph,
+    snp_info = .si20,
+    snp_effects = .snpfx20,
+    gebv_reliability = prediction_reliability,
+    min_reliability = 0.30,
+    verbose = FALSE
+  )
+  expect_false(any(missing_phase$recommendation_eligible))
+  expect_true(all(
+    missing_phase$eligibility_reason ==
+      "phasing_reliability_not_supplied"
+  ))
 })
 
 test_that("usefulness_criterion (phased): errors when haplotypes/snp_info/snp_effects are missing", {

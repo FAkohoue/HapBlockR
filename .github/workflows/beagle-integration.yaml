@@ -1,0 +1,59 @@
+name: Beagle integration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  pull_request:
+    paths:
+      - "R/haplotypes.R"
+      - "R/phasing_accuracy.R"
+      - "R/pipeline.R"
+      - "inst/extdata/BEAGLE.md"
+      - "tests/testthat/test-phasing.R"
+      - ".github/workflows/beagle-integration.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  beagle-5-5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAPBLOCKR_BEAGLE_REQUIRED: "true"
+      HAPBLOCKR_BEAGLE_JAR: "${{ github.workspace }}/.external/beagle.27Feb25.75f.jar"
+      BEAGLE_SHA256: "7319f4af9638be05c18dcc1bfb8fb41a58a09293507ebf0d54617d0e40df5a70"
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          needs: check
+
+      - name: Download declared Beagle 5.5 dependency
+        shell: bash
+        run: |
+          mkdir -p .external
+          curl --fail --location --retry 3 \
+            https://faculty.washington.edu/browning/beagle/beagle.27Feb25.75f.jar \
+            --output "$HAPBLOCKR_BEAGLE_JAR"
+          test -s "$HAPBLOCKR_BEAGLE_JAR"
+          echo "$BEAGLE_SHA256  $HAPBLOCKR_BEAGLE_JAR" | sha256sum --check
+          java -version
+
+      - name: Run phasing identity, provenance, and integration tests
+        shell: Rscript {0}
+        run: |
+          devtools::load_all(quiet = TRUE)
+          testthat::test_file(
+            "tests/testthat/test-phasing.R",
+            reporter = "summary",
+            stop_on_failure = TRUE
+          )

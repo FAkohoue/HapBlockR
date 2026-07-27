@@ -36,7 +36,8 @@ select_parents_by_family(
   check_value = NULL,
   check_margin_pct = NULL,
   min_sel_value = NULL,
-  min_sel_mode = c("value", "percentile", "sd_below_mean"),
+  min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+    "sd_below_mean"),
   ensure_haplotype_diversity = FALSE,
   value_matrix = NULL,
   haplotypes = NULL,
@@ -62,7 +63,10 @@ select_parents_by_family(
 
   Named numeric vector, e.g. whole-genome GEBV
   (`run_haplotype_prediction()$gebv`) or any other selection index.
-  Names are individual IDs.
+  Names are individual IDs. Values must be directionally aligned so that
+  larger always means greater breeding merit; reverse lower-is-better
+  traits, or assign them negative selection-index weights, before
+  calling.
 
 - family:
 
@@ -128,7 +132,9 @@ select_parents_by_family(
 
   Optional merit floor applied to `score` *before* group ranking or
   within-group selection, exactly as in
-  [`truncation_selection`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)/[`select_parents_ga`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md).
+  [`truncation_selection`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md)
+  and
+  [`select_parents_ga_ts`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga_ts.md).
   Default `min_sel_value = NULL` applies no floor.
 
 - ensure_haplotype_diversity:
@@ -253,7 +259,7 @@ select_parents_by_family(
 
 ## Value
 
-Named list:
+A `hapblockr_result` list:
 
 - `selected`:
 
@@ -351,6 +357,14 @@ Named list:
 
   Numeric. Realised mean off-diagonal pairwise relationship among all of
   `selected`. `NA` unless `G` was supplied.
+
+- `result_contract`:
+
+  The `hapblockr_result` contract (parameters, identifiers,
+  transformations, quality gates, `by_family` as the decision table, and
+  `family_ranking` as the uncertainty table). Check with
+  [`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
+  before treating `selected` as a recommendation.
 
 ## Details
 
@@ -534,11 +548,14 @@ A family/group is excluded entirely – before ranking, before it can
 count toward `n_families` – whenever its eligible membership does not
 exceed the number of lines that would actually be taken from it: under
 `"count"`, `n_per_family` itself when it is a single scalar (the common,
-flat-quota case), or `rank_k` when `n_per_family` is a named vector for
-uneven per-group quotas (since `n_per_family` is then only defined for
-whichever groups end up chosen, which is not yet known at exclusion time
-– `rank_k`, "the number of lines this group's ranking is based on," is
-used as the practical stand-in); under `"percentage"`, that group's OWN
+flat-quota case); when `n_per_family` is a named vector for uneven
+per-group quotas, `rank_k` stands in as the threshold for every group,
+named or not – `n_per_family` is only guaranteed to be defined for
+whichever groups end up chosen, and which groups are chosen is not
+decided until after ranking (see `select_parents_by_family`'s internal
+`.resolve_n_per_family()`), so a name that already appears in
+`n_per_family` at this pre-ranking stage cannot yet be trusted as that
+group's real quota; under `"percentage"`, that group's OWN
 `ceiling(pct_per_family/100 * group_size)`. Below that size there is no
 genuine "select the best of" decision for that group at all – every
 eligible member would be taken regardless of ranking – so including it

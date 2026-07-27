@@ -11,8 +11,10 @@ select_core_collection(
   strategy = c("maximin", "mean_distance"),
   merit = NULL,
   min_sel_value = NULL,
-  min_sel_mode = c("value", "percentile", "sd_below_mean"),
+  min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+    "sd_below_mean"),
   seed = NULL,
+  metric_tolerance = sqrt(.Machine$double.eps),
   verbose = TRUE
 )
 }
@@ -24,9 +26,10 @@ individual IDs), e.g. from \code{\link{compute_haplotype_grm}}.}
 
 \item{type}{Character, one of \code{"relationship"} (default) or
 \code{"distance"}. If \code{"relationship"}, \code{G} is converted to a
-genetic distance matrix via \eqn{D_{ij} = G_{ii} + G_{jj} - 2G_{ij}}
-(the exact identity relating a Gram/relationship matrix to squared
-Euclidean distance in the space it represents -- not an approximation).
+genetic distance matrix via
+\eqn{D_{ij} = \sqrt{G_{ii} + G_{jj} - 2G_{ij}}}. The expression inside
+the square root is squared Euclidean distance; taking the square root is
+necessary for the metric guarantee used by the maximin strategy.
 If \code{"distance"}, \code{G} is used as a distance matrix directly.}
 
 \item{strategy}{Character, one of \code{"maximin"} (default) or
@@ -37,20 +40,28 @@ index), names = individual IDs. Only used together with
 \code{min_sel_value} to pre-filter the candidate pool; does not
 otherwise influence which individuals are chosen (this function
 optimizes diversity, not merit, among whichever candidates remain
-eligible).}
+eligible). Values must be directionally aligned so that larger always
+means greater breeding merit; reverse lower-is-better traits before
+constructing this vector.}
 
 \item{min_sel_value, min_sel_mode}{Optional merit floor applied to
 \code{merit} before diversity selection, via the same
 \code{.apply_merit_floor()} logic used by
-\code{\link{truncation_selection}}/\code{\link{select_parents_ga}} --
+\code{\link{truncation_selection}} and
+\code{\link{select_parents_ga_ts}} --
 \code{min_sel_mode} one of \code{"value"}, \code{"percentile"},
-\code{"sd_below_mean"}. Both ignored if \code{merit} is \code{NULL}.}
+\code{"sd_above_mean"}, or \code{"relaxed_pool"}. Both ignored if
+\code{merit} is \code{NULL}.}
 
 \item{seed}{Optional integer. Currently only relevant for the
 degenerate \code{n_core = 1} case (no merit supplied), where the single
 selected individual is otherwise chosen at random; included for
 reproducibility and API consistency with this package's other
 selection functions.}
+
+\item{metric_tolerance}{Numeric tolerance used for symmetry,
+positive-semidefiniteness, zero-diagonal, and triangle-inequality
+validation. Default \code{sqrt(.Machine$double.eps)}.}
 
 \item{verbose}{Logical, default \code{TRUE}.}
 }

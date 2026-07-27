@@ -89,7 +89,7 @@ cluster_selection_groups(
   Integer `>= 2`. Number of clusters to cut the population into.
   **Required** – this package does not silently guess a number of
   clusters for you. If you don't already have a biological reason for a
-  specific number (e.g. "this program has 3 founder families"), a
+  specific number (e.g. "this programme has 3 founder families"), a
   reasonable starting point is to try a small range (e.g. 2-6) and look
   at `cluster_fit` (the `hclust`/ `kmeans` object returned) with
   standard diagnostics (`plot(cluster_fit)` for a dendrogram; `kmeans`'s

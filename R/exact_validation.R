@@ -1,7 +1,7 @@
 # ==============================================================================
 # exact_validation.R
 #
-# Exact optimization as a validation check -- strategy 5 of six planned
+# Exact optimisation as a validation check -- strategy 5 of six planned
 # parent-selection strategy extensions. Every mate-allocation tool this
 # package uses or wraps (SimpleMating::selectCrosses()/GOCS(), AlphaMate,
 # select_parents_ga()'s GA search) is a HEURISTIC: none of them is
@@ -94,14 +94,17 @@
 #'   blindly.
 #' @param verbose Logical, default \code{TRUE}.
 #'
-#' @return A list with \code{exact_plan} (data frame: the optimal cross
-#'   selection, a subset of \code{data}'s rows), \code{exact_objective}
-#'   (the true optimal total criterion), \code{n_candidates} (candidate
-#'   crosses considered after culling), \code{status} (lpSolve's solver
-#'   status; \code{0} = optimal solution found), and, if
-#'   \code{heuristic_plan} was supplied, \code{heuristic_objective} and
-#'   \code{gap_pct} (the heuristic plan's percentage shortfall below the
-#'   exact optimum).
+#' @return A \code{hapblockr_result} list with \code{exact_plan} (data frame:
+#'   the optimal cross selection, a subset of \code{data}'s rows, also the
+#'   decision table), \code{exact_objective} (the true optimal total
+#'   criterion), \code{n_candidates} (candidate crosses considered after
+#'   culling), \code{status} (lpSolve's solver status; \code{0} = optimal
+#'   solution found), and, if \code{heuristic_plan} was supplied,
+#'   \code{heuristic_objective} and \code{gap_pct} (the heuristic plan's
+#'   percentage shortfall below the exact optimum). Also carries
+#'   \code{result_contract} (parameters, identifiers, quality gates); check
+#'   with \code{\link{validate}} before treating \code{exact_plan} as a
+#'   recommendation.
 #'
 #' @seealso \code{\link{select_parents_ocs}}, \code{\link{usefulness_criterion}}
 #' @export
@@ -119,6 +122,7 @@ validate_crosses_exact <- function(
     max_vars            = 2000L,
     verbose             = TRUE
 ) {
+  result_call <- match.call()
   if (!requireNamespace("lpSolve", quietly = TRUE))
     stop("lpSolve is required for validate_crosses_exact(). Install with: ",
          "install.packages('lpSolve')", call. = FALSE)
@@ -248,5 +252,30 @@ validate_crosses_exact <- function(
             " cross(es).")
   }
 
-  out
+  .add_hapblockr_contract(
+    result = out,
+    method = "validate_crosses_exact",
+    call = result_call,
+    parameters = list(
+      n_cross = n_cross, max_cross = max_cross,
+      culling_pairwise_k = culling_pairwise_k, max_vars = max_vars
+    ),
+    sample_ids = parents,
+    inputs = list(data = data),
+    transformations = c(
+      "binary ILP maximisation (lpSolve)",
+      if (!is.null(culling_pairwise_k)) "pairwise-relatedness culling" else NULL
+    ),
+    quality_gates = c(
+      # sol$status is lpSolve's own return type (documented only as
+      # "Numeric indicator: 0 = success"), not guaranteed to be a double
+      # 0 rather than an integer 0L -- identical(sol$status, 0) silently
+      # fails whenever it's the latter, since identical() treats integer
+      # and double as different types even when numerically equal. `==`
+      # compares by value regardless of that distinction.
+      optimal_solution_found = isTRUE(sol$status == 0),
+      meets_target_cross_count = nrow(exact_plan) == n_cross
+    ),
+    decision_table = exact_plan
+  )
 }

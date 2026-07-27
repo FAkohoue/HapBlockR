@@ -955,12 +955,15 @@
 #' count toward \code{n_families} -- whenever its eligible membership does
 #' not exceed the number of lines that would actually be taken from it:
 #' under \code{"count"}, \code{n_per_family} itself when it is a single
-#' scalar (the common, flat-quota case), or \code{rank_k} when
-#' \code{n_per_family} is a named vector for uneven per-group quotas (since
-#' \code{n_per_family} is then only defined for whichever groups end up
-#' chosen, which is not yet known at exclusion time -- \code{rank_k}, "the
-#' number of lines this group's ranking is based on," is used as the
-#' practical stand-in); under \code{"percentage"}, that group's OWN
+#' scalar (the common, flat-quota case); when \code{n_per_family} is a
+#' named vector for uneven per-group quotas, \code{rank_k} stands in as the
+#' threshold for every group, named or not -- \code{n_per_family} is only
+#' guaranteed to be defined for whichever groups end up chosen, and which
+#' groups are chosen is not decided until after ranking (see
+#' \code{\link{select_parents_by_family}}'s internal
+#' \code{.resolve_n_per_family()}), so a name that already appears in
+#' \code{n_per_family} at this pre-ranking stage cannot yet be trusted as
+#' that group's real quota; under \code{"percentage"}, that group's OWN
 #' \code{ceiling(pct_per_family/100 * group_size)}. Below that size there
 #' is no genuine "select the best of" decision for that group at all --
 #' every eligible member would be taken regardless of ranking -- so
@@ -1045,7 +1048,9 @@
 #'
 #' @param score Named numeric vector, e.g. whole-genome GEBV
 #'   (\code{run_haplotype_prediction()$gebv}) or any other selection index.
-#'   Names are individual IDs.
+#'   Names are individual IDs. Values must be directionally aligned so that
+#'   larger always means greater breeding merit; reverse lower-is-better
+#'   traits, or assign them negative selection-index weights, before calling.
 #' @param family Named character or factor vector giving each individual's
 #'   pedigree/family group. Required when \code{group_by = "family"} (used
 #'   as the actual grouping). Optional when \code{group_by =
@@ -1112,7 +1117,8 @@
 #'   corrected family ranking}.
 #' @param min_sel_value,min_sel_mode Optional merit floor applied to
 #'   \code{score} \emph{before} group ranking or within-group selection,
-#'   exactly as in \code{\link{truncation_selection}}/\code{\link{select_parents_ga}}.
+#'   exactly as in \code{\link{truncation_selection}} and
+#'   \code{\link{select_parents_ga_ts}}.
 #'   Default \code{min_sel_value = NULL} applies no floor.
 #' @param ensure_haplotype_diversity Logical, default \code{FALSE}. See
 #'   \emph{Haplotype/coverage diversity adjustment (optional)}. Requires
@@ -1162,7 +1168,7 @@
 #' @param verbose Logical, default \code{TRUE}. Print informational messages
 #'   (shrinkage fallback, skipped diagnostics).
 #'
-#' @return Named list:
+#' @return A \code{hapblockr_result} list:
 #' \describe{
 #'   \item{\code{selected}}{Character vector of all selected individual IDs,
 #'     ordered by group rank, then by selection order within each group.}
@@ -1233,6 +1239,11 @@
 #'   \item{\code{mean_relationship}}{Numeric. Realised mean off-diagonal
 #'     pairwise relationship among all of \code{selected}. \code{NA} unless
 #'     \code{G} was supplied.}
+#'   \item{\code{result_contract}}{The \code{hapblockr_result} contract
+#'     (parameters, identifiers, transformations, quality gates,
+#'     \code{by_family} as the decision table, and \code{family_ranking} as
+#'     the uncertainty table). Check with \code{\link{validate}} before
+#'     treating \code{selected} as a recommendation.}
 #' }
 #'
 #' @section When to reach for this instead of truncation_selection() or select_parents_ga():
@@ -1327,6 +1338,8 @@ select_parents_by_family <- function(score,
                                      check_margin_pct = NULL,
                                      min_sel_value = NULL,
                                      min_sel_mode  = c("value", "percentile",
+                                                      "sd_above_mean",
+                                                      "relaxed_pool",
                                                       "sd_below_mean"),
                                      ensure_haplotype_diversity = FALSE,
                                      value_matrix = NULL,
@@ -1346,6 +1359,7 @@ select_parents_by_family <- function(score,
                                      n_clusters = NULL,
                                      cluster_method = "ward.D2",
                                      verbose = TRUE) {
+  result_call <- match.call()
   if (is.null(names(score)))
     stop("score must be a named numeric vector (names = individual IDs).",
          call. = FALSE)
@@ -1583,9 +1597,23 @@ select_parents_by_family <- function(score,
   too_small <- character(0)
   excl_threshold_desc <- NULL
   if (family_select_mode == "count") {
-    excl_threshold <- if (length(n_per_family) == 1L) as.integer(n_per_family) else rank_k
-    too_small <- names(grp_sizes)[grp_sizes <= excl_threshold]
-    excl_threshold_desc <- paste0("<= ", excl_threshold, " eligible member(s)")
+    if (length(n_per_family) == 1L) {
+      excl_threshold <- as.integer(n_per_family)
+      too_small <- names(grp_sizes)[grp_sizes <= excl_threshold]
+      excl_threshold_desc <- paste0("<= ", excl_threshold, " eligible member(s)")
+    } else {
+      # Named per-family quota vector: n_per_family is only guaranteed to be
+      # defined for whichever families end up CHOSEN, and which families
+      # are chosen is not decided until after ranking, further below (see
+      # .resolve_n_per_family()) -- so at this pre-ranking stage, a name
+      # that happens to already appear in n_per_family cannot yet be
+      # trusted as "this family's real quota": it may not even survive to
+      # be one of the chosen families. Every family, named or not, is
+      # therefore checked against the generic rank_k stand-in here, exactly
+      # as in the fully-unnamed case.
+      too_small <- names(grp_sizes)[as.numeric(grp_sizes) <= rank_k]
+      excl_threshold_desc <- paste0("<= rank_k = ", rank_k, " eligible member(s)")
+    }
   } else if (family_select_mode == "percentage") {
     take_f    <- ceiling(pct_per_family / 100 * as.numeric(grp_sizes))
     too_small <- names(grp_sizes)[as.numeric(grp_sizes) <= take_f]
@@ -1922,7 +1950,7 @@ select_parents_by_family <- function(score,
     }
   }
 
-  list(
+  result <- list(
     selected                    = by_family$individual,
     by_family                   = by_family,
     family_ranking              = fam_tab,
@@ -1953,5 +1981,34 @@ select_parents_by_family <- function(score,
     diversity_method            = diversity_method,
     within_group_target_degree  = within_group_target_degree,
     mean_relationship           = mean_relationship
+  )
+
+  .add_hapblockr_contract(
+    result = result,
+    method = "select_parents_by_family",
+    call = result_call,
+    parameters = list(
+      n_families = n_families, n_per_family = n_per_family,
+      family_select_mode = family_select_mode, rank_k = rank_k,
+      family_rank_method = family_rank_method,
+      variance_method = variance_method, bias_correction = bias_correction,
+      group_by = group_by, n_clusters = n_clusters,
+      ensure_haplotype_diversity = isTRUE(ensure_haplotype_diversity),
+      diversity_method = diversity_method
+    ),
+    sample_ids = names(score),
+    inputs = list(score = score, family = family),
+    transformations = c(
+      paste("family ranking via", family_rank_method),
+      paste("variance estimation via", variance_method),
+      paste("bias correction:", bias_correction)
+    ),
+    quality_gates = c(
+      has_selection = length(by_family$individual) > 0L,
+      no_zero_selected_groups = length(zero_selected_groups) == 0L
+    ),
+    fallbacks = if (length(excluded_groups)) as.character(excluded_groups) else character(0),
+    decision_table = by_family,
+    uncertainty = fam_tab
   )
 }

@@ -20,7 +20,7 @@ logic. Supply your own if you used a bended or tuned G in the GBLUP.}
 \item{ploidy}{Integer >= 2. Ploidy level of \code{geno_matrix}'s dosage
 encoding (2 = diploid 0/1/2, 4 = autotetraploid 0/1/2/3/4, etc.).
 Default \code{2L} (diploid, unchanged behaviour from previous releases).
-Generalises the VanRaden (2008) centering/scaling from \eqn{2p}/\eqn{2\sum
+Generalises the VanRaden (2008) centring/scaling from \eqn{2p}/\eqn{2\sum
 p(1-p)} to \eqn{\text{ploidy} \cdot p}/\eqn{\text{ploidy} \cdot \sum p(1-p)}
 (Endelman et al. 2018-style dosage scaling). Only the dosage arithmetic
 generalises here -- HapBlockR's phased haplotype representation

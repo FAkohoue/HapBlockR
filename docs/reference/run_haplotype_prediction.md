@@ -37,6 +37,7 @@ run_haplotype_prediction(
   n_iter = 6000L,
   burn_in = 1000L,
   seed = NULL,
+  min_reliability = 0.3,
   verbose = TRUE,
   ploidy = 2L
 )
@@ -151,6 +152,13 @@ run_haplotype_prediction(
   Integer or `NULL`. Random seed for the Bayesian methods (ignored
   otherwise). Default `NULL`.
 
+- min_reliability:
+
+  Numeric in \[0, 1\]. Minimum GEBV reliability for an individual to be
+  marked `recommendable` in `gebv_uncertainty`. Default `0.30`. Methods
+  that do not expose prediction error variance return missing
+  reliability and are not promoted as recommendations.
+
 - verbose:
 
   Logical. Print progress. Default `TRUE`.
@@ -162,7 +170,7 @@ run_haplotype_prediction(
   [`backsolve_snp_effects`](https://FAkohoue.github.io/HapBlockR/reference/backsolve_snp_effects.md)/
   [`estimate_marker_effects`](https://FAkohoue.github.io/HapBlockR/reference/estimate_marker_effects.md)/[`compute_local_gebv`](https://FAkohoue.github.io/HapBlockR/reference/compute_local_gebv.md)
   so marker effects and local GEBVs use ploidy-generalised VanRaden
-  centering (\\\text{ploidy} \cdot p\\ instead of \\2p\\). Does **not**
+  centring (\\\text{ploidy} \cdot p\\ instead of \\2p\\). Does **not**
   affect the shared GRM (`G`), which is always built from the
   haplotype-allele feature matrix – itself derived from HapBlockR's
   diploid-only `hap1`/`hap2` phased representation, so its own dosage
@@ -203,6 +211,11 @@ Named list. For single-trait runs, contains:
 - `gebv`:
 
   Named numeric vector of (additive) GEBV.
+
+- `gebv_uncertainty`:
+
+  Data frame containing individual GEBV, prediction error variance,
+  reliability, and the minimum-reliability recommendation gate.
 
 - `dominance_deviation`:
 

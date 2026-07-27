@@ -115,9 +115,14 @@ Default \code{0.80}.}
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
 }
 \value{
-A named list of class \code{c("HapBlockR_effect_concordance", "list")}
-  with the same structure as \code{\link{compare_block_effects}}. Additional
-  columns in \code{$concordance} specific to GWAS input:
+A \code{hapblockr_result} of class
+  \code{c("HapBlockR_effect_concordance", "hapblockr_result", "list")}
+  with the same structure as \code{\link{compare_block_effects}} --
+  including a genuine 2-population, 1-df Cochran's Q for the
+  single-lead-SNP-per-block case (\code{Q_stat} is never \code{NA}) --
+  plus a \code{result_contract}. Check with \code{\link{validate}} before
+  treating a block as replicated. Additional columns in \code{$concordance}
+  specific to GWAS input:
   \itemize{
     \item \code{lead_marker_pop1}, \code{lead_marker_pop2} - lead SNP ID from
       each population (same SNP = same tag; different SNP = different LD

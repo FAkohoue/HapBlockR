@@ -140,8 +140,18 @@ compute_rV2 <- function(X, digits = -1L, n_threads = 1L) {
 get_V_inv_sqrt <- function(V, method = c("chol", "eigen")) {
   method <- match.arg(method)
   if (method == "chol") {
+    # chol(V) returns upper-triangular R with t(R) %*% R = V. We need A with
+    # A V t(A) = I. Setting A = t(R)^-1 gives:
+    #   A V t(A) = t(R)^-1 (t(R) R) R^-1 = R R^-1 = I.        (correct)
+    # A = R^-1 (i.e. backsolve(R, diag(n)) WITHOUT the transpose) does NOT
+    # satisfy this except when R is symmetric (only the diagonal-V special
+    # case) -- R^-1 V t(R^-1) != I in general for a non-diagonal V, silently
+    # defeating the whole point of rV2's kinship whitening. Caught by
+    # comparing against a genuine non-diagonal kinship matrix; the previous
+    # test suite only ever exercised diagonal V, where chol(V) is itself
+    # diagonal (hence trivially symmetric) and so could not expose this.
     R <- chol(V)
-    backsolve(R, diag(nrow(V)))
+    t(backsolve(R, diag(nrow(V))))
   } else {
     eig  <- eigen(V, symmetric = TRUE)
     vals <- pmax(eig$values, 1e-6)

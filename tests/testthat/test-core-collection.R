@@ -32,8 +32,7 @@ dimnames(.cc_D) <- list(.cc_ids, .cc_ids)
 
 # Relationship-style Gram matrix (type = "relationship"): G_ij = x_i * x_j,
 # so D_ij = G_ii + G_jj - 2*G_ij = x_i^2 + x_j^2 - 2*x_i*x_j = (x_i - x_j)^2
-# (squared distance -- same relative ordering as .cc_D, so the same greedy
-# picks result, with squared distance VALUES).
+# The selector takes the square root and therefore recovers .cc_D exactly.
 .cc_G <- outer(.cc_x, .cc_x)
 dimnames(.cc_G) <- list(.cc_ids, .cc_ids)
 
@@ -76,12 +75,14 @@ test_that("select_core_collection (maximin, distance): n_core=5 selects every in
 # 2. type = "relationship" (D_ij = G_ii + G_jj - 2*G_ij identity)
 # ==============================================================================
 
-test_that("select_core_collection (relationship): applies the exact distance identity", {
+test_that("select_core_collection (relationship): returns Euclidean distance", {
   res <- select_core_collection(G = .cc_G, n_core = 3L, type = "relationship",
                                 strategy = "maximin", verbose = FALSE)
-  expect_equal(sort(res$selected), c("A", "C", "E"))  # same picks (squaring preserves order here)
-  expect_equal(res$mean_distance, mean(c(4, 81, 49)), tolerance = 1e-8)  # squared distances
-  expect_equal(res$min_distance, 4)
+  expect_equal(sort(res$selected), c("A", "C", "E"))
+  expect_equal(res$mean_distance, mean(c(2, 9, 7)), tolerance = 1e-8)
+  expect_equal(res$min_distance, 2)
+  expect_identical(res$distance_type, "euclidean")
+  expect_true(res$metric_validated)
 })
 
 # ==============================================================================
@@ -128,6 +129,16 @@ test_that("select_core_collection: min_sel_value/min_sel_mode restricts the elig
   expect_true(all(res$selected %in% c("C", "D", "E")))  # merit > 2.5
 })
 
+test_that("select_core_collection: sd_above_mean uses a superior-merit pool", {
+  merit <- setNames(c(1, 2, 3, 4, 5), .cc_ids)
+  res <- suppressMessages(select_core_collection(
+    G = .cc_D, n_core = 2L, type = "distance",
+    merit = merit, min_sel_value = 0,
+    min_sel_mode = "sd_above_mean", verbose = FALSE
+  ))
+  expect_true(all(merit[res$selected] >= mean(merit)))
+})
+
 # ==============================================================================
 # 6. Errors
 # ==============================================================================
@@ -142,6 +153,40 @@ test_that("select_core_collection: errors when G rownames != colnames", {
   colnames(G_bad) <- rev(colnames(G_bad))
   expect_error(select_core_collection(G = G_bad, n_core = 2L, verbose = FALSE),
               "row and column names")
+})
+
+test_that("select_core_collection: rejects asymmetric distance matrices", {
+  D_bad <- .cc_D
+  D_bad[1, 2] <- D_bad[1, 2] + 0.5
+  expect_error(
+    select_core_collection(G = D_bad, n_core = 2L, type = "distance",
+                           verbose = FALSE),
+    "symmetric"
+  )
+})
+
+test_that("select_core_collection: rejects triangle-inequality violations", {
+  D_bad <- matrix(c(
+    0, 1, 3,
+    1, 0, 1,
+    3, 1, 0
+  ), nrow = 3L, byrow = TRUE,
+  dimnames = list(c("A", "B", "C"), c("A", "B", "C")))
+  expect_error(
+    select_core_collection(G = D_bad, n_core = 2L, type = "distance",
+                           verbose = FALSE),
+    "triangle inequality"
+  )
+})
+
+test_that("select_core_collection: rejects indefinite relationship matrices", {
+  G_bad <- matrix(c(1, 2, 2, 1), 2L, 2L,
+                  dimnames = list(c("A", "B"), c("A", "B")))
+  expect_error(
+    select_core_collection(G = G_bad, n_core = 2L, type = "relationship",
+                           verbose = FALSE),
+    "positive semidefinite"
+  )
 })
 
 test_that("select_core_collection: errors when n_core < 1", {

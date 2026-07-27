@@ -58,19 +58,39 @@
 #'   frames. Default \code{NULL} (auto-detect all numeric non-ID columns).
 #' @param seed        Integer. RNG seed for reproducible fold assignment.
 #'   Default \code{42L}.
+#' @param validation  Validation design. \code{"random"} assigns individuals
+#'   to balanced folds; \code{"grouped"} keeps all individuals in the same
+#'   group in one test fold; \code{"forward"} trains only on earlier time
+#'   points. Default \code{"random"}.
+#' @param groups      Named vector mapping individual identifiers to groups.
+#'   Required when \code{validation = "grouped"}.
+#' @param time        Named numeric or ordered vector mapping individual
+#'   identifiers to breeding cycles, years, or other ordered time points.
+#'   Required when \code{validation = "forward"}.
+#' @param on_fit_error Behaviour when \code{rrBLUP::kin.blup()} fails.
+#'   \code{"error"} stops with trait, repetition, and fold context;
+#'   \code{"record"} retains the failed fold with missing predictions and an
+#'   explicit error message. Default \code{"error"}.
 #' @param verbose     Logical. Print progress. Default \code{TRUE}.
 #'
 #' @return A named list of class \code{HapBlockR_cv}:
 #' \describe{
 #'   \item{\code{pa_summary}}{Data frame: \code{trait}, \code{rep},
 #'     \code{fold}, \code{n_train}, \code{n_test}, \code{PA} (Pearson r),
-#'     \code{RMSE}.}
-#'   \item{\code{pa_mean}}{Data frame: mean PA and RMSE per trait across
-#'     all folds and replications.}
-#'   \item{\code{gebv_all}}{Data frame of out-of-fold GEBVs for all
-#'     individuals and traits (one row per individual x trait).}
+#'     \code{RMSE}, fit status, and any fit error.}
+#'   \item{\code{pa_pooled}}{One row per trait and repetition, calculated
+#'     from the complete pooled out-of-fold predictions: predictive ability,
+#'     root mean squared error, mean absolute error, bias, and calibration
+#'     slope.}
+#'   \item{\code{pa_mean}}{Mean pooled predictive ability and root mean
+#'     squared error per trait across replications.}
+#'   \item{\code{gebv_all}}{Out-of-fold predictions for every tested
+#'     individual, trait, and repetition. \code{gebv} is the predicted
+#'     phenotype on the BLUE scale; \code{breeding_value} is the centred
+#'     random genetic deviation returned by \code{kin.blup()}.}
 #'   \item{\code{k}}{Number of folds used.}
 #'   \item{\code{n_rep}}{Number of replications.}
+#'   \item{\code{validation}}{Validation design used.}
 #' }
 #'
 #' @examples
@@ -104,8 +124,24 @@ cv_haplotype_prediction <- function(
     blue_col   = "blue",
     blue_cols  = NULL,
     seed       = 42L,
+    validation = c("random", "grouped", "forward"),
+    groups     = NULL,
+    time       = NULL,
+    on_fit_error = c("error", "record"),
     verbose    = TRUE
 ) {
+  result_call <- match.call()
+  validation <- match.arg(validation)
+  on_fit_error <- match.arg(on_fit_error)
+  k <- as.integer(k)
+  n_rep <- as.integer(n_rep)
+  if (length(k) != 1L || is.na(k) || k < 2L)
+    stop("k must be a single integer of at least 2.", call. = FALSE)
+  if (length(n_rep) != 1L || is.na(n_rep) || n_rep < 1L)
+    stop("n_rep must be a single positive integer.", call. = FALSE)
+  if (length(seed) != 1L || is.na(seed) || !is.finite(seed))
+    stop("seed must be a single finite integer.", call. = FALSE)
+  seed <- as.integer(seed)
   if (!requireNamespace("rrBLUP", quietly = TRUE))
     stop("rrBLUP is required: install.packages('rrBLUP')", call. = FALSE)
 
@@ -125,6 +161,30 @@ cv_haplotype_prediction <- function(
 
   inds_G <- rownames(G)
   results <- list()
+  oof_results <- list()
+
+  .balanced_group_folds <- function(group, k) {
+    group <- as.character(group)
+    sizes <- sort(table(group), decreasing = TRUE)
+    if (length(sizes) < k)
+      stop("Grouped validation requires at least k distinct groups.",
+           call. = FALSE)
+    ordered_groups <- names(sizes)
+    if (length(ordered_groups) > 1L) {
+      tie_jitter <- stats::runif(length(ordered_groups))
+      ordered_groups <- ordered_groups[
+        order(-as.numeric(sizes), tie_jitter)
+      ]
+    }
+    loads <- numeric(k)
+    assignment <- setNames(integer(length(ordered_groups)), ordered_groups)
+    for (g in ordered_groups) {
+      target <- which.min(loads)
+      assignment[g] <- target
+      loads[target] <- loads[target] + sizes[g]
+    }
+    unname(assignment[group])
+  }
 
   for (rep_i in seq_len(n_rep)) {
     set.seed(seed + rep_i - 1L)
@@ -132,6 +192,7 @@ cv_haplotype_prediction <- function(
     for (tr in traits) {
       pheno <- blues_list[[tr]]
       common <- intersect(names(pheno), inds_G)
+      common <- common[is.finite(pheno[common])]
       if (length(common) < k)
         stop("Fewer individuals (", length(common),
              ") than folds (", k, ") for trait ", tr, call. = FALSE)
@@ -139,16 +200,57 @@ cv_haplotype_prediction <- function(
       y <- pheno[common]
       G_sub <- G[common, common, drop = FALSE]
 
-      # Assign folds
-      fold_id <- sample(rep(seq_len(k), length.out = length(common)))
-      gebv_oof <- setNames(rep(NA_real_, length(common)), common)
+      # Assign folds without allowing group or time leakage.
+      if (validation == "random") {
+        fold_id <- sample(rep(seq_len(k), length.out = length(common)))
+      } else if (validation == "grouped") {
+        if (is.null(groups) || is.null(names(groups)))
+          stop("groups must be a named vector for grouped validation.",
+               call. = FALSE)
+        missing_group <- setdiff(common, names(groups))
+        if (length(missing_group))
+          stop("groups is missing ", length(missing_group),
+               " validation individual(s).", call. = FALSE)
+        fold_id <- .balanced_group_folds(groups[common], k)
+      } else {
+        if (is.null(time) || is.null(names(time)))
+          stop("time must be a named numeric or ordered vector for forward ",
+               "validation.", call. = FALSE)
+        missing_time <- setdiff(common, names(time))
+        if (length(missing_time))
+          stop("time is missing ", length(missing_time),
+               " validation individual(s).", call. = FALSE)
+        time_common <- time[common]
+        if (anyNA(time_common))
+          stop("time contains missing values for validation individuals.",
+               call. = FALSE)
+        time_levels <- sort(unique(time_common))
+        if (length(time_levels) < k + 1L)
+          stop("Forward validation requires at least k + 1 distinct time ",
+               "points so every test fold has earlier training data.",
+               call. = FALSE)
+        time_bin <- ceiling(seq_along(time_levels) * (k + 1L) /
+                              length(time_levels))
+        time_bin <- pmin(time_bin, k + 1L)
+        names(time_bin) <- as.character(time_levels)
+        fold_id <- unname(time_bin[as.character(time_common)]) - 1L
+      }
 
       for (fold in seq_len(k)) {
         test_idx  <- which(fold_id == fold)
-        train_idx <- which(fold_id != fold)
+        train_idx <- if (validation == "forward") {
+          which(fold_id >= 0L & fold_id < fold)
+        } else {
+          which(fold_id != fold)
+        }
+        if (!length(test_idx)) next
+        if (length(train_idx) < 2L)
+          stop("Validation fold ", fold, " for trait '", tr,
+               "' has fewer than two training individuals.", call. = FALSE)
         y_train   <- y
-        y_train[test_idx] <- NA
+        y_train[-train_idx] <- NA
 
+        fit_error <- NULL
         fit <- tryCatch(
           rrBLUP::kin.blup(
             data    = data.frame(id = common, y = y_train),
@@ -156,17 +258,38 @@ cv_haplotype_prediction <- function(
             pheno   = "y",
             K       = G_sub
           ),
-          error = function(e) NULL
+          error = function(e) {
+            fit_error <<- conditionMessage(e)
+            NULL
+          }
         )
-        if (is.null(fit)) next
+        if (is.null(fit) && on_fit_error == "error")
+          stop("rrBLUP::kin.blup() failed for trait '", tr, "', repetition ",
+               rep_i, ", fold ", fold, ": ", fit_error, call. = FALSE)
 
-        pred <- fit$g[common[test_idx]]
-        gebv_oof[test_idx] <- pred
+        breeding_value <- if (is.null(fit)) {
+          rep(NA_real_, length(test_idx))
+        } else {
+          as.numeric(fit$g[common[test_idx]])
+        }
+        fitted_mean <- if (is.null(fit)) {
+          NA_real_
+        } else {
+          mean(y[train_idx], na.rm = TRUE)
+        }
+        pred <- fitted_mean + breeding_value
 
         obs  <- y[test_idx]
-        pa   <- if (stats::sd(pred, na.rm=TRUE) > 0 && stats::sd(obs, na.rm=TRUE) > 0)
+        complete <- is.finite(pred) & is.finite(obs)
+        pa   <- if (sum(complete) >= 2L &&
+                    stats::sd(pred[complete]) > 0 &&
+                    stats::sd(obs[complete]) > 0)
           stats::cor(pred, obs, use = "complete.obs") else NA_real_
-        rmse <- sqrt(mean((pred - obs)^2, na.rm = TRUE))
+        rmse <- if (any(complete)) {
+          sqrt(mean((pred[complete] - obs[complete])^2))
+        } else {
+          NA_real_
+        }
 
         results[[length(results) + 1L]] <- data.frame(
           trait   = tr,
@@ -176,6 +299,21 @@ cv_haplotype_prediction <- function(
           n_test  = length(test_idx),
           PA      = pa,
           RMSE    = rmse,
+          status  = if (is.null(fit)) "fit_error" else "ok",
+          error   = if (is.null(fit)) fit_error else NA_character_,
+          stringsAsFactors = FALSE
+        )
+        oof_results[[length(oof_results) + 1L]] <- data.frame(
+          id = common[test_idx],
+          trait = tr,
+          rep = rep_i,
+          fold = fold,
+          observed = as.numeric(obs),
+          gebv = pred,
+          breeding_value = breeding_value,
+          fitted_mean = fitted_mean,
+          status = if (is.null(fit)) "fit_error" else "ok",
+          error = if (is.null(fit)) fit_error else NA_character_,
           stringsAsFactors = FALSE
         )
         .log("  rep=", rep_i, " trait=", tr, " fold=", fold,
@@ -184,17 +322,109 @@ cv_haplotype_prediction <- function(
     }
   }
 
+  if (!length(results) || !length(oof_results))
+    stop("Cross-validation produced no test-fold results.", call. = FALSE)
   pa_df <- do.call(rbind, results)
-  pa_mean <- stats::aggregate(cbind(PA, RMSE) ~ trait, data = pa_df,
-                              FUN = mean, na.rm = TRUE)
-  pa_sd   <- stats::aggregate(cbind(PA, RMSE) ~ trait, data = pa_df,
-                              FUN = stats::sd, na.rm = TRUE)
-  names(pa_sd)[2:3] <- c("PA_sd", "RMSE_sd")
-  pa_mean <- merge(pa_mean, pa_sd, by = "trait")
+  gebv_all <- do.call(rbind, oof_results)
 
-  structure(
-    list(pa_summary = pa_df, pa_mean = pa_mean, k = k, n_rep = n_rep),
+  pooled_split <- split(gebv_all, interaction(gebv_all$trait, gebv_all$rep,
+                                              drop = TRUE))
+  pa_pooled <- do.call(rbind, lapply(pooled_split, function(d) {
+    keep <- is.finite(d$observed) & is.finite(d$gebv)
+    obs <- d$observed[keep]
+    pred <- d$gebv[keep]
+    pa <- if (length(obs) >= 2L && stats::sd(obs) > 0 &&
+              stats::sd(pred) > 0) stats::cor(obs, pred) else NA_real_
+    calibration <- if (length(obs) >= 2L && stats::var(pred) > 0) {
+      unname(stats::coef(stats::lm(obs ~ pred))[2L])
+    } else {
+      NA_real_
+    }
+    data.frame(
+      trait = d$trait[1L],
+      rep = d$rep[1L],
+      n = sum(keep),
+      PA = pa,
+      RMSE = if (length(obs)) sqrt(mean((pred - obs)^2)) else NA_real_,
+      MAE = if (length(obs)) mean(abs(pred - obs)) else NA_real_,
+      bias = if (length(obs)) mean(pred - obs) else NA_real_,
+      calibration_slope = calibration,
+      stringsAsFactors = FALSE
+    )
+  }))
+  rownames(pa_pooled) <- NULL
+
+  trait_split <- split(pa_pooled, pa_pooled$trait)
+  pa_mean <- do.call(rbind, lapply(trait_split, function(d) {
+    pa_valid <- d$PA[is.finite(d$PA)]
+    rmse_valid <- d$RMSE[is.finite(d$RMSE)]
+    data.frame(
+      trait = d$trait[1L],
+      PA = if (length(pa_valid)) mean(pa_valid) else NA_real_,
+      RMSE = if (length(rmse_valid)) mean(rmse_valid) else NA_real_,
+      PA_sd = if (length(pa_valid) > 1L) stats::sd(pa_valid) else NA_real_,
+      RMSE_sd = if (length(rmse_valid) > 1L) stats::sd(rmse_valid) else NA_real_,
+      stringsAsFactors = FALSE
+    )
+  }))
+  rownames(pa_mean) <- NULL
+
+  result <- structure(
+    list(
+      pa_summary = pa_df,
+      pa_pooled = pa_pooled,
+      pa_mean = pa_mean,
+      gebv_all = gebv_all,
+      k = k,
+      n_rep = n_rep,
+      validation = validation
+    ),
     class = c("HapBlockR_cv", "list")
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "cv_haplotype_prediction",
+    call = result_call,
+    parameters = list(
+      k = k, n_rep = n_rep, top_n = top_n, min_freq = min_freq,
+      min_snps = min_snps, validation = validation,
+      on_fit_error = on_fit_error
+    ),
+    seed = seed,
+    sample_ids = unique(gebv_all$id),
+    variant_ids = colnames(geno_matrix),
+    inputs = list(
+      genotype_identity = list(
+        dimensions = dim(geno_matrix),
+        sample_ids = rownames(geno_matrix),
+        variant_ids = colnames(geno_matrix)
+      ),
+      phenotype = blues_list,
+      block_definition = blocks
+    ),
+    transformations = c(
+      "haplotype extraction",
+      "haplotype feature encoding",
+      "haplotype genomic relationship matrix",
+      paste(validation, "cross-validation")
+    ),
+    quality_gates = c(
+      all_fits_succeeded = all(pa_df$status == "ok"),
+      # This gate exists to catch a real bug -- an individual scored more
+      # than once for the same trait within the same repetition (test-set
+      # leakage/duplication). It must NOT require every (id, trait, rep)
+      # cell to be populated: under multi-trait "forward" validation,
+      # traits can have different phenotyping coverage, so an individual
+      # permanently in the earliest, training-only time bin for trait A but
+      # genuinely tested for trait B creates a legitimate empty cell (count
+      # = 0), not a violation. Only counts > 1 indicate an actual problem.
+      no_individual_tested_twice_per_repetition =
+        all(table(gebv_all$id, gebv_all$trait, gebv_all$rep) <= 1L),
+      finite_predictions = all(is.finite(gebv_all$gebv))
+    ),
+    warnings = unique(stats::na.omit(pa_df$error)),
+    decision_table = pa_mean,
+    uncertainty = pa_pooled
   )
 }
 
@@ -1242,6 +1472,8 @@ scan_diversity_windows <- function(
 # Uses a local copy to avoid coupling to the internal .parse_blues
 # ==============================================================================
 .parse_blues_ext <- function(blues, id_col, blue_col, blue_cols) {
+  target_bundle <- .hb_unpack_model_targets(blues)
+  if (!is.null(target_bundle)) return(target_bundle$values)
   if (is.numeric(blues) && !is.null(names(blues)))
     return(list(trait = blues))
   if (is.data.frame(blues)) {

@@ -53,25 +53,30 @@ with all matrix operations running through the R interpreter. For a WGS
 rice panel with 3 million SNPs across 12 chromosomes, the original
 implementation would take days on a workstation.
 
-HapBlockR replaces the critical paths with eight compiled C++ functions:
+HapBlockR replaces selected critical paths with compiled C++ functions:
 
 ``` r
-compute_r2_cpp(geno, digits = -1L, n_threads = 8L)   # ~40x faster
-maf_filter_cpp(geno, maf_cut = 0.05)                  # ~10x faster
-boundary_scan_cpp(geno, start, end, half_w, threshold) # ~20x faster
-build_hap_strings_cpp(blk_int, na_char)               # ~20-50x faster
+compute_r2(geno, digits = -1L, n_threads = 2L)
+maf_filter_cpp(geno, maf_cut = 0.05)
+boundary_scan_cpp(geno, start, end, half_w, threshold)
+build_hap_strings_cpp(blk_int, na_char)
 ```
 
 ### 2.2 Memory wall
 
-HapBlockR enforces a strict never-full-genome memory model. All six
-supported formats stream genotypes one chromosome window at a time:
+Memory behaviour depends on the input format and backend. GDS, PLINK
+BED, and `bigmemory` pathways can provide subset-oriented or file-backed
+access, while text and downstream dense analyses can still require
+substantial memory:
 
 ``` r
 be     <- read_geno("wgs_panel.vcf.gz")
-blocks <- run_Big_LD_all_chr(be, method = "r2", n_threads = 8L)
-# Peak RAM ~ n_samples x subSegmSize x 8 bytes = 60 MB for n=5000, w=1500
+blocks <- run_Big_LD_all_chr(be, method = "r2", n_threads = 2L)
 ```
+
+Measure wall time and peak resident memory on representative data. The
+large-data vignette defines the required benchmark record and
+distinguishes measured results from projections.
 
 ### 2.3 Pipeline gap
 
@@ -653,6 +658,16 @@ assoc_mt <- test_block_haplotypes(
   verbose    = FALSE
 )
 ```
+
+The fitted Q+K model accounts for population structure and genomic
+relatedness, while FDR, Bonferroni and simpleM options control
+multiplicity. A statistically supported haplotype can identify a segment
+harbouring a causal gene or variant, particularly when its effect
+replicates across populations. HapBlockR then provides cross-population
+harmonisation, epistasis scans and fine mapping to strengthen and
+localise that biological hypothesis. Interpret the association at the
+resolution of the tested segment; claiming a specifically causal variant
+additionally uses positional, functional or experimental evidence.
 
 [`estimate_diplotype_effects()`](https://FAkohoue.github.io/HapBlockR/reference/estimate_diplotype_effects.md)
 now supports the same correction set as

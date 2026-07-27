@@ -160,6 +160,8 @@ if (getRversion() >= "2.15.1") {
 # on the copy in haplotype_analysis.R being loaded first.
 # ==============================================================================
 .parse_blues_assoc <- function(blues, id_col, blue_col, blue_cols) {
+  target_bundle <- .hb_unpack_model_targets(blues)
+  if (!is.null(target_bundle)) return(target_bundle$values)
   if (is.numeric(blues) && !is.null(names(blues)))
     return(list(trait = blues))
   if (is.data.frame(blues)) {
@@ -198,11 +200,15 @@ if (getRversion() >= "2.15.1") {
     sig_metric      = "p_fdr",
     meff_scope      = "chromosome",
     meff_percent_cut = 0.995,
-    warning_message = NULL
+    warning_message = NULL,
+    inference_mode  = "not_fitted",
+    result_call     = NULL,
+    sample_ids      = character(),
+    inputs          = list()
 ) {
   if (!is.null(warning_message))
     warning(warning_message, call. = FALSE)
-  structure(
+  result <- structure(
     list(
       allele_tests     = data.frame(),
       block_tests      = data.frame(),
@@ -214,9 +220,34 @@ if (getRversion() >= "2.15.1") {
       meff_scope       = meff_scope,
       meff_percent_cut = meff_percent_cut,
       meff             = list(),
+      inference_diagnostics = data.frame(
+        trait = traits,
+        mode = rep(inference_mode, length(traits)),
+        grm_adjusted = rep(FALSE, length(traits)),
+        reason = rep(status, length(traits)),
+        stringsAsFactors = FALSE
+      ),
       status           = status
     ),
     class = c("HapBlockR_haplotype_assoc", "list")
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "test_block_haplotypes",
+    call = if (is.null(result_call)) sys.call(-1L) else result_call,
+    parameters = list(
+      n_pcs_used = n_pcs_used, sig_threshold = sig_threshold,
+      sig_metric = sig_metric, meff_scope = meff_scope,
+      meff_percent_cut = meff_percent_cut
+    ),
+    sample_ids = sample_ids,
+    inputs = inputs,
+    quality_gates = c(
+      inference_fitted = FALSE,
+      result_available = FALSE
+    ),
+    fallbacks = if (inference_mode == "not_fitted") character() else inference_mode,
+    decision_table = data.frame()
   )
 }
 
@@ -228,28 +259,6 @@ if (getRversion() >= "2.15.1") {
 .is_polymorphic_col <- function(x) {
   x <- x[!is.na(x)]
   length(unique(x)) > 1L
-}
-
-# Internal helper: vectorised per-allele Wald scan
-.vectorized_hap_wald_scan <- function(X, y_resid, dose_scale = 1) {
-  # Vectorised Wald scan helper (extracted for clarity)
-  n <- length(y_resid); y_bar <- mean(y_resid)
-  XtX  <- colSums(X^2) - colSums(X)^2 / n
-  keep <- is.finite(XtX) & XtX > 1e-10
-  if (!any(keep)) return(NULL)
-  Xk <- X[, keep, drop = FALSE]; XtXk <- XtX[keep]
-  Xty_c <- as.numeric(crossprod(Xk, y_resid)) - n * colMeans(Xk) * y_bar
-  beta <- Xty_c / XtXk
-  df   <- n - 2L; if (df <= 0L) return(NULL)
-  rss  <- pmax(sum((y_resid - y_bar)^2) - beta^2 * XtXk, 0)
-  SE   <- sqrt(rss / df / XtXk)
-  data.frame(
-    column_index       = which(keep), effect = beta, SE = SE,
-    t_stat             = beta / SE,
-    p_wald             = 2 * stats::pt(-abs(beta / SE), df = df),
-    allele_freq_tested = colMeans(Xk, na.rm = TRUE) / dose_scale,
-    stringsAsFactors   = FALSE
-  )
 }
 
 #' Block-Level Haplotype Association Testing (Q+K Mixed Linear Model
@@ -417,6 +426,14 @@ if (getRversion() >= "2.15.1") {
 #'   when computing \eqn{M_{\mathrm{eff}}}. Larger groups are chunked and
 #'   summed. Default \code{1000L}.
 #'
+#' @param fallback Character. Behaviour when the genomic relationship matrix
+#'   (GRM), restricted maximum-likelihood null model, or generalised
+#'   least-squares transform fails. \code{"error"} stops rather than
+#'   presenting an unadjusted analysis as GRM-adjusted inference.
+#'   \code{"unadjusted"} permits an identity covariance or ordinary residual
+#'   scan, emits a warning, and records the mode in
+#'   \code{inference_diagnostics}. Default \code{"error"}.
+#'
 #' @param plot Logical. If \code{TRUE}, save Manhattan and Q-Q plots.
 #'   Default \code{FALSE}. Significance markers reflect \code{sig_metric}.
 #'
@@ -447,6 +464,8 @@ if (getRversion() >= "2.15.1") {
 #'   \item{\code{meff}}{Named list of \eqn{M_{\mathrm{eff}}} summaries per
 #'     trait, each with \code{$allele} (global/chromosome/block) and
 #'     \code{$block} (global/chromosome) components.}
+#'   \item{\code{inference_diagnostics}}{Per-trait record of the fitted
+#'     inference mode and any explicit fallback reason.}
 #' }
 #'
 #' @examples
@@ -524,6 +543,7 @@ test_block_haplotypes <- function(
     meff_scope       = c("chromosome", "global", "block"),
     meff_percent_cut = 0.995,
     meff_max_cols    = 1000L,
+    fallback         = c("error", "unadjusted"),
     optimize_pcs     = FALSE,
     optimize_pcs_max = 10L,
     optimize_method  = c("bic_lambda", "bic", "lambda"),
@@ -531,11 +551,13 @@ test_block_haplotypes <- function(
     out_dir          = ".",
     verbose          = TRUE
 ) {
+  result_call <- match.call()
   if (!requireNamespace("rrBLUP", quietly = TRUE))
     stop("rrBLUP is required: install.packages('rrBLUP')", call. = FALSE)
 
   sig_metric      <- match.arg(sig_metric)
   meff_scope      <- match.arg(meff_scope)
+  fallback        <- match.arg(fallback)
   optimize_method <- match.arg(optimize_method)
   .log <- function(...) if (verbose) message(sprintf("[assoc] %s", paste0(...)))
 
@@ -545,9 +567,29 @@ test_block_haplotypes <- function(
 
   # -- Build haplotype feature matrix and GRM (once, shared across all traits)
   .log("Building haplotype feature matrix ...")
-  hap_mat <- build_haplotype_feature_matrix(
+  hap_features <- build_haplotype_feature_matrix(
     haplotypes, top_n = top_n, min_freq = min_freq, encoding = "additive_012"
-  )$matrix
+  )
+  hap_mat <- hap_features$matrix
+  hap_info <- hap_features$info
+  if (!ncol(hap_mat) ||
+      !any(vapply(seq_len(ncol(hap_mat)),
+                  function(j) .is_polymorphic_col(hap_mat[, j]),
+                  logical(1L)))) {
+    return(.empty_assoc_result(
+      status = "skipped_monomorphic",
+      traits = traits,
+      n_pcs_used = 0L,
+      sig_threshold = sig_threshold,
+      sig_metric = sig_metric,
+      meff_scope = meff_scope,
+      meff_percent_cut = meff_percent_cut,
+      inference_mode = "not_fitted",
+      result_call = result_call,
+      sample_ids = rownames(hap_mat),
+      inputs = list(haplotype_features = hap_info, phenotype = blues_list)
+    ))
+  }
   # Column names are "blockID_hapN" - extract block ID prefix for grouping
   col_blocks <- sub("_hap\\d+$", "", colnames(hap_mat))
 
@@ -564,19 +606,28 @@ test_block_haplotypes <- function(
   dose_scale <- if (is_phased_data) 2 else 1
 
   .log("Computing haplotype GRM ...")
+  grm_error <- NULL
   G <- tryCatch(
     compute_haplotype_grm(hap_mat, phased = is_phased_data),
     error = function(e) {
-      warning(
-        "Haplotype GRM computation failed: ", conditionMessage(e),
-        ". Using identity matrix fallback.",
-        call. = FALSE
-      )
-      diag_G <- diag(nrow(hap_mat))
-      rownames(diag_G) <- colnames(diag_G) <- rownames(hap_mat)
-      diag_G
+      grm_error <<- conditionMessage(e)
+      NULL
     }
   )
+  inference_mode <- "grm_gls"
+  if (is.null(G)) {
+    if (fallback == "error")
+      stop("Haplotype GRM computation failed: ", grm_error,
+           ". Use fallback = 'unadjusted' only when an explicitly ",
+           "unadjusted analysis is scientifically acceptable.",
+           call. = FALSE)
+    warning("Haplotype GRM computation failed: ", grm_error,
+            ". Proceeding with the explicitly requested unadjusted identity ",
+            "covariance.", call. = FALSE)
+    G <- diag(nrow(hap_mat))
+    rownames(G) <- colnames(G) <- rownames(hap_mat)
+    inference_mode <- "unadjusted_identity"
+  }
 
   # -- Derive GRM PCs once (shared across all traits) -------------------------
   # G = Q Lambda Q^T - columns of Q are PCs of individuals in haplotype space.
@@ -735,6 +786,7 @@ test_block_haplotypes <- function(
   block_rows  <- list()
   meff_cache  <- vector("list", length(traits))
   names(meff_cache) <- traits
+  inference_rows <- list()
 
   # block_id -> CHR lookup for chromosome-wise Meff grouping
   block_chr_map <- if (!is.null(bi) && nrow(bi) > 0L) {
@@ -851,6 +903,16 @@ test_block_haplotypes <- function(
     }
 
     if (!gls_ok) {
+      fallback_reason <- if (is.null(null_fit)) {
+        "restricted maximum-likelihood null model failed"
+      } else {
+        "generalised least-squares transform failed"
+      }
+      if (fallback == "error")
+        stop("Adjusted inference failed for trait '", tr, "': ",
+             fallback_reason, ". Use fallback = 'unadjusted' only when an ",
+             "explicitly unadjusted analysis is scientifically acceptable.",
+             call. = FALSE)
       # -- Fallback: null-model-fit failure, GRM eigendecomposition failure,
       # or a singular null design. Falls back to the original residual
       # approximation (fixed effects + BLUP subtracted, plain OLS scan)
@@ -875,6 +937,25 @@ test_block_haplotypes <- function(
       # for the intercept and any PC covariates (was hardcoded to n_ind - 2L,
       # which under-counted df usage whenever PCs were included).
       df_test <- n_ind - ncol(X_null) - 1L
+      inference_rows[[length(inference_rows) + 1L]] <- data.frame(
+        trait = tr,
+        mode = "unadjusted_residual_scan",
+        grm_adjusted = FALSE,
+        reason = fallback_reason,
+        stringsAsFactors = FALSE
+      )
+    } else {
+      inference_rows[[length(inference_rows) + 1L]] <- data.frame(
+        trait = tr,
+        mode = inference_mode,
+        grm_adjusted = identical(inference_mode, "grm_gls"),
+        reason = if (identical(inference_mode, "grm_gls")) {
+          NA_character_
+        } else {
+          grm_error
+        },
+        stringsAsFactors = FALSE
+      )
     }
 
     # -- VECTORISED per-allele scan across ALL blocks simultaneously ---------
@@ -983,10 +1064,13 @@ test_block_haplotypes <- function(
       gm <- function(col, def = NA) {
         if (!is.null(blk_meta) && nrow(blk_meta)>0) blk_meta[[col]][1] else def
       }
-      allele_label <- sub(paste0("^", bn, "_hap\\d+_?"), "",
-                          colnames(hap_mat)[orig_ci])
-      if (allele_label == "" || allele_label == colnames(hap_mat)[orig_ci])
-        allele_label <- colnames(hap_mat)[orig_ci]
+      hap_id <- colnames(hap_mat)[orig_ci]
+      info_idx <- match(hap_id, hap_info$hap_id)
+      allele_label <- if (!is.na(info_idx)) {
+        hap_info$hap_string[info_idx]
+      } else {
+        hap_id
+      }
 
       allele_rows[[length(allele_rows)+1L]] <- data.frame(
         block_id  = bn,
@@ -1170,15 +1254,18 @@ test_block_haplotypes <- function(
   # -- Assemble output and apply multiple testing correction ------------------
   if (!length(allele_rows) && !length(block_rows)) {
     message("[test_block_haplotypes] No results produced.")
-    return(structure(
-      list(allele_tests     = data.frame(), block_tests = data.frame(),
-           traits           = traits,       n_pcs_used  = n_pcs_used,
-           sig_threshold    = sig_threshold, sig_metric = sig_metric,
-           n_tests          = 0L,
-           meff_scope       = meff_scope, meff_percent_cut = meff_percent_cut,
-           meff             = list(),
-           status           = "no_results"),
-      class = c("HapBlockR_haplotype_assoc", "list")
+    return(.empty_assoc_result(
+      status = "no_results",
+      traits = traits,
+      n_pcs_used = n_pcs_used,
+      sig_threshold = sig_threshold,
+      sig_metric = sig_metric,
+      meff_scope = meff_scope,
+      meff_percent_cut = meff_percent_cut,
+      inference_mode = "not_fitted",
+      result_call = result_call,
+      sample_ids = rownames(hap_mat),
+      inputs = list(haplotype_features = hap_info, phenotype = blues_list)
     ))
   }
 
@@ -1370,7 +1457,7 @@ test_block_haplotypes <- function(
     )
   }
 
-  structure(
+  result <- structure(
     list(
       allele_tests        = allele_df,
       block_tests         = block_df,
@@ -1383,9 +1470,53 @@ test_block_haplotypes <- function(
       meff_percent_cut    = meff_percent_cut,
       meff                = meff_summary,
       pc_model_selection  = pc_model_sel,   # NULL unless optimize_pcs = TRUE
+      inference_diagnostics = if (length(inference_rows)) {
+        do.call(rbind, inference_rows)
+      } else {
+        data.frame()
+      },
       status              = "ok"
     ),
     class = c("HapBlockR_haplotype_assoc", "list")
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "test_block_haplotypes",
+    call = result_call,
+    parameters = list(
+      n_pcs = n_pcs, n_pcs_used = n_pcs_used, top_n = top_n,
+      min_freq = min_freq, sig_threshold = sig_threshold,
+      sig_metric = sig_metric, meff_scope = meff_scope,
+      meff_percent_cut = meff_percent_cut, fallback = fallback
+    ),
+    sample_ids = rownames(hap_mat),
+    variant_ids = hap_info$hap_id,
+    inputs = list(haplotype_features = hap_info, phenotype = blues_list),
+    transformations = c(
+      "haplotype feature encoding",
+      "haplotype genomic relationship matrix",
+      "restricted maximum-likelihood null model",
+      "generalised least-squares association scan",
+      paste("simpleM correction at", meff_scope, "scope")
+    ),
+    quality_gates = c(
+      results_available = nrow(allele_df) > 0L,
+      inference_mode_recorded = nrow(result$inference_diagnostics) > 0L,
+      adjusted_or_explicit_fallback =
+        all(result$inference_diagnostics$grm_adjusted) ||
+          identical(fallback, "unadjusted")
+    ),
+    fallbacks = unique(stats::na.omit(
+      result$inference_diagnostics$reason[
+        !result$inference_diagnostics$grm_adjusted
+      ]
+    )),
+    decision_table = allele_df,
+    uncertainty = allele_df[, intersect(
+      c("block_id", "trait", "allele", "effect", "SE", "p_wald",
+        "p_fdr", "p_simplem", "p_simplem_sidak"),
+      names(allele_df)
+    ), drop = FALSE]
   )
 }
 
@@ -1824,8 +1955,13 @@ print.HapBlockR_haplotype_assoc <- function(x, ...) {
 #'
 #' @param verbose Logical. \code{TRUE} (default) prints progress per trait.
 #'
-#' @return A named list of class \code{c("HapBlockR_diplotype", "list")}
-#'   with three elements:
+#' @return A \code{hapblockr_result} of class
+#'   \code{c("HapBlockR_diplotype", "hapblockr_result", "list")} with three
+#'   elements plus a \code{result_contract} (parameters, identifiers,
+#'   transformations, quality gates, \code{omnibus_tests} as the decision
+#'   table, and \code{diplotype_means} as the uncertainty table). Check with
+#'   \code{\link{validate}} before treating a block's effects as a
+#'   recommendation.
 #'
 #' \describe{
 #'   \item{\code{diplotype_means}}{Data frame. One row per diplotype class per
@@ -1934,6 +2070,7 @@ estimate_diplotype_effects <- function(
     meff_max_cols    = 1000L,
     verbose          = TRUE
 ) {
+  result_call <- match.call()
   if (!requireNamespace("rrBLUP", quietly = TRUE))
     stop("rrBLUP is required: install.packages('rrBLUP')", call. = FALSE)
 
@@ -2137,9 +2274,36 @@ estimate_diplotype_effects <- function(
 
   .log("Done. Diplotype means:",nrow(means_df),"| Allele pairs:",nrow(dom_df),
        "| Blocks:",nrow(omnibus_df))
-  structure(list(diplotype_means=means_df,dominance_table=dom_df,
-                 omnibus_tests=omnibus_df),
-            class=c("HapBlockR_diplotype","list"))
+  result <- structure(
+    list(diplotype_means = means_df, dominance_table = dom_df,
+         omnibus_tests = omnibus_df),
+    class = c("HapBlockR_diplotype", "list")
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "estimate_diplotype_effects",
+    call = result_call,
+    parameters = list(
+      min_freq = min_freq, min_n_diplotype = min_n_diplotype,
+      sig_threshold = sig_threshold, sig_metric = sig_metric_dip,
+      meff_percent_cut = meff_percent_cut
+    ),
+    sample_ids = rownames(hap_mat),
+    variant_ids = colnames(hap_mat),
+    inputs = list(phenotype = blues_list),
+    transformations = c(
+      "haplotype genomic relationship matrix",
+      "restricted maximum-likelihood null model (GRM-corrected residuals)",
+      "diplotype inference",
+      "additive/dominance decomposition",
+      "simpleM correction"
+    ),
+    quality_gates = c(
+      results_available = nrow(omnibus_df) > 0L
+    ),
+    decision_table = omnibus_df,
+    uncertainty = means_df
+  )
 }
 
 #' @method print HapBlockR_diplotype
@@ -2389,7 +2553,12 @@ print.HapBlockR_diplotype <- function(x, ...) {
 #'   \code{0.60}) to flag only severely mismatched blocks.
 #' @param verbose Logical. Print progress. Default \code{TRUE}.
 #'
-#' @return A named list of class \code{c("HapBlockR_effect_concordance", "list")}:
+#' @return A \code{hapblockr_result} of class
+#'   \code{c("HapBlockR_effect_concordance", "hapblockr_result", "list")},
+#'   also carrying a \code{result_contract} (parameters, identifiers,
+#'   transformations, quality gates, \code{concordance} as the decision
+#'   table, and \code{shared_alleles} as the uncertainty table). Check with
+#'   \code{\link{validate}} before treating a block as replicated:
 #' \describe{
 #'   \item{\code{concordance}}{Data frame with one row per block per trait.
 #'     Columns:
@@ -2515,6 +2684,7 @@ compare_block_effects <- function(
     boundary_overlap_warn = 0.80,
     verbose               = TRUE
 ) {
+  result_call <- match.call()
   block_match <- match.arg(block_match)
   .log <- function(...) if (verbose) message("[compare_block_effects] ", ...)
 
@@ -2803,7 +2973,7 @@ compare_block_effects <- function(
   .log("Done. Blocks compared: ", nrow(conc_df),
        " | Replicated (concordant, Q_p > 0.05): ", n_rep)
 
-  structure(
+  result <- structure(
     list(
       concordance           = conc_df,
       shared_alleles        = shared_df,
@@ -2816,6 +2986,32 @@ compare_block_effects <- function(
       overlap_min           = overlap_min
     ),
     class = c("HapBlockR_effect_concordance", "list")
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "compare_block_effects",
+    call = result_call,
+    parameters = list(
+      pop1_name = pop1_name, pop2_name = pop2_name,
+      min_shared_alleles = min_shared_alleles, block_match = block_match,
+      overlap_min = overlap_min, direction_threshold = direction_threshold,
+      boundary_overlap_warn = boundary_overlap_warn
+    ),
+    variant_ids = if (nrow(conc_df)) unique(conc_df$block_id) else character(0),
+    inputs = list(
+      assoc_pop1_allele_tests = at1,
+      assoc_pop2_allele_tests = at2
+    ),
+    transformations = c(
+      paste("block matching:", block_match),
+      "inverse-variance-weighted meta-analysis",
+      "Cochran's Q heterogeneity test"
+    ),
+    quality_gates = c(
+      results_available = nrow(conc_df) > 0L
+    ),
+    decision_table = conc_df,
+    uncertainty = shared_df
   )
 }
 
@@ -2972,9 +3168,14 @@ print.HapBlockR_effect_concordance <- function(x, ...) {
 #'   Default \code{0.80}.
 #' @param verbose Logical. Print progress. Default \code{TRUE}.
 #'
-#' @return A named list of class \code{c("HapBlockR_effect_concordance", "list")}
-#'   with the same structure as \code{\link{compare_block_effects}}. Additional
-#'   columns in \code{$concordance} specific to GWAS input:
+#' @return A \code{hapblockr_result} of class
+#'   \code{c("HapBlockR_effect_concordance", "hapblockr_result", "list")}
+#'   with the same structure as \code{\link{compare_block_effects}} --
+#'   including a genuine 2-population, 1-df Cochran's Q for the
+#'   single-lead-SNP-per-block case (\code{Q_stat} is never \code{NA}) --
+#'   plus a \code{result_contract}. Check with \code{\link{validate}} before
+#'   treating a block as replicated. Additional columns in \code{$concordance}
+#'   specific to GWAS input:
 #'   \itemize{
 #'     \item \code{lead_marker_pop1}, \code{lead_marker_pop2} - lead SNP ID from
 #'       each population (same SNP = same tag; different SNP = different LD
@@ -3070,6 +3271,7 @@ compare_gwas_effects <- function(
     boundary_overlap_warn = 0.80,
     verbose               = TRUE
 ) {
+  result_call <- match.call()
   block_match <- match.arg(block_match)
   .log <- function(...) if (verbose) message("[compare_gwas_effects] ", ...)
 
@@ -3374,16 +3576,24 @@ compare_gwas_effects <- function(
       meta_z_v <- b_ivw / se_ivw
       meta_p_v <- 2 * stats::pnorm(-abs(meta_z_v))
 
-      # Cochran Q: df = n_alleles - 1 = 0 with one lead SNP
-      # Q is undefined; report NA (consistent documentation)
-      Q_v    <- NA_real_
-      Q_df_v <- NA_integer_
-      Q_p_v  <- NA_real_
-      I2_v   <- NA_real_
+      # Cochran Q for a 2-population, 1-locus comparison: exactly the same
+      # 2-study fixed-effect heterogeneity test used per-allele in
+      # compare_block_effects() (see that function's Cochran Q comment for
+      # the df derivation). A single lead SNP per population is the k=1
+      # case of that per-allele formula, not an undefined quantity -- it has
+      # 1 df, same as any other 2-study comparison pooled to one estimate.
+      Q_v    <- w1 * (e1 - b_ivw)^2 + w2 * (e2 - b_ivw)^2
+      Q_df_v <- 1L
+      Q_p_v  <- stats::pchisq(Q_v, df = Q_df_v, lower.tail = FALSE)
+      I2_v   <- if (!is.na(Q_v) && Q_v > 0) 100 * max(0, (Q_v - Q_df_v) / Q_v) else 0
 
-      # Replicated: directionally concordant AND meta_p significant
-      # (Q not available for single-allele comparison; use meta_p instead)
-      replicated <- dir_concordant && !is.na(meta_p_v) && meta_p_v <= 0.05
+      # Replicated: directionally concordant AND not significantly
+      # heterogeneous between populations (Q_p > 0.05) -- the same
+      # criterion compare_block_effects() uses, so a QTL with a large
+      # effect in one population and a much smaller (even same-signed)
+      # effect in the other is correctly flagged as non-replicating
+      # instead of passing on pooled-effect significance alone.
+      replicated <- dir_concordant && !is.na(Q_p_v) && Q_p_v > 0.05
 
       base_row$n_shared_alleles     <- 1L
       base_row$enough_shared        <- TRUE
@@ -3438,9 +3648,9 @@ compare_gwas_effects <- function(
   n_both <- sum(!is.na(conc_df$meta_p))
   n_rep  <- sum(conc_df$replicated, na.rm = TRUE)
   .log("Done. Blocks in both pops: ", n_both,
-       " | Replicated (dir concordant + meta_p <= 0.05): ", n_rep)
+       " | Replicated (dir concordant + Q_p > 0.05): ", n_rep)
 
-  structure(
+  result <- structure(
     list(
       concordance           = conc_df,
       shared_alleles        = shared_df,
@@ -3451,5 +3661,29 @@ compare_gwas_effects <- function(
       boundary_overlap_warn = boundary_overlap_warn
     ),
     class = c("HapBlockR_effect_concordance", "list")
+  )
+  .add_hapblockr_contract(
+    result = result,
+    method = "compare_gwas_effects",
+    call = result_call,
+    parameters = list(
+      pop1_name = pop1_name, pop2_name = pop2_name,
+      p_threshold = p_threshold, min_snps = min_snps,
+      block_match = block_match, overlap_min = overlap_min,
+      direction_threshold = direction_threshold,
+      boundary_overlap_warn = boundary_overlap_warn
+    ),
+    variant_ids = if (nrow(conc_df)) unique(conc_df$block_id) else character(0),
+    inputs = list(qtl_pop1 = qtl_pop1, qtl_pop2 = qtl_pop2),
+    transformations = c(
+      paste("block matching:", block_match),
+      "inverse-variance-weighted meta-analysis",
+      "Cochran's Q heterogeneity test (df=1, two populations)"
+    ),
+    quality_gates = c(
+      results_available = nrow(conc_df) > 0L
+    ),
+    decision_table = conc_df,
+    uncertainty = shared_df
   )
 }

@@ -1,0 +1,14 @@
+DesiredGainR-package	DesiredGainR-package
+.dgqgsi_dbg	dot-dgqgsi_dbg
+.dgqgsi_z	dot-dgqgsi_z
+.run_desired_gain_index_Joukhadar2024_legacy	dot-run_desired_gain_index_Joukhadar2024_legacy
+.run_qgsi_desired_gain_legacy	dot-run_qgsi_desired_gain_legacy
+.validate_square_matrix	dot-validate_square_matrix
+compare_dg_and_qgsi	compare_dg_and_qgsi
+construct_Wd_from_dg	construct_Wd_from_dg
+DesiredGainR	DesiredGainR-package
+run_desired_gain_index_Joukhadar2024	run_dgsi
+run_dgsi	run_dgsi
+run_dgsi_qgsi_pipeline	run_dgsi_qgsi_pipeline
+run_qgsi	run_qgsi
+run_qgsi_desired_gain	run_qgsi

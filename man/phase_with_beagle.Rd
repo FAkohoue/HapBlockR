@@ -20,6 +20,16 @@ phase_with_beagle(
   window = NULL,
   overlap = NULL,
   beagle_args = "",
+  required_beagle_major = 5L,
+  min_genotype_concordance = 0.99,
+  min_imputation_rate = 0,
+  truth_vcf = NULL,
+  max_switch_error_rate = 1,
+  min_truth_dosage_accuracy = 0,
+  min_truth_allele_concordance = 0,
+  min_truth_call_rate = 0,
+  require_switch_information = TRUE,
+  return_details = FALSE,
   verbose = TRUE
 )
 }
@@ -28,8 +38,10 @@ phase_with_beagle(
 
 \item{out_prefix}{Output path prefix. Beagle appends \code{.vcf.gz}.}
 
-\item{beagle_jar}{Path to \code{beagle.jar}. Default: searched in
-\code{dirname(out_prefix)}, then standard locations.}
+\item{beagle_jar}{Path to \code{beagle.jar}. When omitted, HapBlockR
+checks option \code{HapBlockR.beagle_jar}, environment variable
+\code{HAPBLOCKR_BEAGLE_JAR}, and \code{beagle.jar} beside
+\code{out_prefix}, in that order.}
 
 \item{java_path}{Java executable. Default \code{"java"}.}
 
@@ -59,10 +71,48 @@ in structured populations. Default \code{NULL}.}
 \item{beagle_args}{Additional Beagle arguments string, space-separated.
 Default \code{""}.}
 
+\item{required_beagle_major}{Integer. Supported Beagle major version.
+Default \code{5L}; execution stops when the log reports another major
+version or no verifiable version.}
+
+\item{min_genotype_concordance}{Minimum dosage concordance at genotypes
+that were observed before phasing. Default \code{0.99}.}
+
+\item{min_imputation_rate}{Minimum fraction of initially missing genotypes
+that must be called after phasing. Default \code{0}; ignored when the
+input contains no missing genotypes.}
+
+\item{truth_vcf}{Optional path to a phased truth-set VCF. When supplied,
+\code{\link{assess_phasing_accuracy}} calculates switch error, dosage
+accuracy, allele concordance, and call rate. Default \code{NULL}.}
+
+\item{max_switch_error_rate}{Maximum truth-set switch-error rate. Default
+\code{1}.}
+
+\item{min_truth_dosage_accuracy}{Minimum truth-set dosage accuracy. Default
+\code{0}.}
+
+\item{min_truth_allele_concordance}{Minimum truth-set phased-allele
+concordance. Default \code{0}.}
+
+\item{min_truth_call_rate}{Minimum call rate against observed truth
+genotypes. Default \code{0}.}
+
+\item{require_switch_information}{Logical. Require the truth set to contain
+at least one informative heterozygous transition. Default \code{TRUE}.}
+
+\item{return_details}{Logical. Return a structured result containing the
+output path, provenance, and quality-control report. When \code{FALSE},
+the historical character path is returned with the same information in
+attributes. Default \code{FALSE}.}
+
 \item{verbose}{Logical. Default \code{TRUE}.}
 }
 \value{
-Invisibly returns the path to the phased VCF.gz.
+When \code{return_details = FALSE}, invisibly returns the path to
+  the phased VCF.gz with provenance and quality-control attributes. When
+  \code{return_details = TRUE}, invisibly returns a structured list with
+  the output path, log path, provenance, and quality-control results.
   Beagle stdout and stderr are written to \code{out_prefix.log}.
 }
 \description{

@@ -17,6 +17,7 @@ read_geno(
   na_strings = c("NA", "N", "NN", "./.", ".", ""),
   gds_cache = NULL,
   clean_malformed = FALSE,
+  multiallelic = c("error", "drop", "first_alt"),
   verbose = FALSE
 )
 ```
@@ -45,7 +46,7 @@ read_geno(
 
 - sep:
 
-  Character. Field separator for `"numeric"` format.
+  Character. Field separator for `"numeric"` format. Default `","`.
 
 - na_strings:
 
@@ -60,7 +61,7 @@ read_geno(
   `FALSE` to disable auto-conversion and read the VCF fully into memory
   instead. When the cache file already exists it is reused without
   re-converting (fast subsequent calls). Ignored for all non-VCF
-  formats. Default `","`.
+  formats.
 
 - clean_malformed:
 
@@ -70,6 +71,14 @@ read_geno(
   the file but is required for files produced by some variant callers
   (e.g. NGSEP) that embed extra characters in FORMAT fields. Applies to
   numeric dosage CSV, HapMap, and VCF formats. Default `FALSE`.
+
+- multiallelic:
+
+  Character. Policy for VCF records with more than one alternative
+  allele: `"error"` (default) rejects the input, `"drop"` excludes those
+  records, and `"first_alt"` retains only the first alternative allele
+  while treating other allele indices as missing. The selected policy is
+  recorded in the import report.
 
 - verbose:
 
@@ -102,8 +111,9 @@ to release file handles.
 - `"vcf"`:
 
   VCF v4.2. Both phased (`0|1`) and unphased (`0/1`) GT fields are
-  accepted. Multi-allelic sites use first ALT. Missing (`./.`) becomes
-  `NA`. Extension: `.vcf`, `.vcf.gz`.
+  accepted. Multiallelic sites are rejected, dropped, or reduced to the
+  first alternative allele according to `multiallelic`. Missing (`./.`)
+  becomes `NA`. Extension: `.vcf`, `.vcf.gz`.
 
 - `"gds"`:
 

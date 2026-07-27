@@ -72,14 +72,17 @@ blindly.}
 \item{verbose}{Logical, default \code{TRUE}.}
 }
 \value{
-A list with \code{exact_plan} (data frame: the optimal cross
-  selection, a subset of \code{data}'s rows), \code{exact_objective}
-  (the true optimal total criterion), \code{n_candidates} (candidate
-  crosses considered after culling), \code{status} (lpSolve's solver
-  status; \code{0} = optimal solution found), and, if
-  \code{heuristic_plan} was supplied, \code{heuristic_objective} and
-  \code{gap_pct} (the heuristic plan's percentage shortfall below the
-  exact optimum).
+A \code{hapblockr_result} list with \code{exact_plan} (data frame:
+  the optimal cross selection, a subset of \code{data}'s rows, also the
+  decision table), \code{exact_objective} (the true optimal total
+  criterion), \code{n_candidates} (candidate crosses considered after
+  culling), \code{status} (lpSolve's solver status; \code{0} = optimal
+  solution found), and, if \code{heuristic_plan} was supplied,
+  \code{heuristic_objective} and \code{gap_pct} (the heuristic plan's
+  percentage shortfall below the exact optimum). Also carries
+  \code{result_contract} (parameters, identifiers, quality gates); check
+  with \code{\link{validate}} before treating \code{exact_plan} as a
+  recommendation.
 }
 \description{
 Solves the cross-selection problem -- choose exactly \code{n_cross}

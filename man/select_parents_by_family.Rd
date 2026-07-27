@@ -16,7 +16,8 @@ select_parents_by_family(
   check_value = NULL,
   check_margin_pct = NULL,
   min_sel_value = NULL,
-  min_sel_mode = c("value", "percentile", "sd_below_mean"),
+  min_sel_mode = c("value", "percentile", "sd_above_mean", "relaxed_pool",
+    "sd_below_mean"),
   ensure_haplotype_diversity = FALSE,
   value_matrix = NULL,
   haplotypes = NULL,
@@ -38,7 +39,9 @@ select_parents_by_family(
 \arguments{
 \item{score}{Named numeric vector, e.g. whole-genome GEBV
 (\code{run_haplotype_prediction()$gebv}) or any other selection index.
-Names are individual IDs.}
+Names are individual IDs. Values must be directionally aligned so that
+larger always means greater breeding merit; reverse lower-is-better
+traits, or assign them negative selection-index weights, before calling.}
 
 \item{family}{Named character or factor vector giving each individual's
 pedigree/family group. Required when \code{group_by = "family"} (used
@@ -87,7 +90,8 @@ itself a scored candidate in this run).}
 
 \item{min_sel_value, min_sel_mode}{Optional merit floor applied to
 \code{score} \emph{before} group ranking or within-group selection,
-exactly as in \code{\link{truncation_selection}}/\code{\link{select_parents_ga}}.
+exactly as in \code{\link{truncation_selection}} and
+\code{\link{select_parents_ga_ts}}.
 Default \code{min_sel_value = NULL} applies no floor.}
 
 \item{ensure_haplotype_diversity}{Logical, default \code{FALSE}. See
@@ -182,7 +186,7 @@ passed to \code{\link[stats]{hclust}} when building genetic clusters.}
 (shrinkage fallback, skipped diagnostics).}
 }
 \value{
-Named list:
+A \code{hapblockr_result} list:
 \describe{
   \item{\code{selected}}{Character vector of all selected individual IDs,
     ordered by group rank, then by selection order within each group.}
@@ -253,6 +257,11 @@ Named list:
   \item{\code{mean_relationship}}{Numeric. Realised mean off-diagonal
     pairwise relationship among all of \code{selected}. \code{NA} unless
     \code{G} was supplied.}
+  \item{\code{result_contract}}{The \code{hapblockr_result} contract
+    (parameters, identifiers, transformations, quality gates,
+    \code{by_family} as the decision table, and \code{family_ranking} as
+    the uncertainty table). Check with \code{\link{validate}} before
+    treating \code{selected} as a recommendation.}
 }
 }
 \description{
@@ -454,12 +463,15 @@ A family/group is excluded entirely -- before ranking, before it can
 count toward \code{n_families} -- whenever its eligible membership does
 not exceed the number of lines that would actually be taken from it:
 under \code{"count"}, \code{n_per_family} itself when it is a single
-scalar (the common, flat-quota case), or \code{rank_k} when
-\code{n_per_family} is a named vector for uneven per-group quotas (since
-\code{n_per_family} is then only defined for whichever groups end up
-chosen, which is not yet known at exclusion time -- \code{rank_k}, "the
-number of lines this group's ranking is based on," is used as the
-practical stand-in); under \code{"percentage"}, that group's OWN
+scalar (the common, flat-quota case); when \code{n_per_family} is a
+named vector for uneven per-group quotas, \code{rank_k} stands in as the
+threshold for every group, named or not -- \code{n_per_family} is only
+guaranteed to be defined for whichever groups end up chosen, and which
+groups are chosen is not decided until after ranking (see
+\code{\link{select_parents_by_family}}'s internal
+\code{.resolve_n_per_family()}), so a name that already appears in
+\code{n_per_family} at this pre-ranking stage cannot yet be trusted as
+that group's real quota; under \code{"percentage"}, that group's OWN
 \code{ceiling(pct_per_family/100 * group_size)}. Below that size there
 is no genuine "select the best of" decision for that group at all --
 every eligible member would be taken regardless of ranking -- so

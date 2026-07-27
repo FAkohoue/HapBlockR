@@ -1,13 +1,5 @@
 
-install.packages("rsvg")
-rsvg::rsvg_png(
-  "man/figures/HapBlockR_schematic.svg",
-  "man/figures/HapBlockR_schematic.png",
-  width  = 1360,
-  height = 560
-)
-
-# Then build favicons from the PNG instead
+# Build favicons from the maintained PNG asset.
 pkgdown::build_favicons(overwrite = TRUE)
 
 options(timeout = 3000)  # 5 minutes
@@ -62,7 +54,10 @@ list.files("pkgdown/favicon")
 
 #############################################################################
 
-# install.packages(c("rsvg", "magick", "base64enc"))
+# Historical raster-to-SVG wrapper generation is disabled because it produced
+# a 13.5 MB SVG with embedded raster content. The website uses the maintained
+# PNG directly.
+if (FALSE) {
 
 library(rsvg)
 library(magick)
@@ -286,6 +281,7 @@ rsvg::rsvg_svg(
 if (!file.exists(svg_file) || file.info(svg_file)$size == 0) {
   stop("The final SVG was not created correctly.")
 }
+}
 
 
 
@@ -350,7 +346,7 @@ devtools::load_all()
 #    installed DLL, so load_all() will find them.
 devtools::test()
 
-devtools::test(filter = "association")
+devtools::test(filter = "repository-metadata")
 devtools::test(filter = "haplotypes")
 devtools::test(filter = "full-pipeline")
 devtools::test(filter = "breeder-guide")
@@ -382,6 +378,9 @@ pkgdown::build_home()
 
 #pkgdown::clean_site(force = TRUE)
 pkgdown::build_site()
+
+
+pkgdown::build_favicons(overwrite = TRUE)
 
 # 10. Build package
 devtools::build()

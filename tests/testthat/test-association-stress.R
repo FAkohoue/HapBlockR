@@ -17,7 +17,8 @@ test_that("test_block_haplotypes handles fully monomorphic haplotypes", {
                                  blocks = blocks, verbose = FALSE)
   })
   expect_s3_class(res, "HapBlockR_haplotype_assoc")
-  expect_true(res$status %in% c("skipped_monomorphic", "no_results", "ok"))
+  expect_identical(res$status, "skipped_monomorphic")
+  expect_true(all(res$inference_diagnostics$mode == "not_fitted"))
 })
 
 
@@ -39,6 +40,8 @@ test_that("test_block_haplotypes handles missing haplotype values", {
                                  blocks = blocks, verbose = FALSE)
   })
   expect_s3_class(res, "HapBlockR_haplotype_assoc")
+  expect_true(all(c("trait", "mode", "grm_adjusted", "reason") %in%
+                    names(res$inference_diagnostics)))
 })
 
 
@@ -62,6 +65,7 @@ test_that("test_block_haplotypes handles degenerate GRM gracefully", {
                                  blocks = blocks, verbose = FALSE)
   })
   expect_s3_class(res, "HapBlockR_haplotype_assoc")
+  expect_identical(res$status, "skipped_monomorphic")
 })
 
 

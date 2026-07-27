@@ -18,8 +18,22 @@ test_that("open_breeder_guide: locates the installed .pdf file", {
   expect_match(path, "HapBlockR_Breeder_Guide\\.pdf$")
 })
 
+test_that("open_breeder_guide: locates the editable Word edition", {
+  path <- open_breeder_guide(open = FALSE, format = "html")
+  expect_true(is.character(path))
+  expect_true(file.exists(path))
+  expect_match(path, "HapBlockR_Breeder_Guide\\.html$")
+})
+
 test_that("open_breeder_guide: returns the path invisibly", {
   expect_invisible(open_breeder_guide(open = FALSE))
+})
+
+test_that("open_breeder_guide: validates the requested format", {
+  expect_error(
+    open_breeder_guide(open = FALSE, format = "txt"),
+    "'arg' should be one of"
+  )
 })
 
 test_that("open_breeder_guide: does not error in a non-interactive session even with open = TRUE", {

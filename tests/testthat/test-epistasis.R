@@ -57,13 +57,11 @@ data(ldx_blues,    package = "HapBlockR")
 # Small synthetic fixture for fast inner-loop tests
 .G_s   <- make_geno(n = 50, p = 30, seed = 42L)
 .si_s  <- make_snpinfo(p = 30)
-.blk_s <- make_blocks(.si_s, n_blocks = 3L)
+.blk_s <- make_blocks(.si_s, n_blocks = 10L)
 .haps_s <- extract_haplotypes(.G_s, .si_s, .blk_s, min_snps = 3L)
 .blues_s <- make_blues(.G_s, seed = 42L)
 
-# suppressWarnings: zero-column hap matrix on small synthetic data triggers
-# the identity-GRM fallback warning; this is expected and tested elsewhere.
-.assoc_s <- suppressWarnings(test_block_haplotypes(
+.assoc_s <- test_block_haplotypes(
   haplotypes    = .haps_s,
   blues         = .blues_s,
   blocks        = .blk_s,
@@ -71,7 +69,7 @@ data(ldx_blues,    package = "HapBlockR")
   sig_metric    = "p_fdr",
   sig_threshold = 1.0,
   verbose       = FALSE
-))
+)
 
 # When test_block_haplotypes returns empty results (identity GRM fallback),
 # manually inject minimal allele_tests and block_tests so downstream tests
@@ -125,9 +123,9 @@ if (nrow(.assoc_s$allele_tests) == 0L) {
   }
 }
 
-# Pre-compute whether scan_block_by_block has valid hap columns for .haps_s.
-# With small/random data, all haplotype strings may be unique (zero common alleles),
-# causing early return. Tests that need results skip when this flag is FALSE.
+# Confirm that the deliberately short-block fixture contains recurrent
+# haplotypes. A failure here is a fixture regression, not a reason to skip the
+# scientific tests below.
 .bb_has_valid_hap_cols <- local({
   feat <- suppressWarnings(
     build_haplotype_feature_matrix(.haps_s, min_freq = 0.05,
@@ -135,6 +133,7 @@ if (nrow(.assoc_s$allele_tests) == 0L) {
   )
   ncol(feat) >= 2L
 })
+stopifnot(.bb_has_valid_hap_cols)
 
 
 # ── Fixture: synthetic epistatic data ────────────────────────────────────────
@@ -656,7 +655,6 @@ test_that("scan_block_by_block_epistasis: returns empty result when no sig allel
 # =============================================================================
 
 test_that("scan_block_by_block_epistasis: returns correct class and elements", {
-  skip_if(!.bb_has_valid_hap_cols, "No valid hap columns in .haps_s fixture -- scan will return 0 tests")
   # Use fixture with all significant so we always have query alleles
   res <- scan_block_by_block_epistasis(
     assoc      = .assoc_s,
@@ -672,7 +670,6 @@ test_that("scan_block_by_block_epistasis: returns correct class and elements", {
 })
 
 test_that("scan_block_by_block_epistasis: results columns are correct", {
-  skip_if(!.bb_has_valid_hap_cols, "No valid hap columns in .haps_s fixture -- scan will return 0 tests")
   res <- scan_block_by_block_epistasis(
     assoc      = .assoc_s,
     haplotypes = .haps_s,
@@ -695,7 +692,6 @@ test_that("scan_block_by_block_epistasis: results columns are correct", {
 # =============================================================================
 
 test_that("scan_block_by_block_epistasis: p-values in [0,1]", {
-  skip_if(!.bb_has_valid_hap_cols, "No valid hap columns in .haps_s fixture -- scan will return 0 tests")
   res <- scan_block_by_block_epistasis(
     assoc      = .assoc_s,
     haplotypes = .haps_s,
@@ -712,7 +708,6 @@ test_that("scan_block_by_block_epistasis: p-values in [0,1]", {
 })
 
 test_that("scan_block_by_block_epistasis: block_i != block_j (no self-interaction)", {
-  skip_if(!.bb_has_valid_hap_cols, "No valid hap columns in .haps_s fixture -- scan will return 0 tests")
   res <- scan_block_by_block_epistasis(
     assoc      = .assoc_s,
     haplotypes = .haps_s,
@@ -727,7 +722,6 @@ test_that("scan_block_by_block_epistasis: block_i != block_j (no self-interactio
 })
 
 test_that("scan_block_by_block_epistasis: n_tests equals n_sig * (n_alleles - 1)", {
-  skip_if(!.bb_has_valid_hap_cols, "No valid hap columns in .haps_s fixture -- scan will return 0 tests")
   res <- scan_block_by_block_epistasis(
     assoc      = .assoc_s,
     haplotypes = .haps_s,
@@ -744,7 +738,6 @@ test_that("scan_block_by_block_epistasis: n_tests equals n_sig * (n_alleles - 1)
 })
 
 test_that("scan_block_by_block_epistasis: same_chr is logical", {
-  skip_if(!.bb_has_valid_hap_cols, "No valid hap columns in .haps_s fixture -- scan will return 0 tests")
   res <- scan_block_by_block_epistasis(
     assoc      = .assoc_s,
     haplotypes = .haps_s,
@@ -968,21 +961,14 @@ test_that("fine_map_epistasis_block: method=auto dispatches to pairwise for 20-S
 test_that("fine_map_epistasis_block: lasso method returns data.frame with lasso_coef", {
   skip_if_not_installed("glmnet")
   bn <- .blk_epi$block_id[1L]
-  # glmnet can fail with conformability errors when interaction columns are
-  # degenerate (all-zero products after centering). Treat as a valid skip.
-  result <- tryCatch(
-    fine_map_epistasis_block(
-      block_id    = bn,
-      geno_matrix = .G_epi,
-      snp_info    = .si_epi,
-      blocks      = .blk_epi,
-      y_resid     = .y_resid_epi,
-      method      = "lasso",
-      verbose     = FALSE
-    ),
-    error = function(e) {
-      skip(paste("glmnet failed (degenerate interaction matrix):", conditionMessage(e)))
-    }
+  result <- fine_map_epistasis_block(
+    block_id    = bn,
+    geno_matrix = .G_epi,
+    snp_info    = .si_epi,
+    blocks      = .blk_epi,
+    y_resid     = .y_resid_epi,
+    method      = "lasso",
+    verbose     = FALSE
   )
   # May return empty (all coefficients zero at lambda.1se) — that is valid
   expect_s3_class(result, "data.frame")
@@ -1001,22 +987,17 @@ test_that("fine_map_epistasis_block: lasso method returns data.frame with lasso_
 test_that("fine_map_epistasis_block: lasso selects snp5 or snp12 interaction", {
   skip_if_not_installed("glmnet")
   bn <- .blk_epi$block_id[1L]
-  result <- tryCatch(
-    fine_map_epistasis_block(
-      block_id     = bn,
-      geno_matrix  = .G_epi,
-      snp_info     = .si_epi,
-      blocks       = .blk_epi,
-      y_resid      = .y_resid_epi,
-      method       = "lasso",
-      lasso_nfolds = 3L,
-      verbose      = FALSE
-    ),
-    error = function(e) {
-      skip(paste("glmnet failed (degenerate interaction matrix):", conditionMessage(e)))
-    }
+  result <- fine_map_epistasis_block(
+    block_id     = bn,
+    geno_matrix  = .G_epi,
+    snp_info     = .si_epi,
+    blocks       = .blk_epi,
+    y_resid      = .y_resid_epi,
+    method       = "lasso",
+    lasso_nfolds = 3L,
+    verbose      = FALSE
   )
-  skip_if(nrow(result) == 0L, "LASSO selected no interactions at lambda.1se")
+  expect_gt(nrow(result), 0L)
   top_pair <- result[1L, ]
   snps_in_top <- c(top_pair$SNP_i, top_pair$SNP_j)
   expect_true(
