@@ -26,14 +26,14 @@ jobs:
       BEAGLE_SHA256: "7319f4af9638be05c18dcc1bfb8fb41a58a09293507ebf0d54617d0e40df5a70"
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v4 # v4
 
-      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+      - uses: r-lib/actions/setup-r@v2 # v2
         with:
           r-version: release
           use-public-rspm: true
 
-      - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+      - uses: r-lib/actions/setup-r-dependencies@v2 # v2
         with:
           needs: check
 
