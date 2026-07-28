@@ -347,7 +347,7 @@ devtools::load_all()
 devtools::test()
 
 devtools::test(filter = "repository-metadata")
-devtools::test(filter = "haplotypes")
+devtools::test(filter = "multitrait-gxe")
 devtools::test(filter = "full-pipeline")
 devtools::test(filter = "breeder-guide")
 
