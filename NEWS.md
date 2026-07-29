@@ -2,6 +2,17 @@
 
 ## Scientific correctness
 
+- Fixed a platform-dependent test failure in `fit_gxe_gblup()` caught by
+  GitHub Actions R CMD check (reproduced on R-devel and older R versions,
+  but not R-release): `across_environment_predictions` was built with
+  `unique(grid[c("id", "genomic_main")])`. `genomic_main` is mathematically
+  constant across environments for a given id, but deduplicating on its
+  floating-point value is fragile -- BLAS/LAPACK can return values equal to
+  many decimal places but not bit-identical across platforms/R versions,
+  silently producing more than one "unique" row for the same id. Now
+  deduplicates on `id` alone (`grid[!duplicated(grid$id), ...]`), with no
+  floating-point comparison involved.
+
 - Fixed `validate_crosses_exact()`'s `optimal_solution_found` quality gate,
   caught by `R CMD check` failing to rebuild the *full pipeline* vignette:
   `identical(sol$status, 0)` compared `lpSolve::lp()`'s returned status

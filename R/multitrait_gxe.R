@@ -1001,6 +1001,19 @@ fit_gxe_gblup <- function(
     )
   ))
   rownames(environment_stability) <- NULL
+  # genomic_main is mathematically constant across environments for a given
+  # id (C_main's row only depends on grid$id -- see u_main above), but
+  # deduplicating on its floating-point VALUE via unique() is fragile:
+  # BLAS/LAPACK can return values that are equal to many decimal places but
+  # not bit-identical across platforms/R versions, which silently yields
+  # more than one "unique" row for the same id (observed on CI: nrow one
+  # more than length(ids) on some R-devel/oldrel builds, though not on
+  # release). Deduplicate on id alone instead -- no floating-point
+  # comparison involved.
+  across_environment_predictions <- grid[
+    !duplicated(grid$id), c("id", "genomic_main")
+  ]
+  rownames(across_environment_predictions) <- NULL
   result <- list(
     predictions = grid,
     observed_predictions = observed_predictions,
@@ -1008,9 +1021,7 @@ fit_gxe_gblup <- function(
     variance_components = variances,
     optimiser = optimiser,
     K_environment = K_environment,
-    across_environment_predictions = unique(
-      grid[c("id", "genomic_main")]
-    ),
+    across_environment_predictions = across_environment_predictions,
     target_provenance = target_provenance
   )
   .add_hapblockr_contract(

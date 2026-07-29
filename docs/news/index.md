@@ -4,6 +4,19 @@
 
 ### Scientific correctness
 
+- Fixed a platform-dependent test failure in
+  [`fit_gxe_gblup()`](https://FAkohoue.github.io/HapBlockR/reference/fit_gxe_gblup.md)
+  caught by GitHub Actions R CMD check (reproduced on R-devel and older
+  R versions, but not R-release): `across_environment_predictions` was
+  built with `unique(grid[c("id", "genomic_main")])`. `genomic_main` is
+  mathematically constant across environments for a given id, but
+  deduplicating on its floating-point value is fragile – BLAS/LAPACK can
+  return values equal to many decimal places but not bit-identical
+  across platforms/R versions, silently producing more than one “unique”
+  row for the same id. Now deduplicates on `id` alone
+  (`grid[!duplicated(grid$id), ...]`), with no floating-point comparison
+  involved.
+
 - Fixed
   [`validate_crosses_exact()`](https://FAkohoue.github.io/HapBlockR/reference/validate_crosses_exact.md)’s
   `optimal_solution_found` quality gate, caught by `R CMD check` failing
