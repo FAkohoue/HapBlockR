@@ -114,17 +114,132 @@
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
+<p>HapBlockR requires R 4.3.0 or later.</p>
+<div class="section level3">
+<h3 id="core-installation">Core installation<a class="anchor" aria-label="anchor" href="#core-installation"></a>
+</h3>
+<p>For routine use, install HapBlockR with its required dependencies:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FAkohoue/HapBlockR"</span>, build_vignettes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  dependencies <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FAkohoue/HapBlockR"</span>, </span>
+<span>build_vignettes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>dependencies <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Set <code>build_vignettes = FALSE</code> to skip building the vignettes locally (they remain available on the package website). Required dependencies install automatically; some methods use optional packages or external tools and fail explicitly when the requested engine is unavailable.</p>
+</div>
+<div class="section level3">
+<h3 id="optional-non-cran-dependencies">Optional non-CRAN dependencies<a class="anchor" aria-label="anchor" href="#optional-non-cran-dependencies"></a>
+</h3>
+<p>Several HapBlockR methods use optional packages that are not distributed through CRAN. These dependencies must be installed separately when their corresponding functionality is required.</p>
+<div class="section level4">
+<h4 id="bioconductor-packages">Bioconductor packages<a class="anchor" aria-label="anchor" href="#bioconductor-packages"></a>
+</h4>
+<p><code>gdsfmt</code> and <code>SNPRelate</code> support GDS-backed genotype storage, conversion and analysis:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gdsfmt"</span>, <span class="st">"SNPRelate"</span><span class="op">)</span>,</span>
+<span>  ask <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  update <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level4">
+<h4 id="github-packages">GitHub packages<a class="anchor" aria-label="anchor" href="#github-packages"></a>
+</h4>
+<p>The following optional packages are installed directly from GitHub:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"remotes"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Forward-in-time genomic simulation</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span></span>
+<span>  <span class="st">"vllrs/genomicSimulation"</span>,</span>
+<span>  upgrade <span class="op">=</span> <span class="st">"never"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Optional mating-design engine</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span></span>
+<span>  <span class="st">"Resende-Lab/SimpleMating"</span>,</span>
+<span>  upgrade <span class="op">=</span> <span class="st">"never"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># DGSI and QGSI selection-index methods</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span></span>
+<span>  <span class="st">"FAkohoue/DesiredGainR"</span>,</span>
+<span>  upgrade <span class="op">=</span> <span class="st">"never"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>The direct optional non-CRAN R dependencies are:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr>
+<th>Source</th>
+<th>Package</th>
+<th>Main use in HapBlockR</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Bioconductor</td>
+<td><code>gdsfmt</code></td>
+<td>GDS-backed genotype storage and access</td>
+</tr>
+<tr>
+<td>Bioconductor</td>
+<td><code>SNPRelate</code></td>
+<td>GDS conversion and SNPRelate genotype workflows</td>
+</tr>
+<tr>
+<td>GitHub</td>
+<td><code>genomicSimulation</code></td>
+<td>Forward-in-time genomic simulation</td>
+</tr>
+<tr>
+<td>GitHub</td>
+<td><code>SimpleMating</code></td>
+<td>Optional mating-design workflows</td>
+</tr>
+<tr>
+<td>GitHub</td>
+<td><code>DesiredGainR</code></td>
+<td>DGSI and QGSI selection-index methods</td>
+</tr>
+</tbody>
+</table>
+<p>After installing the required optional dependencies, install or reinstall HapBlockR:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FAkohoue/HapBlockR"</span>, </span>
+<span>build_vignettes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>dependencies <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>These packages are optional. A HapBlockR method that requires an unavailable dependency stops with an explicit installation message rather than silently changing the requested analytical engine.</p>
+</div>
+</div>
+<div class="section level3">
+<h3 id="external-beagle-phasing">External Beagle phasing<a class="anchor" aria-label="anchor" href="#external-beagle-phasing"></a>
+</h3>
+<p>Beagle is an external Java program rather than an R package and is not distributed with HapBlockR. To use <code><a href="reference/phase_with_beagle.html">phase_with_beagle()</a></code>, obtain a compatible Beagle 5.x JAR separately and provide its location through the function argument, package option or documented environment variable.</p>
+<p>Java 8 or later must also be available:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/system.html" class="external-link">system</a></span><span class="op">(</span><span class="st">"java -version"</span><span class="op">)</span></span></code></pre></div>
+<p>See the phasing vignette for configuration and validation details:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"HapBlockR-phasing"</span><span class="op">)</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
 </h2>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/FAkohoue/HapBlockR" class="external-link">HapBlockR</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">ldx_geno</span><span class="op">)</span></span>
@@ -324,7 +439,7 @@
 </tbody>
 </table>
 <p><code><a href="reference/open_breeder_guide.html">open_breeder_guide()</a></code> opens the versioned, source-backed Breeder’s Guide (PDF or HTML), which covers all decision tools, a worked numerical example, data-quality and feasibility checks, and interpretation guidance for quality-control gates and uncertainty:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/open_breeder_guide.html">open_breeder_guide</a></span><span class="op">(</span>format <span class="op">=</span> <span class="st">"pdf"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/open_breeder_guide.html">open_breeder_guide</a></span><span class="op">(</span>format <span class="op">=</span> <span class="st">"html"</span><span class="op">)</span></span></code></pre></div>
 <p>Its editable source is <code>inst/guide/HapBlockR_Breeder_Guide.Rmd</code>, rendered to the shipped PDF/HTML via <code>tools/build_breeder_guide_accessible.cjs</code>.</p>
@@ -333,7 +448,7 @@
 <h2 id="reproducibility">Reproducibility<a class="anchor" aria-label="anchor" href="#reproducibility"></a>
 </h2>
 <p>For an auditable analysis:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/packageDescription.html" class="external-link">packageVersion</a></span><span class="op">(</span><span class="st">"HapBlockR"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
@@ -342,7 +457,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"HapBlockR"</span><span class="op">)</span></span></code></pre></div>
 <p>Machine-readable citation metadata are provided in <code>CITATION.cff</code>. A DOI has not yet been assigned; do not cite an invented or provisional DOI.</p>
 </div>

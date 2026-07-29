@@ -82,38 +82,123 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install --cask xquartz
 
+      # pak currently fails while resolving archived Bioconductor packages
+      # from DESCRIPTION. These packages are optional Suggests, so exclude
+      # them from pak's lockfile and install them explicitly with BiocManager
+      # from a reachable Bioconductor mirror in the next step.
       - name: Install R dependencies
         if: matrix.config.r != '4.3'
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          cache-version: 2
+          cache-version: 3
           extra-packages: |
             any::rcmdcheck
             any::covr
+            SNPRelate=?ignore
+            gdsfmt=?ignore
+            vsn=?ignore
           needs: check
 
       - name: Install R dependencies (R 4.3)
         if: matrix.config.r == '4.3'
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          cache-version: 2
+          cache-version: 3
           extra-packages: |
             any::rcmdcheck
             any::covr
             cran::Deriv@4.2.0
+            SNPRelate=?ignore
+            gdsfmt=?ignore
+            vsn=?ignore
           needs: check
 
-      - name: Ensure Bioconductor packages
+      - name: Install Bioconductor packages
         shell: Rscript {0}
         run: |
+          cran_repo <- "https://cloud.r-project.org"
+
           if (!requireNamespace("BiocManager", quietly = TRUE)) {
-            install.packages(
-              "BiocManager",
-              repos = "https://cloud.r-project.org"
+            install.packages("BiocManager", repos = cran_repo)
+          }
+
+          bioc_version <- as.character(BiocManager::version())
+
+          # R 4.3 uses the archived Bioconductor 3.18 repository. The
+          # primary archive endpoint is intermittently unavailable, so use
+          # official mirrors and select the first one with a readable index.
+          mirror_candidates <- if (getRversion() < "4.4.0") {
+            c(
+              "https://bioconductor.statistik.tu-dortmund.de",
+              "https://ftp.gwdg.de/pub/misc/bioconductor",
+              "https://bioconductor.org"
+            )
+          } else {
+            c(
+              "https://bioconductor.posit.co",
+              "https://bioconductor.statistik.tu-dortmund.de",
+              "https://ftp.gwdg.de/pub/misc/bioconductor",
+              "https://bioconductor.org"
             )
           }
 
-          bioc_pkgs <- c("SNPRelate", "gdsfmt", "vsn")
+          repository_available <- function(mirror) {
+            mirror <- sub("/+$", "", mirror)
+            index_url <- sprintf(
+              "%s/packages/%s/bioc/src/contrib/PACKAGES.gz",
+              mirror,
+              bioc_version
+            )
+            destination <- tempfile(fileext = ".gz")
+            on.exit(unlink(destination), add = TRUE)
+
+            status <- suppressWarnings(try(
+              utils::download.file(
+                index_url,
+                destination,
+                mode = "wb",
+                quiet = TRUE
+              ),
+              silent = TRUE
+            ))
+
+            !inherits(status, "try-error") &&
+              is.numeric(status) &&
+              status == 0 &&
+              file.exists(destination) &&
+              isTRUE(file.info(destination)$size > 0)
+          }
+
+          available <- vapply(
+            mirror_candidates,
+            repository_available,
+            logical(1L)
+          )
+
+          if (!any(available)) {
+            stop(
+              "No reachable Bioconductor mirror was found for version ",
+              bioc_version,
+              "."
+            )
+          }
+
+          bioc_mirror <- mirror_candidates[which(available)[1L]]
+          message(
+            "Using Bioconductor ",
+            bioc_version,
+            " from ",
+            bioc_mirror
+          )
+
+          options(BioC_mirror = bioc_mirror)
+          repositories <- BiocManager::repositories(
+            version = bioc_version
+          )
+          repositories["CRAN"] <- cran_repo
+          options(repos = repositories)
+
+          bioc_pkgs <- c("gdsfmt", "SNPRelate", "vsn")
           to_install <- bioc_pkgs[!vapply(
             bioc_pkgs,
             requireNamespace,
@@ -124,6 +209,7 @@ jobs:
           if (length(to_install)) {
             BiocManager::install(
               to_install,
+              version = bioc_version,
               ask = FALSE,
               update = FALSE
             )
@@ -138,7 +224,7 @@ jobs:
 
           if (length(missing)) {
             stop(
-              "Missing Bioconductor packages: ",
+              "Missing Bioconductor packages after installation: ",
               paste(missing, collapse = ", ")
             )
           }
@@ -199,11 +285,14 @@ jobs:
       - name: Set up dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          cache-version: 2
+          cache-version: 3
           extra-packages: |
             any::covr
             any::spelling
             any::testthat
+            SNPRelate=?ignore
+            gdsfmt=?ignore
+            vsn=?ignore
           needs: check
 
       - name: Check British-English spelling

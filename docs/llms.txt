@@ -27,10 +27,19 @@ treating any output as ground truth.
 
 ## Installation
 
+HapBlockR requires R 4.3.0 or later.
+
+### Core installation
+
+For routine use, install HapBlockR with its required dependencies:
+
 ``` r
 install.packages("remotes")
-remotes::install_github("FAkohoue/HapBlockR", build_vignettes = TRUE,
-  dependencies = TRUE
+
+install.packages("remotes")
+remotes::install_github("FAkohoue/HapBlockR", 
+build_vignettes = TRUE,
+dependencies = TRUE
 )
 ```
 
@@ -38,6 +47,103 @@ Set `build_vignettes = FALSE` to skip building the vignettes locally
 (they remain available on the package website). Required dependencies
 install automatically; some methods use optional packages or external
 tools and fail explicitly when the requested engine is unavailable.
+
+### Optional non-CRAN dependencies
+
+Several HapBlockR methods use optional packages that are not distributed
+through CRAN. These dependencies must be installed separately when their
+corresponding functionality is required.
+
+#### Bioconductor packages
+
+`gdsfmt` and `SNPRelate` support GDS-backed genotype storage, conversion
+and analysis:
+
+``` r
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+BiocManager::install(
+  c("gdsfmt", "SNPRelate"),
+  ask = FALSE,
+  update = FALSE
+)
+```
+
+#### GitHub packages
+
+The following optional packages are installed directly from GitHub:
+
+``` r
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+
+# Forward-in-time genomic simulation
+remotes::install_github(
+  "vllrs/genomicSimulation",
+  upgrade = "never"
+)
+
+# Optional mating-design engine
+remotes::install_github(
+  "Resende-Lab/SimpleMating",
+  upgrade = "never"
+)
+
+# DGSI and QGSI selection-index methods
+remotes::install_github(
+  "FAkohoue/DesiredGainR",
+  upgrade = "never"
+)
+```
+
+The direct optional non-CRAN R dependencies are:
+
+| Source | Package | Main use in HapBlockR |
+|----|----|----|
+| Bioconductor | `gdsfmt` | GDS-backed genotype storage and access |
+| Bioconductor | `SNPRelate` | GDS conversion and SNPRelate genotype workflows |
+| GitHub | `genomicSimulation` | Forward-in-time genomic simulation |
+| GitHub | `SimpleMating` | Optional mating-design workflows |
+| GitHub | `DesiredGainR` | DGSI and QGSI selection-index methods |
+
+After installing the required optional dependencies, install or
+reinstall HapBlockR:
+
+``` r
+install.packages("remotes")
+remotes::install_github("FAkohoue/HapBlockR", 
+build_vignettes = TRUE,
+dependencies = TRUE
+)
+```
+
+These packages are optional. A HapBlockR method that requires an
+unavailable dependency stops with an explicit installation message
+rather than silently changing the requested analytical engine.
+
+### External Beagle phasing
+
+Beagle is an external Java program rather than an R package and is not
+distributed with HapBlockR. To use
+[`phase_with_beagle()`](https://FAkohoue.github.io/HapBlockR/reference/phase_with_beagle.md),
+obtain a compatible Beagle 5.x JAR separately and provide its location
+through the function argument, package option or documented environment
+variable.
+
+Java 8 or later must also be available:
+
+``` r
+system("java -version")
+```
+
+See the phasing vignette for configuration and validation details:
+
+``` r
+vignette("HapBlockR-phasing")
+```
 
 ## Quick example
 
