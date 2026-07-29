@@ -27,7 +27,16 @@ jobs:
           - { os: ubuntu-latest,  r: "release"  }
           - { os: ubuntu-latest,  r: "devel"    }
           - { os: ubuntu-latest,  r: "oldrel-1" }
-          - { os: ubuntu-22.04,   r: "4.2"      }
+          # Fixed-version floor test, pinned to DESCRIPTION's Depends: R
+          # (>= 4.3.0). Was previously "4.2" to match an R (>= 4.2.0) floor,
+          # but ASRgenomics (Suggests) now transitively needs FactoMineR
+          # (>= 2.13), which itself requires R >= 4.3 -- pak can no longer
+          # resolve a full dependency lockfile (including Suggests) on R
+          # 4.2 as a result. This is upstream CRAN drift in a third-party
+          # transitive dependency, not a HapBlockR requirement, but it makes
+          # R 4.2 no longer achievable for a full-Suggests CI install, so
+          # the floor moved to 4.3 in both places together.
+          - { os: ubuntu-22.04,   r: "4.3"      }
           # Pinned to macos-15 (not macos-latest): macos-latest now resolves
           # to macOS 26 "Tahoe", which dropped OpenGL/XQuartz support. `rgl`
           # (pulled in transitively via SimpleMating -> optiSel's dependency

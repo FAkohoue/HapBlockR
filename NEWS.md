@@ -68,13 +68,6 @@
   stated SD superiority. Deliberately broad candidate pools use the clearer
   `"relaxed_pool"` name. The former `"sd_below_mean"` name remains only as a
   deprecated compatibility alias.
-- Fixed `select_parents_by_family()`'s `too_small` family-exclusion check
-  under `family_select_mode = "count"`: when `n_per_family` is a per-family
-  named vector, the check now compares each family's eligible membership
-  against ITS OWN quota. It previously borrowed a single scalar threshold
-  (the largest quota across all families) for every family, which could
-  wrongly exclude a family whose own, smaller quota it would have
-  comfortably satisfied.
 - Epistasis fine mapping's `p_bonf` now uses the number of interaction tests
   that actually produced a valid fit, not the pre-loop candidate-pair count
   (which counted pairs later skipped for degenerate/rank-deficient OLS fits).
@@ -186,6 +179,13 @@
 - Compiled parallel methods use at most two threads, check for user
   interruption, and build with optional OpenMP through portable configure
   logic.
+- Raised the declared minimum R version from `4.2.0` to `4.3.0`
+  (`DESCRIPTION`'s `Depends`), and moved the CI floor-version check
+  (`.github/workflows/R-CMD-check.yaml`) from R 4.2 to R 4.3 to match.
+  `ASRgenomics` (Suggests) now transitively needs `FactoMineR (>= 2.13)`,
+  which itself requires R >= 4.3 -- upstream CRAN drift in a third-party
+  dependency, not a HapBlockR requirement, but it made a full-Suggests
+  dependency install no longer resolvable on R 4.2.
 
 ## Documentation and repository
 

@@ -28,7 +28,7 @@ Description: Detects linkage-disequilibrium blocks and supports haplotype
     biallelic data.
 License: MIT + file LICENSE
 Depends:
-    R (>= 4.2.0)
+    R (>= 4.3.0)
 Imports:
     Rcpp (>= 1.0.10),
     igraph (>= 1.3.0),
