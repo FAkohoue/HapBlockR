@@ -119,86 +119,135 @@ jobs:
           cran_repo <- "https://cloud.r-project.org"
 
           if (!requireNamespace("BiocManager", quietly = TRUE)) {
-            install.packages("BiocManager", repos = cran_repo)
+            install.packages(
+              "BiocManager",
+              repos = cran_repo
+            )
           }
 
           bioc_version <- as.character(BiocManager::version())
+          is_windows <- identical(.Platform$OS.type, "windows")
 
-          # R 4.3 uses the archived Bioconductor 3.18 repository. The
-          # primary archive endpoint is intermittently unavailable, so use
-          # official mirrors and select the first one with a readable index.
-          mirror_candidates <- if (getRversion() < "4.4.0") {
-            c(
-              "https://bioconductor.statistik.tu-dortmund.de",
-              "https://ftp.gwdg.de/pub/misc/bioconductor",
-              "https://bioconductor.org"
-            )
+          bioc_pkgs <- c(
+            "gdsfmt",
+            "SNPRelate",
+            "vsn"
+          )
+
+          # Use only official Bioconductor mirrors. A mirror is accepted only
+          # when the repository appropriate for the current platform contains
+          # all packages required by this CI step.
+          mirror_candidates <- c(
+            "https://bioconductor.org",
+            "https://bioconductor.posit.co",
+            "https://bioconductor.statistik.tu-dortmund.de",
+            "https://ftp.gwdg.de/pub/misc/bioconductor",
+            "https://mirrors.dotsrc.org/bioconductor"
+          )
+
+          repository_type <- if (is_windows) {
+            "binary"
           } else {
-            c(
-              "https://bioconductor.posit.co",
-              "https://bioconductor.statistik.tu-dortmund.de",
-              "https://ftp.gwdg.de/pub/misc/bioconductor",
-              "https://bioconductor.org"
-            )
+            "source"
           }
 
-          repository_available <- function(mirror) {
-            mirror <- sub("/+$", "", mirror)
-            index_url <- sprintf(
-              "%s/packages/%s/bioc/src/contrib/PACKAGES.gz",
-              mirror,
-              bioc_version
+          mirror_has_packages <- function(mirror) {
+            old_mirror <- getOption("BioC_mirror")
+            on.exit(
+              options(BioC_mirror = old_mirror),
+              add = TRUE
             )
-            destination <- tempfile(fileext = ".gz")
-            on.exit(unlink(destination), add = TRUE)
 
-            status <- suppressWarnings(try(
-              utils::download.file(
-                index_url,
-                destination,
-                mode = "wb",
-                quiet = TRUE
+            options(BioC_mirror = mirror)
+
+            repositories <- tryCatch(
+              BiocManager::repositories(
+                version = bioc_version
               ),
-              silent = TRUE
-            ))
+              error = function(error) NULL
+            )
 
-            !inherits(status, "try-error") &&
-              is.numeric(status) &&
-              status == 0 &&
-              file.exists(destination) &&
-              isTRUE(file.info(destination)$size > 0)
+            if (
+              is.null(repositories) ||
+              !"BioCsoft" %in% names(repositories)
+            ) {
+              return(FALSE)
+            }
+
+            contribution_url <- tryCatch(
+              utils::contrib.url(
+                repositories[["BioCsoft"]],
+                type = repository_type
+              ),
+              error = function(error) NA_character_
+            )
+
+            if (
+              length(contribution_url) != 1L ||
+              is.na(contribution_url) ||
+              !nzchar(contribution_url)
+            ) {
+              return(FALSE)
+            }
+
+            available <- tryCatch(
+              utils::available.packages(
+                contriburl = contribution_url
+              ),
+              error = function(error) {
+                message(
+                  "Could not read ",
+                  contribution_url,
+                  ": ",
+                  conditionMessage(error)
+                )
+                NULL
+              }
+            )
+
+            !is.null(available) &&
+              all(bioc_pkgs %in% rownames(available))
           }
 
-          available <- vapply(
+          available_mirrors <- vapply(
             mirror_candidates,
-            repository_available,
+            mirror_has_packages,
             logical(1L)
           )
 
-          if (!any(available)) {
+          if (!any(available_mirrors)) {
             stop(
-              "No reachable Bioconductor mirror was found for version ",
+              "No Bioconductor ",
+              repository_type,
+              " repository containing ",
+              paste(bioc_pkgs, collapse = ", "),
+              " was found for Bioconductor ",
               bioc_version,
               "."
             )
           }
 
-          bioc_mirror <- mirror_candidates[which(available)[1L]]
+          bioc_mirror <- mirror_candidates[
+            which(available_mirrors)[1L]
+          ]
+
           message(
             "Using Bioconductor ",
             bioc_version,
-            " from ",
+            " ",
+            repository_type,
+            " packages from ",
             bioc_mirror
           )
 
           options(BioC_mirror = bioc_mirror)
+
           repositories <- BiocManager::repositories(
             version = bioc_version
           )
           repositories["CRAN"] <- cran_repo
           options(repos = repositories)
 
-          bioc_pkgs <- c("gdsfmt", "SNPRelate", "vsn")
           to_install <- bioc_pkgs[!vapply(
             bioc_pkgs,
             requireNamespace,
@@ -207,11 +256,22 @@ jobs:
           )]
 
           if (length(to_install)) {
-            BiocManager::install(
-              to_install,
+            installation_arguments <- list(
+              pkgs = to_install,
               version = bioc_version,
               ask = FALSE,
               update = FALSE
+            )
+
+            # Never compile these packages from source on Windows. The
+            # corresponding Bioconductor Windows binaries are used instead.
+            if (is_windows) {
+              installation_arguments$type <- "binary"
+            }
+
+            do.call(
+              BiocManager::install,
+              installation_arguments
             )
           }
 
@@ -228,6 +288,19 @@ jobs:
               paste(missing, collapse = ", ")
             )
           }
+
+          installed_versions <- vapply(
+            bioc_pkgs,
+            function(package) {
+              as.character(
+                utils::packageVersion(package)
+              )
+            },
+            character(1L)
+          )
+
+          print(installed_versions)
+
 
       - name: Reinstall data.table from source on Linux
         if: runner.os == 'Linux'
