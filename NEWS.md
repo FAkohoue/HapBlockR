@@ -69,6 +69,11 @@
   stated SD superiority. Deliberately broad candidate pools use the clearer
   `"relaxed_pool"` name. The former `"sd_below_mean"` name remains only as a
   deprecated compatibility alias.
+- Genome-wide pipelines now preserve the physical column coordinates of
+  file-backed genotype data while applying streaming MAF and chromosome
+  filters. Retained markers are mapped to the source backend before the
+  filtered matrix is materialised, preventing out-of-range reads when an
+  earlier physical marker is removed.
 
 ## Identity, provenance, and reproducibility
 

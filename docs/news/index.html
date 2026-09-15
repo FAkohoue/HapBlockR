@@ -92,6 +92,7 @@
 <li>Association testing no longer labels an unadjusted result as adjusted when the requested mixed model cannot be fitted. Fallback behaviour is explicit.</li>
 <li>Core-collection selection validates metric-distance assumptions and uses square-root Euclidean distances derived from genomic relationships.</li>
 <li>Merit-floor interfaces now provide <code>min_sel_mode = "sd_above_mean"</code> for intuitive selection of directionally superior candidates. A value of zero retains candidates at or above the mean and positive values require the stated SD superiority. Deliberately broad candidate pools use the clearer <code>"relaxed_pool"</code> name. The former <code>"sd_below_mean"</code> name remains only as a deprecated compatibility alias.</li>
+<li>Genome-wide pipelines now preserve the physical column coordinates of file-backed genotype data while applying streaming MAF and chromosome filters. Retained markers are mapped to the source backend before the filtered matrix is materialised, preventing out-of-range reads when an earlier physical marker is removed.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="identity-provenance-and-reproducibility-0-3-12-9000">Identity, provenance, and reproducibility<a class="anchor" aria-label="anchor" href="#identity-provenance-and-reproducibility-0-3-12-9000"></a></h3>

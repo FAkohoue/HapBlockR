@@ -417,6 +417,92 @@ test_that("run_ldx_pipeline: Path A accepts HapBlockR_backend as geno_source", {
   expect_true(nrow(res$blocks) >= 1L)
 })
 
+test_that("run_ldx_pipeline maps filtered markers to physical backend columns", {
+  data(ldx_geno, package = "HapBlockR")
+  data(ldx_snp_info, package = "HapBlockR")
+
+  # Rejecting the first physical marker makes every retained physical index
+  # one greater than its position in the filtered metadata. The former
+  # implementation reduced backend$n_snps before read_chunk(), causing the
+  # final retained marker to be rejected as out of bounds.
+  geno <- cbind(monomorphic_first = 0, ldx_geno)
+  snp_info <- rbind(
+    data.frame(
+      SNP = "monomorphic_first", CHR = "1", POS = 1,
+      REF = "A", ALT = "G", stringsAsFactors = FALSE
+    ),
+    ldx_snp_info
+  )
+  be <- read_geno(
+    geno, format = "matrix", snp_info = snp_info,
+    sample_ids = rownames(geno), verbose = FALSE
+  )
+  on.exit(close_backend(be), add = TRUE)
+
+  res <- run_ldx_pipeline(
+    geno_source = be,
+    out_blocks = tempfile(fileext = ".csv"),
+    out_diversity = tempfile(fileext = ".csv"),
+    out_hap_matrix = tempfile(fileext = ".csv"),
+    maf_cut = 0.05,
+    CLQcut = 0.5,
+    leng = 10L,
+    subSegmSize = 70L,
+    min_snps_block = 3L,
+    verbose = FALSE
+  )
+
+  expect_false("monomorphic_first" %in% res$snp_info_filtered$SNP)
+  expect_identical(colnames(res$geno_matrix), res$snp_info_filtered$SNP)
+  expect_identical(be$n_snps, ncol(geno))
+  expect_identical(be$snp_info$SNP, snp_info$SNP)
+})
+
+test_that("run_ldx_pipeline preserves physical indices for bigmemory", {
+  skip_if_not_installed("bigmemory")
+  data(ldx_geno, package = "HapBlockR")
+  data(ldx_snp_info, package = "HapBlockR")
+
+  geno <- cbind(monomorphic_first = 0, ldx_geno)
+  snp_info <- rbind(
+    data.frame(
+      SNP = "monomorphic_first", CHR = "1", POS = 1,
+      REF = "A", ALT = "G", stringsAsFactors = FALSE
+    ),
+    ldx_snp_info
+  )
+  backing_path <- tempfile("ldxbm_physical_indices_")
+  dir.create(backing_path, recursive = TRUE)
+  on.exit(unlink(backing_path, recursive = TRUE), add = TRUE)
+
+  be <- read_geno_bigmemory(
+    source = geno,
+    snp_info = snp_info,
+    backingfile = "physical_indices",
+    backingpath = backing_path,
+    type = "char",
+    verbose = FALSE
+  )
+  on.exit(close_backend(be), add = TRUE)
+
+  res <- run_ldx_pipeline(
+    geno_source = be,
+    out_blocks = tempfile(fileext = ".csv"),
+    out_diversity = tempfile(fileext = ".csv"),
+    out_hap_matrix = tempfile(fileext = ".csv"),
+    maf_cut = 0.05,
+    CLQcut = 0.5,
+    leng = 10L,
+    subSegmSize = 70L,
+    min_snps_block = 3L,
+    verbose = FALSE
+  )
+
+  expect_false("monomorphic_first" %in% res$snp_info_filtered$SNP)
+  expect_identical(colnames(res$geno_matrix), res$snp_info_filtered$SNP)
+  expect_equal(be$n_snps, ncol(geno))
+})
+
 test_that("run_ldx_pipeline: use_bigmemory=TRUE builds bigmemory backend internally", {
   skip_if_not_installed("bigmemory")
   f <- system.file("extdata", "example_genotypes_numeric.csv",

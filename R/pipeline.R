@@ -773,24 +773,36 @@ run_ldx_pipeline <- function(
   if (nrow(snp_info_filtered) == 0L)
     stop("No SNPs remain after MAF pre-screen. Lower maf_cut.", call. = FALSE)
 
-  be$snp_info <- snp_info_filtered
-  be$n_snps   <- nrow(snp_info_filtered)
-
   # -- Step 3: Chromosome subset ----------------------------------------------
   if (!is.null(chr)) {
     chr <- .norm_chr_hap(as.character(chr))
-    be$snp_info$CHR <- .norm_chr_hap(be$snp_info$CHR)
-    be$snp_info <- be$snp_info[be$snp_info$CHR %in% chr, , drop = FALSE]
-    be$n_snps   <- nrow(be$snp_info)
-    .log("Chr filter: ", be$n_snps, " SNPs on chr ", paste(chr, collapse = ", "))
+    snp_info_filtered$CHR <- .norm_chr_hap(snp_info_filtered$CHR)
+    snp_info_filtered <- snp_info_filtered[
+      snp_info_filtered$CHR %in% chr, , drop = FALSE
+    ]
+    .log("Chr filter: ", nrow(snp_info_filtered), " SNPs on chr ",
+         paste(chr, collapse = ", "))
+    if (nrow(snp_info_filtered) == 0L)
+      stop(
+        "No SNPs remain after chromosome filtering. Check chr labels.",
+        call. = FALSE
+      )
   }
 
   # -- Step 4: Load genotype matrix -------------------------------------------
   .log("Loading filtered genotype matrix ...")
-  full_idx <- match(be$snp_info$SNP, orig_snp_info$SNP)
+  # `be` still describes the physical source matrix. MAF and chromosome
+  # filtering above define a logical subset only, so retain the physical
+  # column coordinates until read_chunk() has materialised that subset.
+  full_idx <- match(snp_info_filtered$SNP, orig_snp_info$SNP)
+  if (anyNA(full_idx) || anyDuplicated(full_idx))
+    stop(
+      "Filtered SNP metadata cannot be mapped uniquely to the source backend.",
+      call. = FALSE
+    )
   geno_mat <- read_chunk(be, full_idx)
   rownames(geno_mat) <- be$sample_ids
-  colnames(geno_mat) <- be$snp_info$SNP
+  colnames(geno_mat) <- snp_info_filtered$SNP
   .log("Genotype matrix: ", nrow(geno_mat), " x ", ncol(geno_mat))
 
   # -- Step 4.5a: Call-rate filter --------------------------------------------
@@ -805,8 +817,6 @@ run_ldx_pipeline <- function(
       keep_cr           <- as.logical(cr_res$keep)
       geno_mat          <- geno_mat[, keep_cr, drop = FALSE]
       snp_info_filtered <- snp_info_filtered[keep_cr, , drop = FALSE]
-      be$snp_info       <- snp_info_filtered
-      be$n_snps         <- nrow(snp_info_filtered)
 
       .log(sprintf(
         "Call-rate filter: removed %d SNPs (< %.0f%%) | Remaining: %d",
@@ -824,8 +834,6 @@ run_ldx_pipeline <- function(
   if (n_maf_removed > 0L) {
     geno_mat          <- geno_mat[, keep_maf, drop = FALSE]
     snp_info_filtered <- snp_info_filtered[keep_maf, , drop = FALSE]
-    be$snp_info       <- snp_info_filtered
-    be$n_snps         <- nrow(snp_info_filtered)
 
     .log(sprintf(
       "MAF filter (>= %.2f): removed %d SNPs | Remaining: %d",
