@@ -112,35 +112,27 @@ jobs:
           if (length(to_install))
             BiocManager::install(to_install, ask = FALSE, update = FALSE)
 
-      - name: Cache R packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ${{ env.R_LIBS_USER }}
-          key: ${{ runner.os }}-r-${{ matrix.config.r }}-${{ hashFiles('DESCRIPTION') }}
-          restore-keys: |
-            ${{ runner.os }}-r-${{ matrix.config.r }}-
-
       - name: Install R dependencies
         uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
+          # The action owns this cache. R-devel is deliberately uncached
+          # because its moving ABI can invalidate compiled packages; the new
+          # cache version also prevents reuse of the earlier shared caches.
+          cache: ${{ matrix.config.r == 'devel' && 'false' || 'true' }}
+          cache-version: 2
           extra-packages: |
             any::rcmdcheck
             any::covr
+            ASRgenomics=?ignore-before-r=4.3.0
           needs: check
-
-      - name: Reinstall data.table from source on Linux
-        if: runner.os == 'Linux'
-        shell: Rscript {0}
-        run: |
-          if (requireNamespace("data.table", quietly = TRUE)) {
-            try(remove.packages("data.table"), silent = TRUE)
-          }
-          install.packages("data.table", repos = "https://cloud.r-project.org", type = "source")
-          library(data.table)
-          packageVersion("data.table")
 
       - name: Check package
         uses: r-lib/actions/check-r-package@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        env:
+          # ASRgenomics is optional and its current dependency chain is not
+          # installable on R 4.2. All optional integrations are exercised in
+          # the dedicated current-R integration workflow.
+          _R_CHECK_FORCE_SUGGESTS_: ${{ matrix.config.r == '4.2' && 'false' || 'true' }}
         with:
           upload-snapshots: true
           build_args: 'c("--no-manual")'
