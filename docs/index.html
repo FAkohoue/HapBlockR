@@ -69,24 +69,23 @@
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
-<li class="nav-item"><a class="nav-link" href="articles/HapBlockR-intro.html">Tutorial</a></li>
 <li class="nav-item dropdown">
-  <button class="nav-link dropdown-toggle" type="button" id="dropdown-vignettes" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Vignettes</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-vignettes">
-<li><a class="dropdown-item" href="articles/HapBlockR-full-pipeline.html">Full pipeline walkthrough</a></li>
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="articles/HapBlockR-intro.html">Introduction to HapBlockR</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Methods</h6></li>
     <li><a class="dropdown-item" href="articles/HapBlockR-ld-metrics.html">LD Metrics: Standard r² and Kinship-Adjusted rV²</a></li>
-    <li><a class="dropdown-item" href="articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision</a></li>
+    <li><a class="dropdown-item" href="articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision: Haplotype-Based Parent Selection</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="articles/HapBlockR-large-scale.html">Large-Data Backends and Reproducible Performance Evidence</a></li>
     <li><a class="dropdown-item" href="articles/HapBlockR-phasing.html">Statistical Phasing with External Beagle 5.x</a></li>
     <li><a class="dropdown-item" href="articles/HapBlockR-programme-operations.html">Programme-Level Models, Feasibility, and Data Exchange</a></li>
     <li><a class="dropdown-item" href="articles/HapBlockR-workflow.html">From Genotypes to a Validated Breeding Decision</a></li>
+    <li><a class="dropdown-item" href="articles/HapBlockR-full-pipeline.html">The Full Pipeline: Genotypes to a Certified Mating Plan</a></li>
   </ul>
 </li>
-<li class="nav-item"><a class="nav-link" href="breeder-guide.html">Breeder guide</a></li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
@@ -107,139 +106,22 @@
 </h1>
 </div>
 <p><a href="https://github.com/FAkohoue/HapBlockR/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/FAkohoue/HapBlockR/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle: experimental"></a></p>
-<p>HapBlockR detects linkage-disequilibrium blocks and supports haplotype analysis, genomic prediction, parent selection, optimum-contribution selection, genomic mating, and core-collection design, as shown below:</p>
-<p align="center">
-<img src="reference/figures/HapBlockR_schematic.png" alt="HapBlockR architecture: inputs and scalable data access; four-stage core workflow (data preparation, LD block detection, haplotype reconstruction, feature construction); one haplotype layer feeding seven analytical pathways (diversity and populations, haplotype-based genomic prediction, association testing, cross-population concordance, epistasis and interactions, parent selection, forward-in-time simulation); computational foundation" width="100%"></p>
-<p>The package is under active development. HapBlockR converts the data, breeding objectives and constraints supplied by the user into reproducible parent, cross and mating recommendations. Every decision-critical result carries quality-control, provenance, validation and uncertainty information, so recommendation relevance is driven principally by the quality of the input data and how accurately the parameters express the programme’s objectives — not by the package treating any output as ground truth.</p>
+<p>HapBlockR detects linkage-disequilibrium blocks and supports haplotype analysis, genomic prediction, parent selection, optimum-contribution selection, genomic mating, and core-collection design.</p>
+<p>The package is under active development. HapBlockR converts the data, breeding objectives and constraints supplied by the user into reproducible parent, cross and mating recommendations. Breeder-facing results include quality control, provenance, validation and uncertainty information so that the basis of each recommendation is explicit. Recommendation relevance is therefore driven principally by the quality and representativeness of the input data and by how accurately the specified parameters express the breeding programme’s objectives.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>HapBlockR requires R 4.3.0 or later.</p>
-<div class="section level3">
-<h3 id="core-installation">Core installation<a class="anchor" aria-label="anchor" href="#core-installation"></a>
-</h3>
-<p>For routine use, install HapBlockR with its required dependencies:</p>
+<p>Install the development version from GitHub:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FAkohoue/HapBlockR"</span>, </span>
-<span>build_vignettes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>dependencies <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>Set <code>build_vignettes = FALSE</code> to skip building the vignettes locally (they remain available on the package website). Required dependencies install automatically; some methods use optional packages or external tools and fail explicitly when the requested engine is unavailable.</p>
-</div>
-<div class="section level3">
-<h3 id="optional-non-cran-dependencies">Optional non-CRAN dependencies<a class="anchor" aria-label="anchor" href="#optional-non-cran-dependencies"></a>
-</h3>
-<p>Several HapBlockR methods use optional packages that are not distributed through CRAN. These dependencies must be installed separately when their corresponding functionality is required.</p>
-<div class="section level4">
-<h4 id="bioconductor-packages">Bioconductor packages<a class="anchor" aria-label="anchor" href="#bioconductor-packages"></a>
-</h4>
-<p><code>gdsfmt</code> and <code>SNPRelate</code> support GDS-backed genotype storage, conversion and analysis:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gdsfmt"</span>, <span class="st">"SNPRelate"</span><span class="op">)</span>,</span>
-<span>  ask <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  update <span class="op">=</span> <span class="cn">FALSE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level4">
-<h4 id="github-packages">GitHub packages<a class="anchor" aria-label="anchor" href="#github-packages"></a>
-</h4>
-<p>The following optional packages are installed directly from GitHub:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"remotes"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="co"># Forward-in-time genomic simulation</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span></span>
-<span>  <span class="st">"vllrs/genomicSimulation"</span>,</span>
-<span>  upgrade <span class="op">=</span> <span class="st">"never"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Optional mating-design engine</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span></span>
-<span>  <span class="st">"Resende-Lab/SimpleMating"</span>,</span>
-<span>  upgrade <span class="op">=</span> <span class="st">"never"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># DGSI and QGSI selection-index methods</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span></span>
-<span>  <span class="st">"FAkohoue/DesiredGainR"</span>,</span>
-<span>  upgrade <span class="op">=</span> <span class="st">"never"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>The direct optional non-CRAN R dependencies are:</p>
-<table class="table">
-<colgroup>
-<col width="33%">
-<col width="33%">
-<col width="33%">
-</colgroup>
-<thead><tr>
-<th>Source</th>
-<th>Package</th>
-<th>Main use in HapBlockR</th>
-</tr></thead>
-<tbody>
-<tr>
-<td>Bioconductor</td>
-<td><code>gdsfmt</code></td>
-<td>GDS-backed genotype storage and access</td>
-</tr>
-<tr>
-<td>Bioconductor</td>
-<td><code>SNPRelate</code></td>
-<td>GDS conversion and SNPRelate genotype workflows</td>
-</tr>
-<tr>
-<td>GitHub</td>
-<td><code>genomicSimulation</code></td>
-<td>Forward-in-time genomic simulation</td>
-</tr>
-<tr>
-<td>GitHub</td>
-<td><code>SimpleMating</code></td>
-<td>Optional mating-design workflows</td>
-</tr>
-<tr>
-<td>GitHub</td>
-<td><code>DesiredGainR</code></td>
-<td>DGSI and QGSI selection-index methods</td>
-</tr>
-</tbody>
-</table>
-<p>After installing the required optional dependencies, install or reinstall HapBlockR:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FAkohoue/HapBlockR"</span>, </span>
-<span>build_vignettes <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>dependencies <span class="op">=</span> <span class="cn">TRUE</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>These packages are optional. A HapBlockR method that requires an unavailable dependency stops with an explicit installation message rather than silently changing the requested analytical engine.</p>
-</div>
-</div>
-<div class="section level3">
-<h3 id="external-beagle-phasing">External Beagle phasing<a class="anchor" aria-label="anchor" href="#external-beagle-phasing"></a>
-</h3>
-<p>Beagle is an external Java program rather than an R package and is not distributed with HapBlockR. To use <code><a href="reference/phase_with_beagle.html">phase_with_beagle()</a></code>, obtain a compatible Beagle 5.x JAR separately and provide its location through the function argument, package option or documented environment variable.</p>
-<p>Java 8 or later must also be available:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/system.html" class="external-link">system</a></span><span class="op">(</span><span class="st">"java -version"</span><span class="op">)</span></span></code></pre></div>
-<p>See the phasing vignette for configuration and validation details:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/vignette.html" class="external-link">vignette</a></span><span class="op">(</span><span class="st">"HapBlockR-phasing"</span><span class="op">)</span></span></code></pre></div>
-</div>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"FAkohoue/HapBlockR"</span><span class="op">)</span></span></code></pre></div>
+<p>Required package dependencies install automatically. Some methods use optional R packages or external tools and fail explicitly when the requested engine is unavailable.</p>
 </div>
 <div class="section level2">
-<h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
+<h2 id="ten-minute-workflow">Ten-minute workflow<a class="anchor" aria-label="anchor" href="#ten-minute-workflow"></a>
 </h2>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<p>The included deterministic values represent externally adjusted genotype means with equal precision. They illustrate target preparation, internal prediction and parent selection:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/FAkohoue/HapBlockR" class="external-link">HapBlockR</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">ldx_geno</span><span class="op">)</span></span>
@@ -273,8 +155,12 @@
 <span>  n <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">min</a></span><span class="op">(</span><span class="fl">10L</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">prediction</span><span class="op">$</span><span class="va">block_importance</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
+<span><span class="va">parent_values</span> <span class="op">&lt;-</span> <span class="va">prediction</span><span class="op">$</span><span class="va">local_gebv</span><span class="op">[</span></span>
+<span>  , <span class="va">top_blocks</span><span class="op">$</span><span class="va">block_id</span>, drop <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">]</span></span>
+<span></span>
 <span><span class="va">parents</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/select_parents_ga.html">select_parents_ga</a></span><span class="op">(</span></span>
-<span>  value_matrix <span class="op">=</span> <span class="va">prediction</span><span class="op">$</span><span class="va">local_gebv</span><span class="op">[</span>, <span class="va">top_blocks</span><span class="op">$</span><span class="va">block_id</span>, drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span>,</span>
+<span>  value_matrix <span class="op">=</span> <span class="va">parent_values</span>,</span>
 <span>  n_founders <span class="op">=</span> <span class="fl">8</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">42</span>,</span>
 <span>  n_reps <span class="op">=</span> <span class="fl">5</span>,</span>
@@ -284,8 +170,34 @@
 <span><span class="va">parents</span><span class="op">$</span><span class="va">selected</span></span>
 <span><span class="fu"><a href="reference/validate.html">validate</a></span><span class="op">(</span><span class="va">parents</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">parents</span><span class="op">)</span></span></code></pre></div>
-<p>Decision-critical objects like <code>parents</code> inherit from <code>hapblockr_result</code>: a versioned contract recording method, call, parameters, seed, sample/variant identifiers, input hashes, quality gates, warnings, exclusions, and decision/uncertainty tables. <code><a href="reference/validate.html">validate()</a></code>, <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code>, <code><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame()</a></code> and <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> all work on it. A failed validation gate must be resolved before a result is promoted to a breeding recommendation.</p>
-<p>For the full walkthrough — target preparation, cross-validated prediction, GA and GA+TS parent selection, family quotas, optimum-contribution selection, core-collection design, feasibility screening, and export to a certified mating plan — see <code><a href="articles/HapBlockR-full-pipeline.html">vignette("HapBlockR-full-pipeline")</a></code>.</p>
+<p>This call uses coverage-only GA. When whole-genome merit must remain active while complementary blocks are assembled, use the explicit GA+TS tool:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">hybrid_parents</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/select_parents_ga_ts.html">select_parents_ga_ts</a></span><span class="op">(</span></span>
+<span>  value_matrix <span class="op">=</span> <span class="va">parent_values</span>,</span>
+<span>  n_founders <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>  merit_score <span class="op">=</span> <span class="va">prediction</span><span class="op">$</span><span class="va">gebv</span>,</span>
+<span>  merit_priority <span class="op">=</span> <span class="fl">50</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">42</span>,</span>
+<span>  n_reps <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Both GA tools run five independent searches by default, check hard constraints for every result, and automatically return the feasible replicate with the greatest complete objective. The breeder reviews the returned stability summary; individual runs do not require manual selection.</p>
+<p>For leakage-aware assessment before selection:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/cv_haplotype_prediction.html">cv_haplotype_prediction</a></span><span class="op">(</span></span>
+<span>  geno_matrix <span class="op">=</span> <span class="va">ldx_geno</span>,</span>
+<span>  snp_info <span class="op">=</span> <span class="va">ldx_snp_info</span>,</span>
+<span>  blocks <span class="op">=</span> <span class="va">ldx_blocks</span>,</span>
+<span>  blues <span class="op">=</span> <span class="va">targets</span>,</span>
+<span>  k <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">42</span>,</span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cv</span><span class="op">$</span><span class="va">pa_pooled</span></span>
+<span><span class="va">cv</span><span class="op">$</span><span class="va">gebv_all</span></span>
+<span><span class="fu"><a href="reference/validate.html">validate</a></span><span class="op">(</span><span class="va">cv</span><span class="op">)</span></span></code></pre></div>
+<p>Use grouped or forward validation when families, populations, sites, years, or prediction timing could leak information between training and validation sets.</p>
 </div>
 <div class="section level2">
 <h2 id="capability-map">Capability map<a class="anchor" aria-label="anchor" href="#capability-map"></a>
@@ -389,60 +301,157 @@
 </tr>
 </tbody>
 </table>
+<p>The package website contains the full function reference and task-oriented vignettes.</p>
 </div>
 <div class="section level2">
-<h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
+<h2 id="breeding-target-input-contract">Breeding-target input contract<a class="anchor" aria-label="anchor" href="#breeding-target-input-contract"></a>
 </h2>
-<p>The package website has the full function reference. Vignettes cover each topic in depth:</p>
+<p>HapBlockR starts from genotype-level estimates produced by a field-trial or genetic-evaluation analysis outside the package. It does not accept raw plot records, fit replicate, block, row or column effects, or calculate an external selection index. Units are optional. Every supplied estimate must have a standard error, posterior standard deviation, precision weight or full sampling covariance; random-effect predictions instead require reliability or prediction error variance and the relevant genetic variance.</p>
 <table class="table">
 <colgroup>
 <col width="50%">
 <col width="50%">
 </colgroup>
 <thead><tr>
-<th>Vignette</th>
-<th>Covers</th>
+<th><code>input_type</code></th>
+<th>Meaning and treatment</th>
 </tr></thead>
 <tbody>
 <tr>
-<td><code>HapBlockR-intro</code></td>
-<td>First orientation to the package</td>
+<td><code>"adjusted_mean"</code></td>
+<td>Model-adjusted entry mean, including a Bayesian posterior adjusted mean when the analysis does not distinguish BLUE from BLUP; not a raw arithmetic mean</td>
 </tr>
 <tr>
-<td><code>HapBlockR-workflow</code></td>
-<td>Genotypes through a validated breeding decision</td>
+<td><code>"BLUE"</code></td>
+<td>Best Linear Unbiased Estimate of an entry fitted as fixed; retained without deregression</td>
 </tr>
 <tr>
-<td><code>HapBlockR-full-pipeline</code></td>
-<td>End-to-end run: targets to a certified mating plan</td>
+<td><code>"BLUP_identity"</code></td>
+<td>Random genotype or entry effect with covariance <code>I × genetic variance</code>; deregressed from reliability or prediction error variance</td>
 </tr>
 <tr>
-<td><code>HapBlockR-breeding-decisions</code></td>
-<td>Local GEBV to a crossing decision</td>
+<td><code>"PBLUP"</code></td>
+<td>Pedigree Best Linear Unbiased Prediction with covariance <code>A × additive genetic variance</code>; requires the named numerator relationship matrix <code>A</code>
+</td>
 </tr>
 <tr>
-<td><code>HapBlockR-programme-operations</code></td>
-<td>Breeding-target input contract, multi-trait index methods, feasibility and data exchange</td>
+<td><code>"BV"</code></td>
+<td>Additive, transmissible breeding value; the fixed, identity or pedigree estimation basis must be declared</td>
 </tr>
 <tr>
-<td><code>HapBlockR-phasing</code></td>
-<td>Configuring and validating external Beagle 5.x phasing</td>
+<td><code>"GCA"</code></td>
+<td>General combining ability in a declared tester or mate population; fixed GCA is retained and random GCA is deregressed</td>
 </tr>
 <tr>
-<td><code>HapBlockR-ld-metrics</code></td>
-<td>Standard r² and kinship-adjusted rV²</td>
-</tr>
-<tr>
-<td><code>HapBlockR-large-scale</code></td>
-<td>GDS/BED/<code>bigmemory</code> backends, memory and performance evidence</td>
+<td><code>"TGV"</code></td>
+<td>Total genetic value; additive and dominance components must be supplied separately</td>
 </tr>
 </tbody>
 </table>
-<p><code><a href="reference/open_breeder_guide.html">open_breeder_guide()</a></code> opens the versioned, source-backed Breeder’s Guide (PDF or HTML), which covers all decision tools, a worked numerical example, data-quality and feasibility checks, and interpretation guidance for quality-control gates and uncertainty:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<p>External genomic Best Linear Unbiased Predictions (GBLUPs), genomic estimated breeding values and selection-index values are rejected as target types. HapBlockR uses the accepted external summaries as responses in its internal marker, haplotype, block, multi-trait or genotype-by-environment models. The resulting internal predictions feed <code><a href="reference/build_selection_index.html">build_selection_index()</a></code> and become the directionally aligned <code>merit_score</code> used in parent selection.</p>
+<p><code><a href="reference/prepare_breeding_targets.html">prepare_breeding_targets()</a></code> reverses lower-is-better traits once, so every downstream <code>model_value</code>, selection-index score and <code>merit_score</code> follows the same rule: larger is better. For estimates with standard error <code>SE</code>, relative precision is proportional to <code>1 / SE^2</code> and is normalised within each trait-analysis group. For a pedigree BLUP, reliability is <code>1 - PEV / (A_ii × additive genetic variance)</code>.</p>
+<p><code><a href="reference/build_selection_index.html">build_selection_index()</a></code> provides four internal methods:</p>
+<ul>
+<li>
+<code>"smith_hazel"</code> for economic weights;</li>
+<li>
+<code>"pesek_baker"</code> for a deterministic desired-gain index;</li>
+<li>
+<code>"dgsi"</code> for replicated Desired-Gain Selection Index optimisation through DesiredGainR; and</li>
+<li>
+<code>"qgsi"</code> for a Quadratic Genomic Selection Index through DesiredGainR using an explicit, symmetric matrix of squared and cross-product weights.</li>
+</ul>
+<p>Trait direction and objective magnitude have one unambiguous contract. <code>directions</code> declares which traits increase or decrease, while <code>economic_weights</code> and <code>desired_gains</code> contain non-negative magnitudes after orientation to the favourable direction. HapBlockR rejects negative objectives instead of silently changing their signs.</p>
+<p>For DGSI, desired gains are expressed in candidate standard deviations, whether or not trait scaling is requested. For Pesek-Baker, they are expressed in original trait units. Divide an original-unit DGSI target by the candidate standard deviation of that trait before passing it to <code>desired_gains</code>.</p>
+<p>The DGSI engine selects its best replicate automatically using its declared holdout or validation rule and reports coefficient, rank and selected-set stability. HapBlockR uses DesiredGainR’s model-expected transmitted response in original trait units and reports the realised selected-set differential separately in candidate standard-deviation units. DGSI and QGSI use the selection intensity for the number of candidates actually selected. QGSI model-expected gains use the total linear-plus-quadratic index variance and are converted from DesiredGainR’s analysis space back to the original trait units. QGSI has no single global coefficient vector: HapBlockR reports its linear weights, quadratic-weight matrix and candidate-specific contributions separately. All four methods return the same coefficient-table columns, with <code>NA</code> only where a field does not apply to that method.</p>
+<p><code>dgsi_control</code> and <code>qgsi_control</code> accept exact DesiredGainR argument names; partial names and overrides of HapBlockR’s structural arguments are rejected. QGSI’s <code>Gamma</code> is the covariance of genomic predictions, not an automatic substitute for the supplied genetic covariance. Supply it in original trait units through <code>qgsi_control</code>, or let DesiredGainR estimate it from the candidate or reference genomic predictions, optionally using a relationship matrix. QGSI weights must refer to the oriented and, if requested, scaled trait space.</p>
+<p>For DGSI, <code>coefficients_original_units</code> includes the direction and scale conversion needed to combine original-unit marker, haplotype or block effects. <code>score_intercept</code> accounts for reference centring when reconstructing candidate scores. The unmodified <code>engine_result</code> remains available for DesiredGainR’s comparison and diagnostic tools.</p>
+<p>When <code><a href="reference/prepare_breeding_targets.html">prepare_breeding_targets()</a></code> supplies a full sampling covariance, <code><a href="reference/fit_multitrait_gblup.html">fit_multitrait_gblup()</a></code> uses it as the complete record-error covariance by default. Set <code>sampling_covariance_mode = "sampling_plus_residual"</code> only when the model requires a separate residual nugget in addition to known sampling error. Record keys and diagonal precision must agree exactly enough to prevent silent loss or duplication of uncertainty.</p>
+</div>
+<div class="section level2">
+<h2 id="common-result-contract">Common result contract<a class="anchor" aria-label="anchor" href="#common-result-contract"></a>
+</h2>
+<p>Decision-critical methods return objects inheriting from <code>hapblockr_result</code>. The versioned contract records:</p>
+<ul>
+<li>method, call, normalised parameters, and seed;</li>
+<li>immutable sample and variant IDs and SHA-256 input hashes;</li>
+<li>transformation history and software versions;</li>
+<li>quality-control gates, warnings, fallbacks, and exclusions;</li>
+<li>decision and uncertainty tables; and</li>
+<li>machine-readable validation status.</li>
+</ul>
+<p>Use:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/validate.html">validate</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></code></pre></div>
+<p>A failed validation gate must be resolved before a result is promoted to a breeding recommendation.</p>
+</div>
+<div class="section level2">
+<h2 id="beagle-phasing">Beagle phasing<a class="anchor" aria-label="anchor" href="#beagle-phasing"></a>
+</h2>
+<p>HapBlockR integrates a user-supplied Beagle 5.x JAR, allowing the programme to retain explicit control of the external-tool version and licence. Download it from the official Beagle site and configure the path:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span>HapBlockR.beagle_jar <span class="op">=</span> <span class="st">"/absolute/path/to/beagle.jar"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">phased</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/phase_with_beagle.html">phase_with_beagle</a></span><span class="op">(</span></span>
+<span>  input_vcf <span class="op">=</span> <span class="st">"genotypes.vcf.gz"</span>,</span>
+<span>  out_prefix <span class="op">=</span> <span class="st">"results/genotypes_phased"</span>,</span>
+<span>  nthreads <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  seed <span class="op">=</span> <span class="fl">42</span>,</span>
+<span>  min_genotype_concordance <span class="op">=</span> <span class="fl">0.99</span>,</span>
+<span>  return_details <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">phased</span><span class="op">$</span><span class="va">quality_control</span></span>
+<span><span class="va">phased</span><span class="op">$</span><span class="va">provenance</span></span></code></pre></div>
+<p>The path may instead be supplied through <code>beagle_jar</code>, <code>HAPBLOCKR_BEAGLE_JAR</code>, or a file named <code>beagle.jar</code> beside <code>out_prefix</code>. HapBlockR restricts the integration to one or two threads, records Java and JAR provenance, verifies Beagle 5.x, and checks sample, variant, allele, and observed-genotype identity after phasing.</p>
+<p>Official Beagle download and licence: <a href="https://faculty.washington.edu/browning/beagle/beagle.html" class="external-link uri">https://faculty.washington.edu/browning/beagle/beagle.html</a></p>
+</div>
+<div class="section level2">
+<h2 id="data-scale-and-memory">Data scale and memory<a class="anchor" aria-label="anchor" href="#data-scale-and-memory"></a>
+</h2>
+<p>Memory behaviour depends on the source and backend:</p>
+<ul>
+<li>GDS, PLINK BED, and <code>bigmemory</code> pathways can provide file-backed or subset-oriented access;</li>
+<li>text dosage, HapMap, and ordinary VCF pathways may materialise substantial objects in memory; and</li>
+<li>downstream algorithms can still require dense matrices even when import is streamed.</li>
+</ul>
+<p>Measure wall time and peak resident memory on data representative of the intended programme. HapBlockR provides file-backed, subset-oriented and dense analysis pathways; the selected pathway determines whether a full matrix is materialised for a particular operation.</p>
+</div>
+<div class="section level2">
+<h2 id="interpreting-hapblockr-results">Interpreting HapBlockR results<a class="anchor" aria-label="anchor" href="#interpreting-hapblockr-results"></a>
+</h2>
+<p>All breeder-facing merit inputs follow one direction: larger values mean greater breeding merit. Declare lower-is-better traits during target preparation or index construction; do not reverse their signs a second time. Standardised superior-candidate filtering is available through <code>min_sel_mode = "sd_above_mean"</code>; <code>min_sel_value = 0</code> retains candidates at or above the mean and <code>1</code> requires at least one SD superiority. Use <code>min_sel_mode = "relaxed_pool"</code> only when the programme deliberately admits some candidates below the mean for complementarity or diversity. The former name <code>"sd_below_mean"</code> remains as a deprecated alias.</p>
+<ul>
+<li>HapBlockR accepts phased data and also provides optional statistical phasing through <code><a href="reference/phase_with_beagle.html">phase_with_beagle()</a></code>. Use phasing when the breeding question depends on the parental chromosome carrying an allele; dosage-based workflows remain available when that distinction is unnecessary.</li>
+<li>Haplotype inference, <code>hap1</code>/<code>hap2</code> representations, Beagle integration, and compiled r-squared or rV-squared kernels operate on diploid, biallelic data. Dosage-centred relationship and marker-effect calculations can accept alternative ploidy values.</li>
+<li>
+<code><a href="reference/run_haplotype_prediction.html">run_haplotype_prediction()</a></code> supports single- and multiple-trait inputs. Use <code><a href="reference/fit_multitrait_gblup.html">fit_multitrait_gblup()</a></code> when genetic and residual covariance should be estimated jointly, and <code><a href="reference/fit_gxe_gblup.html">fit_gxe_gblup()</a></code> for reaction-norm predictions. Both models report REML likelihoods with residual degrees of freedom and prediction error variances adjusted for fitted fixed effects. Compare REML likelihoods only between models with the same fixed-effect design.</li>
+<li>HapBlockR controls population structure and genomic relatedness in its adjusted association models, applies multiple-testing procedures, compares effects across populations, and provides within- and between-block fine-mapping tools. A reproducible haplotype association can identify a segment that harbours a functional gene or causal variant. The strength of a causal conclusion then depends on positional resolution, replication and functional evidence.</li>
+<li>Prediction relevance is determined by the phenotype quality, genotype and haplotype representation, training population, target environments, validation design and parameters supplied by the user. Grouped and forward validation quantify transfer to new families or cycles.</li>
+<li>HapBlockR supports representative future populations through family- or genetic-cluster selection, GA selection of complementary favourable haplotypes, core-collection design, relationship control and environment-aware modelling.</li>
+<li>Reliability, uncertainty and validation gates show how strongly the data support each reported recommendation.</li>
+</ul>
+<p>See the vignettes for method-specific assumptions and diagnostics.</p>
+</div>
+<div class="section level2">
+<h2 id="breeders-guide">Breeder’s guide<a class="anchor" aria-label="anchor" href="#breeders-guide"></a>
+</h2>
+<p>The versioned, source-backed guide covers nine decision tools, their variants, a worked numerical decision, data-quality and feasibility checks, interpretation guidance, references, and a sign-off template. It is distributed in accessible PDF and editable Word formats:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/open_breeder_guide.html">open_breeder_guide</a></span><span class="op">(</span>format <span class="op">=</span> <span class="st">"pdf"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/open_breeder_guide.html">open_breeder_guide</a></span><span class="op">(</span>format <span class="op">=</span> <span class="st">"html"</span><span class="op">)</span></span></code></pre></div>
-<p>Its editable source is <code>inst/guide/HapBlockR_Breeder_Guide.Rmd</code>, rendered to the shipped PDF/HTML via <code>tools/build_breeder_guide_accessible.cjs</code>.</p>
+<span><span class="fu"><a href="reference/open_breeder_guide.html">open_breeder_guide</a></span><span class="op">(</span>format <span class="op">=</span> <span class="st">"docx"</span><span class="op">)</span></span></code></pre></div>
+<p>Its source is <code>inst/guide/HapBlockR_Breeder_Guide.md</code>. The locked, reproducible builder is <code>tools/build_breeder_guide_accessible.cjs</code>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="ex">corepack</span> enable</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="ex">corepack</span> prepare pnpm@11.9.0 <span class="at">--activate</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="ex">pnpm</span> <span class="at">--dir</span> tools install <span class="at">--frozen-lockfile</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="ex">pnpm</span> <span class="at">--dir</span> tools exec playwright install chromium</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="ex">node</span> tools/build_breeder_guide_accessible.cjs</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="ex">python</span> tools/build_breeder_guide_docx.py</span></code></pre></div>
+<p>The build produces a tagged A4 PDF with a document outline, semantic table headers, internal links, British-English language metadata and page numbers. <code>tools/build_breeder_guide_docx.py</code> produces the corresponding editable Word edition with real headings, lists, table headers and page numbering. Continuous integration rebuilds and verifies both editions.</p>
 </div>
 <div class="section level2">
 <h2 id="reproducibility">Reproducibility<a class="anchor" aria-label="anchor" href="#reproducibility"></a>
@@ -457,6 +466,7 @@
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
+<p>Use the installed citation so that the package version is current:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/citation.html" class="external-link">citation</a></span><span class="op">(</span><span class="st">"HapBlockR"</span><span class="op">)</span></span></code></pre></div>
 <p>Machine-readable citation metadata are provided in <code>CITATION.cff</code>. A DOI has not yet been assigned; do not cite an invented or provisional DOI.</p>

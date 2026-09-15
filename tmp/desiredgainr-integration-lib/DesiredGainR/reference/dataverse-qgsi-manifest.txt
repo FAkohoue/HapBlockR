@@ -1,0 +1,39 @@
+Reference implementation provenance
+===================================
+
+Cerón-Rojas JJ, Montesinos-López OA, Montesinos-López A, Vitale P,
+Pérez-Rodríguez P, Fernandes SB, Ortiz R, Crossa J (2026). Replication Data
+for: Nonlinear Genomic Selection Index Accelerates Multi-Trait Crop
+Improvement. CIMMYT Research Data & Software Repository Network, V1.
+https://doi.org/10.71682/10549385
+
+The authors' original scripts are retained in the source repository under
+Public data/dataverse_files. The independent arithmetic in
+tests/testthat/test-reference-implementation.R is transcribed from these files.
+
+SHA-256 checksums of the source snapshot reviewed on 2026-08-01:
+
+RealData-LGSI-QGSI-set3-4.R
+b26a3f6ad5bcc037d25765bc23b5b2062566b29c3f5175ef5fbf4b0e0d20f937
+
+RealData-LPSI-QSI-set3-4.R
+503bb91d9516608a760556bd22d91920436d0fe3efaf9a40dae5f710b1ff44c1
+
+SimuatedData-LPSI-QPSI-Final.R
+3d22bd3cffa69a3dfa7599c58e12d8355b7ad9c133e083af4a64e14588a1f711
+
+SimulatedData-LGSI-QGenomics.R
+87b3b6bbdcb5dc0e59c381d5f4de99b633abae719a1d48daeffeed2dcd73f7f5
+
+Important script variants preserved in the comparison:
+
+* the simulated QGSI script constructs BB = P^-1 G A G P^-1;
+* the real-data QGSI script reads A as an already constructed quadratic
+  coefficient matrix and sets BB = A;
+* both evaluate the quadratic variance contribution as
+  2 tr(BB P BB P), with the corresponding merit term 2 tr(A G A G).
+
+The deposit omits several intermediate CSV/TXT matrices referenced by the
+scripts. DesiredGainR therefore labels its current validation as an
+implementation-level reproduction of the deposited arithmetic, not a complete
+rerun of every published numeric result.

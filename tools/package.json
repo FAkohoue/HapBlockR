@@ -2,7 +2,7 @@
   "name": "hapblockr-guide-builder",
   "private": true,
   "version": "1.0.0",
-  "description": "Pinned dependencies for the HapBlockR breeder-guide PDF/HTML builder.",
+  "description": "Pinned dependencies for the tagged HapBlockR breeder-guide PDF builder.",
   "packageManager": "pnpm@11.9.0",
   "dependencies": {
     "marked": "17.0.5",

@@ -26,12 +26,34 @@ test_that("BLUEs retain optional units and use inverse-variance precision", {
   expect_s3_class(result, "hapblockr_result")
   expect_true(all(is.na(result$targets$unit)))
   expect_equal(mean(result$targets$precision_weight), 1)
+  precision_group <- interaction(
+    result$targets$trait,
+    ifelse(
+      is.na(result$targets$environment),
+      "ACROSS",
+      result$targets$environment
+    ),
+    drop = TRUE
+  )
+  expect_equal(
+    as.numeric(tapply(
+      result$targets$precision_weight, precision_group, mean
+    )),
+    rep(1, nlevels(precision_group))
+  )
   expect_equal(
     result$targets$precision_raw,
     1 / values$SE^2
   )
   expect_equal(result$targets$model_value, values$value)
   expect_true(all(validate(result)$passed))
+
+  incomplete <- result
+  incomplete$targets$record_key <- NULL
+  expect_error(
+    .hb_unpack_model_targets(incomplete),
+    "incomplete"
+  )
 })
 
 test_that("identity BLUPs are deregressed from PEV and genetic variance", {

@@ -78,22 +78,21 @@ Dominance ratio: \(d/a\) - the key quantity for interpreting
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
-<li class="nav-item"><a class="nav-link" href="../articles/HapBlockR-intro.html">Tutorial</a></li>
 <li class="nav-item dropdown">
-  <button class="nav-link dropdown-toggle" type="button" id="dropdown-vignettes" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Vignettes</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-vignettes"><li><a class="dropdown-item" href="../articles/HapBlockR-full-pipeline.html">Full pipeline walkthrough</a></li>
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/HapBlockR-intro.html">Introduction to HapBlockR</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Methods</h6></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-ld-metrics.html">LD Metrics: Standard r² and Kinship-Adjusted rV²</a></li>
-    <li><a class="dropdown-item" href="../articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision</a></li>
+    <li><a class="dropdown-item" href="../articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision: Haplotype-Based Parent Selection</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-large-scale.html">Large-Data Backends and Reproducible Performance Evidence</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-phasing.html">Statistical Phasing with External Beagle 5.x</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-programme-operations.html">Programme-Level Models, Feasibility, and Data Exchange</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-workflow.html">From Genotypes to a Validated Breeding Decision</a></li>
+    <li><a class="dropdown-item" href="../articles/HapBlockR-full-pipeline.html">The Full Pipeline: Genotypes to a Certified Mating Plan</a></li>
   </ul></li>
-<li class="nav-item"><a class="nav-link" href="../breeder-guide.html">Breeder guide</a></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -249,13 +248,8 @@ when estimating \(M_{\mathrm{eff}}\). Default <code>1000L</code>.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <code>hapblockr_result</code> of class
-  <code>c("HapBlockR_diplotype", "hapblockr_result", "list")</code> with three
-  elements plus a <code>result_contract</code> (parameters, identifiers,
-  transformations, quality gates, <code>omnibus_tests</code> as the decision
-  table, and <code>diplotype_means</code> as the uncertainty table). Check with
-  <code><a href="validate.html">validate</a></code> before treating a block's effects as a
-  recommendation.</p>
+    <p>A named list of class <code>c("HapBlockR_diplotype", "list")</code>
+  with three elements:</p>
 <dl><dt><code>diplotype_means</code></dt>
 <dd><p>Data frame. One row per diplotype class per
     LD block per trait, for diplotype classes with <code>&gt;= min_n_diplotype</code>

@@ -955,15 +955,12 @@
 #' count toward \code{n_families} -- whenever its eligible membership does
 #' not exceed the number of lines that would actually be taken from it:
 #' under \code{"count"}, \code{n_per_family} itself when it is a single
-#' scalar (the common, flat-quota case); when \code{n_per_family} is a
-#' named vector for uneven per-group quotas, \code{rank_k} stands in as the
-#' threshold for every group, named or not -- \code{n_per_family} is only
-#' guaranteed to be defined for whichever groups end up chosen, and which
-#' groups are chosen is not decided until after ranking (see
-#' \code{\link{select_parents_by_family}}'s internal
-#' \code{.resolve_n_per_family()}), so a name that already appears in
-#' \code{n_per_family} at this pre-ranking stage cannot yet be trusted as
-#' that group's real quota; under \code{"percentage"}, that group's OWN
+#' scalar (the common, flat-quota case), or \code{rank_k} when
+#' \code{n_per_family} is a named vector for uneven per-group quotas (since
+#' \code{n_per_family} is then only defined for whichever groups end up
+#' chosen, which is not yet known at exclusion time -- \code{rank_k}, "the
+#' number of lines this group's ranking is based on," is used as the
+#' practical stand-in); under \code{"percentage"}, that group's OWN
 #' \code{ceiling(pct_per_family/100 * group_size)}. Below that size there
 #' is no genuine "select the best of" decision for that group at all --
 #' every eligible member would be taken regardless of ranking -- so
@@ -1168,7 +1165,9 @@
 #' @param verbose Logical, default \code{TRUE}. Print informational messages
 #'   (shrinkage fallback, skipped diagnostics).
 #'
-#' @return A \code{hapblockr_result} list:
+#' @return A list inheriting from \code{HapBlockR_family_selection} and
+#'   \code{hapblockr_result}. It contains the following selection-specific
+#'   elements and a common \code{result_contract} used by \code{validate()}:
 #' \describe{
 #'   \item{\code{selected}}{Character vector of all selected individual IDs,
 #'     ordered by group rank, then by selection order within each group.}
@@ -1239,11 +1238,6 @@
 #'   \item{\code{mean_relationship}}{Numeric. Realised mean off-diagonal
 #'     pairwise relationship among all of \code{selected}. \code{NA} unless
 #'     \code{G} was supplied.}
-#'   \item{\code{result_contract}}{The \code{hapblockr_result} contract
-#'     (parameters, identifiers, transformations, quality gates,
-#'     \code{by_family} as the decision table, and \code{family_ranking} as
-#'     the uncertainty table). Check with \code{\link{validate}} before
-#'     treating \code{selected} as a recommendation.}
 #' }
 #'
 #' @section When to reach for this instead of truncation_selection() or select_parents_ga():
@@ -1360,6 +1354,7 @@ select_parents_by_family <- function(score,
                                      cluster_method = "ward.D2",
                                      verbose = TRUE) {
   result_call <- match.call()
+  score_input <- score
   if (is.null(names(score)))
     stop("score must be a named numeric vector (names = individual IDs).",
          call. = FALSE)
@@ -1597,23 +1592,9 @@ select_parents_by_family <- function(score,
   too_small <- character(0)
   excl_threshold_desc <- NULL
   if (family_select_mode == "count") {
-    if (length(n_per_family) == 1L) {
-      excl_threshold <- as.integer(n_per_family)
-      too_small <- names(grp_sizes)[grp_sizes <= excl_threshold]
-      excl_threshold_desc <- paste0("<= ", excl_threshold, " eligible member(s)")
-    } else {
-      # Named per-family quota vector: n_per_family is only guaranteed to be
-      # defined for whichever families end up CHOSEN, and which families
-      # are chosen is not decided until after ranking, further below (see
-      # .resolve_n_per_family()) -- so at this pre-ranking stage, a name
-      # that happens to already appear in n_per_family cannot yet be
-      # trusted as "this family's real quota": it may not even survive to
-      # be one of the chosen families. Every family, named or not, is
-      # therefore checked against the generic rank_k stand-in here, exactly
-      # as in the fully-unnamed case.
-      too_small <- names(grp_sizes)[as.numeric(grp_sizes) <= rank_k]
-      excl_threshold_desc <- paste0("<= rank_k = ", rank_k, " eligible member(s)")
-    }
+    excl_threshold <- if (length(n_per_family) == 1L) as.integer(n_per_family) else rank_k
+    too_small <- names(grp_sizes)[grp_sizes <= excl_threshold]
+    excl_threshold_desc <- paste0("<= ", excl_threshold, " eligible member(s)")
   } else if (family_select_mode == "percentage") {
     take_f    <- ceiling(pct_per_family / 100 * as.numeric(grp_sizes))
     too_small <- names(grp_sizes)[as.numeric(grp_sizes) <= take_f]
@@ -1983,32 +1964,104 @@ select_parents_by_family <- function(score,
     mean_relationship           = mean_relationship
   )
 
+  active_selected_group <- if (group_by == "family") {
+    by_family$family
+  } else {
+    by_family$genetic_group
+  }
+  excluded_records <- rbind(
+    data.frame(
+      group_id = excluded_groups,
+      reason = rep(
+        "group_size_did_not_exceed_selection_quota",
+        length(excluded_groups)
+      ),
+      stringsAsFactors = FALSE
+    ),
+    data.frame(
+      group_id = zero_selected_groups,
+      reason = rep(
+        "no_member_met_the_declared_threshold",
+        length(zero_selected_groups)
+      ),
+      stringsAsFactors = FALSE
+    )
+  )
+  contract_inputs <- list(score = score_input)
+  if (!is.null(family)) contract_inputs$family <- family
+  if (!is.null(G)) contract_inputs$relationship_matrix <- G
+  if (!is.null(value_matrix)) contract_inputs$value_matrix <- value_matrix
+  if (!is.null(block_weights)) contract_inputs$block_weights <- block_weights
+  if (!is.null(haplotypes)) contract_inputs$haplotypes <- haplotypes
+
+  class(result) <- c("HapBlockR_family_selection", "list")
   .add_hapblockr_contract(
     result = result,
     method = "select_parents_by_family",
     call = result_call,
     parameters = list(
-      n_families = n_families, n_per_family = n_per_family,
-      family_select_mode = family_select_mode, rank_k = rank_k,
+      n_families = n_families,
+      n_per_family = n_per_family,
+      family_select_mode = family_select_mode,
+      pct_per_family = pct_per_family,
+      sd_threshold = sd_threshold,
+      check_id = check_id,
+      check_value = check_value,
+      check_margin_pct = check_margin_pct,
+      min_sel_value = min_sel_value,
+      min_sel_mode = min_sel_mode,
+      group_by = group_by,
+      rank_k = rank_k,
       family_rank_method = family_rank_method,
-      variance_method = variance_method, bias_correction = bias_correction,
-      group_by = group_by, n_clusters = n_clusters,
+      variance_method = variance_method,
+      bias_correction = bias_correction,
+      use_family_relationship = isTRUE(use_family_relationship),
       ensure_haplotype_diversity = isTRUE(ensure_haplotype_diversity),
-      diversity_method = diversity_method
+      diversity_method = diversity_method,
+      within_group_target_degree = within_group_target_degree,
+      n_clusters = n_clusters,
+      cluster_method = cluster_method
     ),
     sample_ids = names(score),
-    inputs = list(score = score, family = family),
+    variant_ids = if (is.null(value_matrix)) character() else
+      colnames(value_matrix),
+    inputs = contract_inputs,
     transformations = c(
-      paste("family ranking via", family_rank_method),
-      paste("variance estimation via", variance_method),
-      paste("bias correction:", bias_correction)
+      "candidate merit-floor filtering",
+      paste0(group_by, " grouping and ranking"),
+      paste0(family_select_mode, " within-group selection"),
+      if (isTRUE(ensure_haplotype_diversity))
+        paste0(diversity_method, " haplotype-diversity adjustment") else
+        character(),
+      if (!is.null(within_group_target_degree))
+        "within-group relationship control" else character()
     ),
     quality_gates = c(
-      has_selection = length(by_family$individual) > 0L,
-      no_zero_selected_groups = length(zero_selected_groups) == 0L
+      selected_set_nonempty = length(result$selected) > 0L,
+      selected_ids_unique = !anyDuplicated(result$selected),
+      selected_ids_eligible = all(result$selected %in% names(score)),
+      selected_scores_finite = all(is.finite(by_family$score)),
+      requested_group_count_met =
+        length(unique(active_selected_group)) == n_families
     ),
-    fallbacks = if (length(excluded_groups)) as.character(excluded_groups) else character(0),
-    decision_table = by_family,
+    fallbacks = c(
+      if (identical(variance_method, "reml") &&
+          identical(variance_method_used_out, "anova"))
+        "REML variance estimation fell back to ANOVA" else character(),
+      if (isTRUE(use_family_relationship) && !is.null(G) &&
+          !isTRUE(relationship_informed_out))
+        "family ranking used independent-group shrinkage" else character()
+    ),
+    excluded_records = excluded_records,
+    decision_table = data.frame(
+      id = by_family$individual,
+      score = by_family$score,
+      rank = seq_len(nrow(by_family)),
+      family = by_family$family,
+      genetic_group = by_family$genetic_group,
+      selected = TRUE,
+      stringsAsFactors = FALSE
+    ),
     uncertainty = fam_tab
   )
 }

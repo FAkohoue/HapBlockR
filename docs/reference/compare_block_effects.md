@@ -201,13 +201,7 @@ compare_block_effects(
 
 ## Value
 
-A `hapblockr_result` of class
-`c("HapBlockR_effect_concordance", "hapblockr_result", "list")`, also
-carrying a `result_contract` (parameters, identifiers, transformations,
-quality gates, `concordance` as the decision table, and `shared_alleles`
-as the uncertainty table). Check with
-[`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
-before treating a block as replicated:
+A named list of class `c("HapBlockR_effect_concordance", "list")`:
 
 - `concordance`:
 

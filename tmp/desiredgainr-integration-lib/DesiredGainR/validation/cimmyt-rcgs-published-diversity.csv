@@ -1,0 +1,11 @@
+group,n,Shannon,heterozygosity,polymorphic_SNPs,source
+Parents,18,0.0661,0.1104,950248,"Zhang et al. (2017), Table 4"
+C0,1000,0.0728,0.1226,952825,"Zhang et al. (2017), Table 4"
+C0 selected,50,0.02,0.1208,943344,"Zhang et al. (2017), Table 4"
+C1,157,0.0776,0.1297,951390,"Zhang et al. (2017), Table 4"
+C1 selected,25,0.052,0.125,947868,"Zhang et al. (2017), Table 4"
+C2,91,0.0765,0.1276,953199,"Zhang et al. (2017), Table 4"
+C2 selected,18,0.043,0.1228,953453,"Zhang et al. (2017), Table 4"
+C3,44,0.0588,0.0973,954058,"Zhang et al. (2017), Table 4"
+C3 selected,22,0.063,0.0923,954924,"Zhang et al. (2017), Table 4"
+All,1331,0.074,0.1245,954960,"Zhang et al. (2017), Table 4"

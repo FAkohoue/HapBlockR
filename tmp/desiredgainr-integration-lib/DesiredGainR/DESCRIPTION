@@ -1,0 +1,50 @@
+Package: DesiredGainR
+Type: Package
+Title: Desired-Gain Selection Index and Quadratic Genomic Selection
+        Index Tools for Plant Breeding
+Version: 0.5.0
+Authors@R: 
+    person(
+      given   = "Félicien",
+      family  = "Akohoue",
+      email   = "akohoue.f@gmail.com",
+      role    = c("aut", "cre"),
+      comment = c(ORCID = "0000-0002-2160-0182")
+    )
+Description: Provides auditable multi-trait selection-index tools for plant
+    breeding programs. The desired-gain selection index (DGSI) searches for
+    coefficients whose realised response approaches breeder-defined targets
+    and reports optimisation stability across independent searches.
+    For breeders who cannot defend a complete target vector, population-driven
+    tools search trait-specific desired-gain intervals and return independently
+    confirmed minimum-attainment and maximum-balanced recommendations with
+    feasibility, stability, uncertainty, and model-conditional support.
+    The quadratic genomic selection index (QGSI) scores genomic estimated
+    breeding values with explicit linear economic weights and a validated
+    symmetric matrix of squared and cross-product economic weights, following
+    Ceron-Rojas et al. (2026) <doi:10.1038/s41467-026-69890-3>. It estimates or
+    accepts the genomic covariance matrix and reports the model-based index
+    mean, variance, selection response, expected gains, and, when true genetic
+    covariance is available in simulation, accuracy and prediction error.
+    Results also include covariance provenance, automatic DGSI replicate
+    selection, convergence and stability diagnostics, eligibility decisions,
+    rankings, and candidate-specific score contributions.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Language: en-GB
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Depends: R (>= 4.1)
+Imports: data.table, digest, stats, utils
+Suggests: AlphaSimR (>= 1.5.0), ASRgenomics (>= 1.1.0), MASS, jsonlite,
+        knitr, rmarkdown, testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/FAkohoue/DesiredGainR,
+        https://FAkohoue.github.io/DesiredGainR/
+BugReports: https://github.com/FAkohoue/DesiredGainR/issues
+Config/roxygen2/version: 8.0.0
+Author: Félicien Akohoue [aut, cre] (ORCID:
+    <https://orcid.org/0000-0002-2160-0182>)
+Maintainer: Félicien Akohoue <akohoue.f@gmail.com>
+Built: R 4.5.0; ; 2026-08-27 17:32:02 UTC; windows

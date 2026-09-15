@@ -54,7 +54,8 @@ run_ldx_pipeline(
   use_bigmemory = FALSE,
   bigmemory_path = tempdir(),
   bigmemory_type = "char",
-  verbose = TRUE
+  verbose = TRUE,
+  multiallelic = c("error", "drop", "first_alt")
 )
 }
 \arguments{
@@ -181,6 +182,13 @@ or right neighbouring block. Default \code{2L}.}
 or \code{"double"}.}
 
 \item{verbose}{Print progress. Default \code{TRUE}.}
+
+\item{multiallelic}{Character. Policy for VCF records with multiple ALT
+alleles: \code{"error"} (default) stops, \code{"drop"} excludes the
+complete record, and \code{"first_alt"} retains the first ALT allele while
+treating genotype calls involving other ALT alleles as missing. Haplotype
+construction uses biallelic dosage, so \code{"drop"} is generally the
+appropriate explicit policy for a mixed biallelic/multiallelic VCF.}
 }
 \value{
 Named list (invisibly): \code{blocks}, \code{diversity},

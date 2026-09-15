@@ -72,22 +72,21 @@ would have ranked in a single population-wide list."><meta property="og:image" c
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
-<li class="nav-item"><a class="nav-link" href="../articles/HapBlockR-intro.html">Tutorial</a></li>
 <li class="nav-item dropdown">
-  <button class="nav-link dropdown-toggle" type="button" id="dropdown-vignettes" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Vignettes</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-vignettes"><li><a class="dropdown-item" href="../articles/HapBlockR-full-pipeline.html">Full pipeline walkthrough</a></li>
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/HapBlockR-intro.html">Introduction to HapBlockR</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Methods</h6></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-ld-metrics.html">LD Metrics: Standard r² and Kinship-Adjusted rV²</a></li>
-    <li><a class="dropdown-item" href="../articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision</a></li>
+    <li><a class="dropdown-item" href="../articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision: Haplotype-Based Parent Selection</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-large-scale.html">Large-Data Backends and Reproducible Performance Evidence</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-phasing.html">Statistical Phasing with External Beagle 5.x</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-programme-operations.html">Programme-Level Models, Feasibility, and Data Exchange</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-workflow.html">From Genotypes to a Validated Breeding Decision</a></li>
+    <li><a class="dropdown-item" href="../articles/HapBlockR-full-pipeline.html">The Full Pipeline: Genotypes to a Certified Mating Plan</a></li>
   </ul></li>
-<li class="nav-item"><a class="nav-link" href="../breeder-guide.html">Breeder guide</a></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
@@ -367,7 +366,9 @@ passed to <code><a href="https://rdrr.io/r/stats/hclust.html" class="external-li
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <code>hapblockr_result</code> list:</p><dl><dt><code>selected</code></dt>
+    <p>A list inheriting from <code>HapBlockR_family_selection</code> and
+  <code>hapblockr_result</code>. It contains the following selection-specific
+  elements and a common <code>result_contract</code> used by <code><a href="validate.html">validate()</a></code>:</p><dl><dt><code>selected</code></dt>
 <dd><p>Character vector of all selected individual IDs,
     ordered by group rank, then by selection order within each group.</p></dd>
 
@@ -459,13 +460,6 @@ passed to <code><a href="https://rdrr.io/r/stats/hclust.html" class="external-li
 <dd><p>Numeric. Realised mean off-diagonal
     pairwise relationship among all of <code>selected</code>. <code>NA</code> unless
     <code>G</code> was supplied.</p></dd>
-
-  <dt><code>result_contract</code></dt>
-<dd><p>The <code>hapblockr_result</code> contract
-    (parameters, identifiers, transformations, quality gates,
-    <code>by_family</code> as the decision table, and <code>family_ranking</code> as
-    the uncertainty table). Check with <code><a href="validate.html">validate</a></code> before
-    treating <code>selected</code> as a recommendation.</p></dd>
 
 
 </dl></div>
@@ -655,15 +649,12 @@ CONTRIBUTING groups (auto-backfill) whenever enough ranked groups exist.</p>
 count toward <code>n_families</code> – whenever its eligible membership does
 not exceed the number of lines that would actually be taken from it:
 under <code>"count"</code>, <code>n_per_family</code> itself when it is a single
-scalar (the common, flat-quota case); when <code>n_per_family</code> is a
-named vector for uneven per-group quotas, <code>rank_k</code> stands in as the
-threshold for every group, named or not – <code>n_per_family</code> is only
-guaranteed to be defined for whichever groups end up chosen, and which
-groups are chosen is not decided until after ranking (see
-<code>select_parents_by_family</code>'s internal
-<code>.resolve_n_per_family()</code>), so a name that already appears in
-<code>n_per_family</code> at this pre-ranking stage cannot yet be trusted as
-that group's real quota; under <code>"percentage"</code>, that group's OWN
+scalar (the common, flat-quota case), or <code>rank_k</code> when
+<code>n_per_family</code> is a named vector for uneven per-group quotas (since
+<code>n_per_family</code> is then only defined for whichever groups end up
+chosen, which is not yet known at exclusion time – <code>rank_k</code>, "the
+number of lines this group's ranking is based on," is used as the
+practical stand-in); under <code>"percentage"</code>, that group's OWN
 <code>ceiling(pct_per_family/100 * group_size)</code>. Below that size there
 is no genuine "select the best of" decision for that group at all –
 every eligible member would be taken regardless of ranking – so

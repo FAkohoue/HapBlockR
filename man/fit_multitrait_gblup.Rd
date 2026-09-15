@@ -9,6 +9,7 @@ fit_multitrait_gblup(
   K,
   genetic_cov = NULL,
   residual_cov = NULL,
+  sampling_covariance_mode = c("sampling_only", "sampling_plus_residual"),
   estimate_covariances = is.null(genetic_cov) && is.null(residual_cov),
   maxit = 200L,
   reltol = 1e-08,
@@ -26,6 +27,14 @@ multi-trait result from \code{\link{prepare_breeding_targets}}.}
 
 \item{residual_cov}{Optional named residual covariance matrix.}
 
+\item{sampling_covariance_mode}{Treatment of a full sampling covariance
+supplied through \code{\link{prepare_breeding_targets}}. With
+\code{"sampling_only"} (default), the known matrix is the complete
+record-error covariance and no additional residual covariance is fitted.
+With \code{"sampling_plus_residual"}, an additional
+\eqn{Sigma_e \otimes I} nugget is fitted. The option has no effect when no
+full sampling covariance is present.}
+
 \item{estimate_covariances}{Logical. Estimate covariance matrices by REML.}
 
 \item{maxit}{Maximum optimiser iterations.}
@@ -36,11 +45,17 @@ multi-trait result from \code{\link{prepare_breeding_targets}}.}
 }
 \value{
 A \code{hapblockr_result} with trait covariance diagnostics,
-  multivariate predictions, PEV, reliability, and fitted means.
+  multivariate predictions, fixed-effect-adjusted PEV, reliability, fitted
+  means, the REML log-likelihood, and sampling-covariance provenance.
+  Compare REML likelihoods only between models with the same fixed-effect
+  design.
 }
 \description{
-Fits a multivariate GBLUP by restricted maximum likelihood using
-\eqn{V = Sigma_g \otimes K + Sigma_e \otimes I}. Missing phenotype cells
-are allowed; all candidates must be represented in the genomic
-relationship matrix.
+Fits a multivariate GBLUP by restricted maximum likelihood. Without a full
+sampling covariance, the model uses
+\eqn{V = Sigma_g \otimes K + Sigma_e \otimes R}, where \eqn{R} carries
+relative precision. With a full sampling covariance \eqn{S}, the default is
+\eqn{V = Sigma_g \otimes K + S}; an explicit option adds
+\eqn{Sigma_e \otimes I}. Missing phenotype cells are allowed; all
+candidates must be represented in the genomic relationship matrix.
 }

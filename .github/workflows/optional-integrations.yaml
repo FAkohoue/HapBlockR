@@ -10,10 +10,14 @@ on:
       - "R/ocs.R"
       - "R/epistasis.R"
       - "R/haplotypes.R"
+      - "R/multitrait_gxe.R"
+      - "DESCRIPTION"
       - "tests/testthat/test-io.R"
       - "tests/testthat/test-ocs.R"
       - "tests/testthat/test-epistasis.R"
       - "tests/testthat/test-marker-effects.R"
+      - "tests/testthat/test-multitrait-gxe.R"
+      - "tests/testthat/test-desiredgainr-integration.R"
       - ".github/workflows/optional-integrations.yaml"
 
 permissions:
@@ -21,7 +25,7 @@ permissions:
 
 jobs:
   optional-r-backends:
-    name: GDS, PLINK, bigmemory, optiSel, glmnet, and BGLR
+    name: Genotype backends, optimisers, and DesiredGainR
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -29,10 +33,10 @@ jobs:
       NOT_CRAN: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 # v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up R
-        uses: r-lib/actions/setup-r@v2 # v2
+        uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           use-public-rspm: true
 
@@ -44,7 +48,7 @@ jobs:
             liblapack-dev gfortran
 
       - name: Install package dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2 # v2
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           extra-packages: |
             any::devtools
@@ -72,13 +76,15 @@ jobs:
         run: |
           required <- c(
             "SNPRelate", "gdsfmt", "BEDMatrix", "bigmemory",
-            "BGLR", "glmnet", "lpSolve", "optiSel"
+            "BGLR", "glmnet", "lpSolve", "optiSel", "DesiredGainR"
           )
           missing <- required[
             !vapply(required, requireNamespace, logical(1L), quietly = TRUE)
           ]
           if (length(missing))
             stop("Required integration missing: ", paste(missing, collapse = ", "))
+          if (packageVersion("DesiredGainR") < numeric_version("0.5.0"))
+            stop("The DesiredGainR integration requires version 0.5.0 or later.")
           optisel_functions <- c("candes", "opticont", "matings", "noffspring")
           absent <- optisel_functions[
             !vapply(optisel_functions, exists, logical(1L),
@@ -95,7 +101,9 @@ jobs:
             "tests/testthat/test-io.R",
             "tests/testthat/test-ocs.R",
             "tests/testthat/test-epistasis.R",
-            "tests/testthat/test-marker-effects.R"
+            "tests/testthat/test-marker-effects.R",
+            "tests/testthat/test-multitrait-gxe.R",
+            "tests/testthat/test-desiredgainr-integration.R"
           )) {
             testthat::test_file(
               file,

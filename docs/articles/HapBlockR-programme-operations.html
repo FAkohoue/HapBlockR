@@ -64,24 +64,23 @@
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
 <li class="nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
-<li class="nav-item"><a class="nav-link" href="../articles/HapBlockR-intro.html">Tutorial</a></li>
 <li class="active nav-item dropdown">
-  <button class="nav-link dropdown-toggle" type="button" id="dropdown-vignettes" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Vignettes</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-vignettes">
-<li><a class="dropdown-item" href="../articles/HapBlockR-full-pipeline.html">Full pipeline walkthrough</a></li>
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="../articles/HapBlockR-intro.html">Introduction to HapBlockR</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Methods</h6></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-ld-metrics.html">LD Metrics: Standard r² and Kinship-Adjusted rV²</a></li>
-    <li><a class="dropdown-item" href="../articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision</a></li>
+    <li><a class="dropdown-item" href="../articles/HapBlockR-breeding-decisions.html">From Local GEBV to a Crossing Decision: Haplotype-Based Parent Selection</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-large-scale.html">Large-Data Backends and Reproducible Performance Evidence</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-phasing.html">Statistical Phasing with External Beagle 5.x</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-programme-operations.html">Programme-Level Models, Feasibility, and Data Exchange</a></li>
     <li><a class="dropdown-item" href="../articles/HapBlockR-workflow.html">From Genotypes to a Validated Breeding Decision</a></li>
+    <li><a class="dropdown-item" href="../articles/HapBlockR-full-pipeline.html">The Full Pipeline: Genotypes to a Certified Mating Plan</a></li>
   </ul>
 </li>
-<li class="nav-item"><a class="nav-link" href="../breeder-guide.html">Breeder guide</a></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
@@ -105,7 +104,7 @@
                         <h4 data-toc-skip class="author">HapBlockR
 Development Team</h4>
             
-            <h4 data-toc-skip class="date">2026-07-29</h4>
+            <h4 data-toc-skip class="date">2026-09-15</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/FAkohoue/HapBlockR/blob/HEAD/vignettes/HapBlockR-programme-operations.Rmd" class="external-link"><code>vignettes/HapBlockR-programme-operations.Rmd</code></a></small>
       <div class="d-none name"><code>HapBlockR-programme-operations.Rmd</code></div>
@@ -187,9 +186,12 @@ metadata.</p>
 <span><span class="co">#&gt; 1 G1        2.790244    3</span></span>
 <span><span class="co">#&gt; 3 G3        2.431402    4</span></span>
 <span><span class="va">index</span><span class="op">$</span><span class="va">coefficients</span></span>
-<span><span class="co">#&gt;           trait unit direction coefficient expected_response</span></span>
-<span><span class="co">#&gt; yield     yield &lt;NA&gt;  increase   0.7042683         0.7857940</span></span>
-<span><span class="co">#&gt; disease disease &lt;NA&gt;  decrease   0.4359756        -0.4428416</span></span>
+<span><span class="co">#&gt;           trait unit direction coefficient linear_weight expected_response</span></span>
+<span><span class="co">#&gt; yield     yield &lt;NA&gt;  increase   0.7042683            NA         0.7857940</span></span>
+<span><span class="co">#&gt; disease disease &lt;NA&gt;  decrease   0.4359756            NA        -0.4428416</span></span>
+<span><span class="co">#&gt;         realised_response_sd_favourable realised_response_sd_original</span></span>
+<span><span class="co">#&gt; yield                                NA                            NA</span></span>
+<span><span class="co">#&gt; disease                              NA                            NA</span></span>
 <span><span class="fu"><a href="../reference/validate.html">validate</a></span><span class="op">(</span><span class="va">index</span><span class="op">)</span></span>
 <span><span class="co">#&gt;                 check passed                  detail</span></span>
 <span><span class="co">#&gt; 1     required_fields   TRUE                        </span></span>
@@ -204,17 +206,61 @@ metadata.</p>
 Pesek-Baker, Desired-Gain Selection Index (DGSI) and Quadratic Genomic
 Selection Index (QGSI) methods. DGSI and QGSI call DesiredGainR. DGSI
 runs independent optimisation replicates and automatically returns the
-one with the smallest desired-response objective; breeders review the
-compact stability tables rather than choosing a run manually. QGSI
-requires an explicit symmetric quadratic-weight matrix and returns
-candidate-specific linear, squared and cross-product contributions.</p>
+replicate chosen by its declared holdout or independent-validation rule;
+breeders review the compact stability tables rather than choosing a run
+manually. QGSI requires an explicit symmetric quadratic-weight matrix
+and returns candidate-specific linear, squared and cross-product
+contributions.</p>
+<p>For every method, <code>directions</code> defines favourable
+orientation. <code>economic_weights</code> and
+<code>desired_gains</code> are non-negative magnitudes in that oriented
+space; negative objectives are rejected. DGSI reports both its
+model-expected transmitted genetic response in original trait units and
+its realised selected-set differential in candidate SD units. DGSI and
+QGSI use the selection intensity for the number of candidates actually
+selected. QGSI reports model-expected gains using the complete QGSI
+variance and retains its linear and quadratic weights separately because
+no single global QGSI coefficient vector exists. HapBlockR converts
+DesiredGainR’s reported response from its analysis scale back to the
+original trait units. Additional QGSI engine controls, such as explicit
+<code>Gamma</code>, relationship information or trait scaling, can be
+supplied through <code>qgsi_control</code>. All methods expose a common
+coefficient-table schema.</p>
+<p>DGSI interprets <code>desired_gains</code> in candidate standard
+deviations even when <code>scale_traits = FALSE</code>; Pesek-Baker uses
+original trait units. For example, a DGSI target of 0.5 requests a
+selected-set shift of half a candidate standard deviation in the
+favourable direction. This target is distinct from the model-expected
+response transmitted to the next generation.</p>
+<p>Both control lists require exact DesiredGainR argument names. Supply
+reference data with the original-unit trait columns and an
+<code>id</code> column. For QGSI, <code>Gamma</code> also uses original
+trait units, whereas the linear and quadratic weights refer to the
+oriented, optionally scaled analysis space. <code>genetic_cov</code> and
+<code>phenotypic_cov</code> remain upstream context for QGSI; they do
+not replace <code>Gamma</code>.</p>
+<p>For a DGSI result, use <code>coefficients_original_units</code> when
+combining original-unit marker, haplotype or block effects. Candidate
+scores can be reconstructed as
+<code>trait_values %*% coefficients_original_units + score_intercept</code>.
+The existing <code>coefficients$coefficient</code> field retains
+DesiredGainR’s analysis-scale coefficients. Use
+<code>engine_result</code> when passing the fitted index to
+DesiredGainR’s comparison tools.</p>
 <p>Use <code><a href="../reference/fit_multitrait_gblup.html">fit_multitrait_gblup()</a></code> when genetic and residual
-covariance must be estimated jointly. Use <code><a href="../reference/fit_gxe_gblup.html">fit_gxe_gblup()</a></code>
-with an environment kernel for reaction-norm predictions.
-Environment-specific predictions support environment-specific parent
-selection. The across-environment output is the internally estimated
-genomic main effect; HapBlockR does not combine environment predictions
-with breeder-specified environment weights.</p>
+covariance must be estimated jointly. A supplied full sampling
+covariance is the complete record-error covariance by default; request
+<code>sampling_covariance_mode = "sampling_plus_residual"</code> only
+when an additional residual nugget is intended. Sampling-covariance keys
+and diagonal precision are checked before fitting. Use
+<code><a href="../reference/fit_gxe_gblup.html">fit_gxe_gblup()</a></code> with an environment kernel for
+reaction-norm predictions. Environment-specific predictions support
+environment-specific parent selection. The across-environment output is
+the internally estimated genomic main effect; HapBlockR does not combine
+environment predictions with breeder-specified environment weights. Both
+models report REML likelihoods with residual degrees of freedom; compare
+those likelihoods only between models with the same fixed-effect
+design.</p>
 </div>
 <div class="section level2">
 <h2 id="operational-screening">Operational screening<a class="anchor" aria-label="anchor" href="#operational-screening"></a>
@@ -409,14 +455,14 @@ objects:</p>
 <span><span class="co">#&gt; [1] HapBlockR_0.3.12.9000</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; loaded via a namespace (and not attached):</span></span>
-<span><span class="co">#&gt;  [1] cli_3.6.6         knitr_1.51        rlang_1.2.0       xfun_0.57        </span></span>
+<span><span class="co">#&gt;  [1] cli_3.6.6         knitr_1.51        rlang_1.3.0       xfun_0.57        </span></span>
 <span><span class="co">#&gt;  [5] otel_0.2.0        rrBLUP_4.6.3      textshaping_1.0.5 jsonlite_2.0.0   </span></span>
 <span><span class="co">#&gt;  [9] data.table_1.18.4 htmltools_0.5.9   ragg_1.5.2        sass_0.4.10      </span></span>
-<span><span class="co">#&gt; [13] rmarkdown_2.31    evaluate_1.0.5    jquerylib_0.1.4   fastmap_1.2.0    </span></span>
+<span><span class="co">#&gt; [13] rmarkdown_2.32    evaluate_1.0.5    jquerylib_0.1.4   fastmap_1.2.0    </span></span>
 <span><span class="co">#&gt; [17] yaml_2.3.12       lifecycle_1.0.5   compiler_4.5.0    igraph_2.3.1     </span></span>
 <span><span class="co">#&gt; [21] fs_2.1.0          pkgconfig_2.0.3   htmlwidgets_1.6.4 Rcpp_1.1.1-1.1   </span></span>
 <span><span class="co">#&gt; [25] rstudioapi_0.18.0 systemfonts_1.3.2 digest_0.6.39     R6_2.6.1         </span></span>
-<span><span class="co">#&gt; [29] parallel_4.5.0    magrittr_2.0.5    bslib_0.11.0      tools_4.5.0      </span></span>
+<span><span class="co">#&gt; [29] parallel_4.5.0    magrittr_2.0.5    bslib_0.12.0      tools_4.5.0      </span></span>
 <span><span class="co">#&gt; [33] pkgdown_2.2.0     cachem_1.1.0      desc_1.4.3</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

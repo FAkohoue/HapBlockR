@@ -1256,3 +1256,23 @@ test_that("select_parents_by_family(): family_select_mode = 'check_relative' + u
   expect_setequal(res$zero_selected_groups, c("FamY", "FamZ"))
   expect_setequal(res$selected, c("X1", "X2"))
 })
+
+test_that("select_parents_by_family returns a valid common result contract", {
+  result <- select_parents_by_family(
+    .fs_score, .fs_family,
+    n_families = 2L, n_per_family = 2L,
+    variance_method = "anova", verbose = FALSE
+  )
+
+  expect_s3_class(result, "HapBlockR_family_selection")
+  expect_s3_class(result, "hapblockr_result")
+  expect_identical(
+    result$result_contract$method,
+    "select_parents_by_family"
+  )
+  expect_identical(
+    result$result_contract$decision_table$id,
+    result$selected
+  )
+  expect_no_error(validate(result))
+})

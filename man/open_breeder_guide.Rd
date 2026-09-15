@@ -4,7 +4,7 @@
 \alias{open_breeder_guide}
 \title{Locate or Open the HapBlockR Breeder's Guide}
 \usage{
-open_breeder_guide(open = TRUE, format = c("pdf", "html"))
+open_breeder_guide(open = TRUE, format = c("pdf", "docx"))
 }
 \arguments{
 \item{open}{Logical, default \code{TRUE}. If \code{TRUE} and the session
@@ -13,8 +13,8 @@ application for the selected file via \code{\link[utils]{browseURL}}.
 If \code{FALSE}, or the session is non-interactive, the file is not
 opened -- only its path is returned.}
 
-\item{format}{Character, one of \code{"pdf"} (default) or \code{"html"}.
-Selects the tagged fixed-layout edition or HTML edition.}
+\item{format}{Character, one of \code{"pdf"} (default) or \code{"docx"}.
+Selects the tagged fixed-layout edition or the editable Word edition.}
 }
 \value{
 The file path (character, invisibly) to the selected guide edition
@@ -22,7 +22,7 @@ The file path (character, invisibly) to the selected guide edition
   requested edition is unavailable.
 }
 \description{
-The PDF and HTML editions of the HapBlockR Breeder's Guide are standalone
+The PDF and Word editions of the HapBlockR Breeder's Guide are standalone
 companions to the \emph{From Local GEBV to a Crossing Decision} vignette --
 the same nine parent- and cross-selection tools
 (\code{\link{truncation_selection}}, \code{\link{select_parents_ga}},
@@ -38,20 +38,20 @@ breeders, programme managers, or reviewers who will use or approve a
 crossing decision but do not necessarily run R themselves.
 }
 \details{
-The tagged PDF provides a fixed reference edition and the HTML edition
-renders the same content for on-screen reading. These standalone files
-have no vignette engine, so they are not indexed by
+The tagged PDF provides a fixed reference edition and the Word document
+provides an editable edition for programme-specific annotation. These
+standalone files have no vignette engine, so they are not indexed by
 \code{vignette()}/\code{browseVignettes()} like the package's
 \code{.Rmd} vignettes. Their version-controlled source is
-\code{inst/guide/HapBlockR_Breeder_Guide.Rmd}; both generated files ship
-in \code{inst/extdata/} and are located via
+\code{inst/guide/HapBlockR_Breeder_Guide.md}; both generated files ship in
+\code{inst/extdata/} and are located via
 \code{\link[base]{system.file}}.
 }
 \examples{
-pdf_path  <- open_breeder_guide(open = FALSE)
-html_path <- open_breeder_guide(open = FALSE, format = "html")
+pdf_path <- open_breeder_guide(open = FALSE)
+word_path <- open_breeder_guide(open = FALSE, format = "docx")
 file.exists(pdf_path)
-file.exists(html_path)
+file.exists(word_path)
 
 }
 \seealso{

@@ -59,5 +59,7 @@ fit_gxe_gblup(
 
 ## Value
 
-A `hapblockr_result` with variance components and environment-specific
-genomic predictions.
+A `hapblockr_result` with variance components, environment-specific
+genomic predictions, fixed-effect-adjusted PEV, reliability, and the
+REML log-likelihood. Compare REML likelihoods only between models with
+the same fixed-effect design.

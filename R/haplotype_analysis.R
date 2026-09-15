@@ -410,16 +410,8 @@ cv_haplotype_prediction <- function(
     ),
     quality_gates = c(
       all_fits_succeeded = all(pa_df$status == "ok"),
-      # This gate exists to catch a real bug -- an individual scored more
-      # than once for the same trait within the same repetition (test-set
-      # leakage/duplication). It must NOT require every (id, trait, rep)
-      # cell to be populated: under multi-trait "forward" validation,
-      # traits can have different phenotyping coverage, so an individual
-      # permanently in the earliest, training-only time bin for trait A but
-      # genuinely tested for trait B creates a legitimate empty cell (count
-      # = 0), not a violation. Only counts > 1 indicate an actual problem.
-      no_individual_tested_twice_per_repetition =
-        all(table(gebv_all$id, gebv_all$trait, gebv_all$rep) <= 1L),
+      all_tested_once_per_repetition =
+        all(table(gebv_all$id, gebv_all$trait, gebv_all$rep) == 1L),
       finite_predictions = all(is.finite(gebv_all$gebv))
     ),
     warnings = unique(stats::na.omit(pa_df$error)),

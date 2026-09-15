@@ -1,0 +1,25 @@
+section,item,observed,expected,status
+markers,marker_rows,955690,955690,pass
+markers,unique_marker_names,955690,955690,pass
+markers,mapped_chromosomes,11,11,pass
+markers,zero_chromosome_markers,570,,documented
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic data_C0/HGB_18 Original parents.hmp.txt,18 samples; 17 linked,18 samples,investigate
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic data_C0/HGB_C0_1000 samples.hmp.txt,1000 samples; 1000 linked,1000 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic data_C0/HGB_C0_50 samples selected.hmp.txt,50 samples; 50 linked,50 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic Data_C1/HGB_C1_157 samples.hmp.txt,157 samples; 157 linked,157 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic Data_C1/HGB_C1_25 samples selected.hmp.txt,25 samples; 25 linked,25 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic Data_C2/HGB_C2_18 selected samples.hmp.txt,18 samples; 18 linked,18 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic Data_C2/HGB_C2_91 samples.hmp.txt,91 samples; 91 linked,91 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic data_C3/HGB_22 selected samples.hmp.txt,22 samples; 22 linked,22 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic data_C3/HGB_44 samples.hmp.txt,44 samples; 44 linked,44 samples,pass
+hapmap,RCGS Genetic gains_Genotypic data/Genotypic data_C4/HGB_22 selected samples.hmp.txt,22 samples; 22 linked,22 samples,pass
+cross-file,C3/C4 selected HapMap identity,TRUE,FALSE,fail-do-not-use-as-C4
+training phenotype,E1,1000 candidates,1000 candidates,pass
+training phenotype,E2,1000 candidates,1000 candidates,pass
+training phenotype,E3,1000 candidates,1000 candidates,pass
+training phenotype,E4,1000 candidates,1000 candidates,pass
+cross-file,training pedigree-to-sample linkage,1000 of 1000,1000 of 1000,pass
+cross-file,C0 gain-trial pedigree linkage,48 of 48,48 of 48,pass
+cross-file,C1 gain-trial pedigree linkage,47 of 47,47 of 47,pass
+cross-file,C2 gain-trial pedigree linkage,48 of 48,48 of 48,pass
+cross-file,C3 gain-trial pedigree linkage,43 of 43,43 of 43,pass

@@ -164,3 +164,23 @@ test_that("validate_crosses_exact: NA criterion_col rows are dropped before solv
   res <- validate_crosses_exact(data = dat, n_cross = 2L, verbose = FALSE)
   expect_equal(res$n_candidates, 4L)
 })
+
+test_that("validate_crosses_exact returns a valid common result contract", {
+  skip_if_not_installed("lpSolve")
+  result <- validate_crosses_exact(
+    data = .evc_data, n_cross = 2L, max_cross = 1L,
+    verbose = FALSE
+  )
+
+  expect_s3_class(result, "HapBlockR_exact_cross_validation")
+  expect_s3_class(result, "hapblockr_result")
+  expect_identical(
+    result$result_contract$method,
+    "validate_crosses_exact"
+  )
+  expect_equal(
+    nrow(result$result_contract$decision_table),
+    nrow(result$exact_plan)
+  )
+  expect_no_error(validate(result))
+})

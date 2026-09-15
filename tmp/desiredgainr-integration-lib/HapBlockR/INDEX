@@ -1,0 +1,195 @@
+Big_LD                  LD Block Segmentation (r^2 or rV^2, C++
+                        accelerated)
+HapBlockR-package       HapBlockR: Genome-Wide LD Block Detection,
+                        Haplotype Analysis, Genomic Prediction, and
+                        Breeding Decision Support
+assess_decision_stability
+                        Assess Recommendation Stability Across
+                        Scenarios
+assess_phasing_accuracy
+                        Assess Phasing Accuracy against a Truth Set
+backsolve_snp_effects   Backsolve SNP Effects from GEBV (Tong et al.
+                        2025)
+breeding_target_types   Describe Accepted Breeding-target Inputs
+build_breeding_exchange
+                        Build a BrAPI/MIAPPE-Oriented Recommendation
+                        Bundle
+build_environment_kernel
+                        Build an Environmental Similarity Kernel
+build_haplotype_feature_matrix
+                        Build Haplotype Dosage Matrix for Genomic
+                        Prediction
+build_selection_index   Construct an Economic or Desired-Gain Selection
+                        Index
+certify_mating_plan     Certify an Operational Mating Plan
+close_backend           Close an HapBlockR Backend and Release File
+                        Handles
+cluster_selection_groups
+                        Cluster Individuals on Retained Principal
+                        Components and Cross-Tabulate Selection
+                        Coverage
+collapse_haplotypes     Collapse Rare Haplotype Alleles Into
+                        Biologically Meaningful Groups
+compare_block_effects   Cross-Population Haplotype Effect Concordance
+compare_gwas_effects    Cross-Population GWAS Effect Concordance from
+                        External Results
+compare_haplotype_populations
+                        Compare Haplotype Allele Frequencies Between
+                        Two Population Groups
+compute_dominance_grm   Genomic Dominance Relationship Matrix (Vitezica
+                        et al. 2013)
+compute_haplotype_diversity
+                        Compute Haplotype Diversity Per Block
+compute_haplotype_grm   Compute Haplotype-Based Genomic Relationship
+                        Matrix
+compute_ld_decay        Compute LD Decay and Chromosome-Specific Decay
+                        Distances
+compute_local_gebv      Compute Local Haplotype GEBV per Block (Tong et
+                        al. 2025)
+compute_r2              Compute Standard r^2 LD Matrix
+compute_rV2             Compute Kinship-Adjusted rV^2 LD Matrix
+cv_haplotype_prediction
+                        K-Fold Cross-Validation for Haplotype-Based
+                        Genomic Prediction
+decode_haplotype_strings
+                        Decode Haplotype Strings to Nucleotide
+                        Sequences
+decompose_block_effects
+                        Decompose Per-SNP Effects into
+                        Per-Haplotype-Allele Effect Table
+define_qtl_regions      Map GWAS Hits to LD Blocks (Post-GWAS QTL
+                        Region Definition)
+estimate_diplotype_effects
+                        Estimate Diplotype Effects and Dominance
+                        Deviations Per LD Block
+estimate_marker_effects
+                        Estimate Per-SNP Marker Effects via GBLUP,
+                        rrBLUP (SNP-BLUP), or Bayesian Regression
+export_candidate_regions
+                        Export Candidate Gene Regions to BED, CSV, or
+                        biomaRt Format
+extract_haplotypes      Extract Haplotype Dosage Strings from LD Blocks
+fine_map_epistasis_block
+                        Fine-Map Epistatic SNP Pairs Within a Single
+                        Block
+fit_gxe_gblup           Fit a Reaction-Norm Genomic GxE Model
+fit_multitrait_gblup    Fit a Multivariate Genomic BLUP
+ga_vs_ts_simulation     Simulate GA-Selected vs. Truncation-Selected
+                        Founders Over Generations
+get_V_inv_sqrt          Compute the Inverse Square Root (Whitening
+                        Factor) of a Kinship Matrix
+harmonize_haplotypes    Harmonise Haplotype Allele Labels Across Panels
+                        or Analysis Runs
+infer_block_haplotypes
+                        Infer Structured Block-Level Diplotypes Per
+                        Individual
+integrate_gwas_haplotypes
+                        Integrate GWAS QTL Regions with Haplotype
+                        Prediction Results
+ldx_blocks              Example LD Block Table
+ldx_blues               Pre-Adjusted Phenotype Means (BLUEs) for
+                        Genomic Prediction Examples
+ldx_blues_list          Per-Environment BLUEs for Stability Analysis
+                        Examples
+ldx_geno                Example Genotype Matrix
+ldx_gwas                Example GWAS Marker Table
+ldx_snp_info            Example SNP Information Table
+open_breeder_guide      Locate or Open the HapBlockR Breeder's Guide
+pareto_front            Pareto (Non-Dominated) Front of a Set of
+                        Candidates
+phase_with_beagle       Statistical Phasing via Beagle 5.x
+plot_block_funnel       Funnel Plot of Block Importance
+plot_ga_vs_ts_simulation
+                        Plot Realised Genetic Gain: GA vs. Truncation
+                        Selection (and Beyond)
+plot_haplotype_network
+                        Plot a Minimum-Spanning Haplotype Network for
+                        One LD Block
+plot_ld_blocks          Plot LD Block Structure Across Chromosomes
+plot_ld_decay           Plot LD Decay Curve
+plot_parent_selection_pca
+                        PCA of Parent-Selection Groups
+plot_selection_clusters
+                        Plot Individuals Coloured by Genetic Cluster
+prepare_breeding_targets
+                        Prepare Externally Analysed Breeding Targets
+prepare_gblup_inputs    Prepare Genomic Prediction Inputs for External
+                        GBLUP Software
+prepare_geno            Prepare Genotype Matrix for LD Computation
+print.HapBlockR_backend
+                        Print Method for HapBlockR Backend
+rank_haplotype_blocks   Rank Haplotype Blocks by Evidence Strength
+read_breeding_exchange
+                        Read and Verify a Breeding Exchange Bundle
+read_chunk              Extract a Genotype Slice from an HapBlockR
+                        Backend
+read_geno               Read Genotype Data into an HapBlockR Backend
+read_geno_bigmemory     Open a bigmemory-backed Genotype Store
+read_phased_vcf         Read Pre-Phased VCF
+run_Big_LD_all_chr      Genome-Wide LD Block Detection by Chromosome
+run_haplotype_prediction
+                        Haplotype Prediction and Block Importance from
+                        Pre-Adjusted Phenotypes
+run_haplotype_stability
+                        Finlay-Wilkinson Stability Analysis of
+                        Haplotype Effects Across Environments
+run_ldx_pipeline        End-to-End Haplotype Block Pipeline
+scan_block_by_block_epistasis
+                        Between-Block Haplotype Allele Epistasis Scan
+scan_block_epistasis    Within-Block Pairwise SNP Epistasis Scan
+scan_diversity_windows
+                        Sliding-Window Genome-Wide Diversity Scan
+score_favorable_haplotypes
+                        Score Individual Haplotype Portfolios Against
+                        Known Allele Effects
+screen_candidate_crosses
+                        Screen Crosses for Operational Feasibility
+select_core_collection
+                        Core-Collection / Diversity-Maximizing Subset
+                        Selection
+select_parents_by_family
+                        Family- or Genetic-Cluster-Quota Parent
+                        Selection (Best Groups, Then Best Lines Within
+                        Them)
+select_parents_ga       Select Parents by Genetic-Algorithm Haplotype
+                        Coverage
+select_parents_ga_ts    Select Parents by Joint GA and Whole-Genome
+                        Merit
+select_parents_ocs      True Optimal Contribution Selection (OCS) and
+                        Mate Allocation
+select_parents_pareto   Pareto Frontier of Parent Sets: Merit vs.
+                        Relatedness
+select_top_blocks       Select Top-Ranked Blocks by Count, Percentage,
+                        or Cumulative Variance
+suggest_merit_weight    Suggest a Starting merit_weight for
+                        select_parents_ga_ts()
+summarise_blocks        Summarise LD Block Characteristics
+summarize_parent_haplotypes
+                        Summarise Haplotype Allele Inventory Per
+                        Candidate Parent
+summary.HapBlockR_backend
+                        Summary Method for HapBlockR Backend
+test_block_haplotypes   Block-Level Haplotype Association Testing (Q+K
+                        Mixed Linear Model with simpleM
+                        Multiple-Testing Correction)
+truncation_selection    Truncation Selection (Top-n by a Single Score)
+tune_LD_params          Auto-Tune LD Block Detection Parameters
+usefulness_criterion    Usefulness Criterion (UC) / Genomic Mating:
+                        Rank Candidate Crosses
+validate                Validate an Object
+validate_breeding_metadata
+                        Validate Traceable Breeding Metadata
+validate_crosses_exact
+                        Exact (ILP) Cross Selection: A Validation Check
+                        for Heuristic Mating Plans
+validate_hapblockr_result
+                        Validate a HapBlockR Result Contract
+write_breeding_exchange
+                        Write a Breeding Exchange Bundle
+write_haplotype_character
+                        Write Haplotype Character (Nucleotide) Matrix
+write_haplotype_diversity
+                        Write Haplotype Diversity Table
+write_haplotype_numeric
+                        Write Haplotype Feature Matrix as Numeric
+                        Dosage Table

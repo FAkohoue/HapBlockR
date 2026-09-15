@@ -259,7 +259,10 @@ select_parents_by_family(
 
 ## Value
 
-A `hapblockr_result` list:
+A list inheriting from `HapBlockR_family_selection` and
+`hapblockr_result`. It contains the following selection-specific
+elements and a common `result_contract` used by
+[`validate()`](https://FAkohoue.github.io/HapBlockR/reference/validate.md):
 
 - `selected`:
 
@@ -357,14 +360,6 @@ A `hapblockr_result` list:
 
   Numeric. Realised mean off-diagonal pairwise relationship among all of
   `selected`. `NA` unless `G` was supplied.
-
-- `result_contract`:
-
-  The `hapblockr_result` contract (parameters, identifiers,
-  transformations, quality gates, `by_family` as the decision table, and
-  `family_ranking` as the uncertainty table). Check with
-  [`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
-  before treating `selected` as a recommendation.
 
 ## Details
 
@@ -548,14 +543,11 @@ A family/group is excluded entirely – before ranking, before it can
 count toward `n_families` – whenever its eligible membership does not
 exceed the number of lines that would actually be taken from it: under
 `"count"`, `n_per_family` itself when it is a single scalar (the common,
-flat-quota case); when `n_per_family` is a named vector for uneven
-per-group quotas, `rank_k` stands in as the threshold for every group,
-named or not – `n_per_family` is only guaranteed to be defined for
-whichever groups end up chosen, and which groups are chosen is not
-decided until after ranking (see `select_parents_by_family`'s internal
-`.resolve_n_per_family()`), so a name that already appears in
-`n_per_family` at this pre-ranking stage cannot yet be trusted as that
-group's real quota; under `"percentage"`, that group's OWN
+flat-quota case), or `rank_k` when `n_per_family` is a named vector for
+uneven per-group quotas (since `n_per_family` is then only defined for
+whichever groups end up chosen, which is not yet known at exclusion time
+– `rank_k`, "the number of lines this group's ranking is based on," is
+used as the practical stand-in); under `"percentage"`, that group's OWN
 `ceiling(pct_per_family/100 * group_size)`. Below that size there is no
 genuine "select the best of" decision for that group at all – every
 eligible member would be taken regardless of ranking – so including it

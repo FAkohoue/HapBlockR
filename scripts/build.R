@@ -346,8 +346,8 @@ devtools::load_all()
 #    installed DLL, so load_all() will find them.
 devtools::test()
 
-devtools::test(filter = "repository-metadata")
-devtools::test(filter = "multitrait-gxe")
+devtools::test(filter = "association")
+devtools::test(filter = "haplotypes")
 devtools::test(filter = "full-pipeline")
 devtools::test(filter = "breeder-guide")
 
@@ -378,9 +378,6 @@ pkgdown::build_home()
 
 #pkgdown::clean_site(force = TRUE)
 pkgdown::build_site()
-
-
-pkgdown::build_favicons(overwrite = TRUE)
 
 # 10. Build package
 devtools::build()

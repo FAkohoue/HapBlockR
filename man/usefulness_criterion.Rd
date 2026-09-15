@@ -210,11 +210,9 @@ example the \code{reliability} column returned by
 conservative minimum of its two parental reliabilities.}
 
 \item{phasing_reliability}{Optional named numeric vector in [0, 1].
-For \code{variance_model = "phased"} or \code{"linked"} -- both build
-progeny variance from phased haplotype blocks and depend equally on
-phasing accuracy -- each cross uses the conservative minimum of
-parental prediction and phasing reliability. Missing phasing
-reliability therefore cannot pass the recommendation gate in either
+For \code{variance_model = "phased"}, each cross uses the conservative
+minimum of parental prediction and phasing reliability. Missing phasing
+reliability therefore cannot pass the recommendation gate in phased
 mode.}
 
 \item{downside_quantile}{Numeric in (0, 0.5). Progeny-distribution

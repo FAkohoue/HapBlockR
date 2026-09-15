@@ -15,29 +15,26 @@ test_that("package, citation, and guide versions are consistent", {
   root <- .repository_source_root()
   description <- read.dcf(file.path(root, "DESCRIPTION"))[1L, ]
   version <- unname(description[["Version"]])
+  citation <- utils::readCitationFile(
+    file.path(root, "inst", "CITATION"),
+    meta = as.list(description)
+  )
 
   cff <- readLines(file.path(root, "CITATION.cff"), warn = FALSE)
   expect_true(any(trimws(cff) == paste("version:", version)))
+  expect_s3_class(citation, "bibentry")
+  expect_true(any(grepl(version, format(citation), fixed = TRUE)))
 
   guide <- readLines(
-    file.path(root, "inst", "guide", "HapBlockR_Breeder_Guide.Rmd"),
+    file.path(root, "inst", "guide", "HapBlockR_Breeder_Guide.md"),
     warn = FALSE,
     encoding = "UTF-8"
   )
-  guide_version_pattern <- paste0(
-    "^\\s*",
-    "(?:Compatible package version|compatible_package_version)",
-    "\\s*:\\s*",
-    "[\"']?\\Q", version, "\\E[\"']?",
-    "\\s*$"
-  )
-
   expect_true(any(grepl(
-    guide_version_pattern,
+    paste0("Compatible package version: ", version),
     guide,
-    perl = TRUE
+    fixed = TRUE
   )))
-
   expect_true(any(grepl("nine decision tools", guide, fixed = TRUE)))
 })
 
@@ -65,7 +62,7 @@ test_that("source tree contains no redistributed executables or JAR archives", {
 test_that("breeder guide has reproducible source and a generated PDF", {
   root <- .repository_source_root()
   expect_true(file.exists(file.path(
-    root, "inst", "guide", "HapBlockR_Breeder_Guide.Rmd"
+    root, "inst", "guide", "HapBlockR_Breeder_Guide.md"
   )))
   expect_true(file.exists(file.path(
     root, "tools", "build_breeder_guide_accessible.cjs"

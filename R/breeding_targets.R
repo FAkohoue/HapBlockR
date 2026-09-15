@@ -338,11 +338,7 @@ prepare_breeding_targets <- function(
       (targets$value - parent_average_value) / targets$reliability
   }
 
-  precision_group <- interaction(
-    targets$trait,
-    ifelse(is.na(targets$environment), "ACROSS", targets$environment),
-    drop = TRUE
-  )
+  precision_group <- .hb_target_precision_group(targets)
   targets$precision_weight <- stats::ave(
     targets$precision_raw,
     precision_group,
@@ -636,7 +632,32 @@ prepare_breeding_targets <- function(
     stop("covariance must be symmetric with a positive diagonal.",
          call. = FALSE)
   }
+  eigenvalues <- eigen(
+    (covariance + t(covariance)) / 2,
+    symmetric = TRUE,
+    only.values = TRUE
+  )$values
+  tolerance <- 1e-8 * max(1, max(abs(eigenvalues)))
+  if (min(eigenvalues) < -tolerance) {
+    stop("covariance must be positive semidefinite.", call. = FALSE)
+  }
   covariance
+}
+
+.hb_target_precision_group <- function(targets) {
+  required <- c("trait", "environment")
+  if (!all(required %in% names(targets))) {
+    stop(
+      "Prepared targets require trait and environment columns for precision ",
+      "normalisation.",
+      call. = FALSE
+    )
+  }
+  interaction(
+    targets$trait,
+    ifelse(is.na(targets$environment), "ACROSS", targets$environment),
+    drop = TRUE
+  )
 }
 
 .hb_unpack_model_targets <- function(x, allow_environment = FALSE) {
@@ -646,7 +667,8 @@ prepare_breeding_targets <- function(
   }
   targets <- x$targets
   required <- c(
-    "id", "trait", "environment", "model_value", "precision_weight"
+    "id", "trait", "environment", "record_key", "model_value",
+    "precision_weight"
   )
   if (!all(required %in% names(targets))) {
     stop(
@@ -660,6 +682,14 @@ prepare_breeding_targets <- function(
     stop(
       "Targets from multiple environments require fit_gxe_gblup(). To fit ",
       "one environment independently, prepare or subset one environment.",
+      call. = FALSE
+    )
+  }
+  if (!isTRUE(allow_environment) && length(environments) == 1L &&
+      anyNA(targets$environment)) {
+    stop(
+      "Do not mix across-environment and environment-specific targets in ",
+      "one multivariate model.",
       call. = FALSE
     )
   }

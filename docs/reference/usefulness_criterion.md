@@ -279,11 +279,10 @@ usefulness_criterion(
 - phasing_reliability:
 
   Optional named numeric vector in \[0, 1\]. For
-  `variance_model = "phased"` or `"linked"` – both build progeny
-  variance from phased haplotype blocks and depend equally on phasing
-  accuracy – each cross uses the conservative minimum of parental
-  prediction and phasing reliability. Missing phasing reliability
-  therefore cannot pass the recommendation gate in either mode.
+  `variance_model = "phased"`, each cross uses the conservative minimum
+  of parental prediction and phasing reliability. Missing phasing
+  reliability therefore cannot pass the recommendation gate in phased
+  mode.
 
 - downside_quantile:
 

@@ -1,0 +1,37 @@
+## The version is read from the installed DESCRIPTION rather than written out,
+## because a hard-coded version drifts silently: this file still claimed 0.3.1
+## while DESCRIPTION and CITATION.cff said 0.5.0.
+
+version <- tryCatch(
+  as.character(utils::packageVersion("DesiredGainR")),
+  error = function(e) meta$Version
+)
+if (is.null(version) || !length(version)) version <- "unreleased"
+note <- paste("R package version", version)
+
+citHeader("To cite DesiredGainR in publications, use:")
+
+bibentry(
+  bibtype = "Manual",
+  title = paste(
+    "DesiredGainR: Desired-Gain Selection Index and Quadratic Genomic",
+    "Selection Index Tools for Plant Breeding"
+  ),
+  author = person(
+    given = "Félicien",
+    family = "Akohoue",
+    role = c("aut", "cre"),
+    email = "akohoue.f@gmail.com",
+    comment = c(ORCID = "0000-0002-2160-0182")
+  ),
+  year = "2026",
+  note = note,
+  url = "https://github.com/FAkohoue/DesiredGainR",
+  textVersion = paste0(
+    "Akohoue F (2026). ",
+    "DesiredGainR: Desired-Gain Selection Index and Quadratic Genomic ",
+    "Selection Index Tools for Plant Breeding. ",
+    note, ". ",
+    "https://github.com/FAkohoue/DesiredGainR"
+  )
+)

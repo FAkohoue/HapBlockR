@@ -1,0 +1,59 @@
+Package: HapBlockR
+Type: Package
+Title: LD Blocks, Haplotype Analysis, and Breeding Decisions
+Version: 0.3.12.9000
+Date: 2026-07-25
+Authors@R: 
+    person(
+      given   = "Félicien",
+      family  = "Akohoue",
+      email   = "akohoue.f@gmail.com",
+      role    = c("aut", "cre"),
+      comment = c(ORCID = "0000-0002-2160-0182")
+    )
+Description: Detects linkage-disequilibrium blocks and supports haplotype
+    analysis, genomic prediction, multivariate and genotype-by-environment
+    prediction, parent selection, optimum-contribution selection, genomic
+    mating, operational plan certification, interoperable recommendation
+    export, and core-collection design. Compiled routines
+    calculate standard r-squared and kinship-adjusted rV-squared statistics.
+    Input readers support dosage tables, HapMap, VCF, GDS, and PLINK BED
+    files; memory use depends on the source format and selected backend.
+    Breeder-facing methods return quality-control, provenance, validation,
+    and uncertainty information where it can be estimated. Beagle phasing
+    is supported through an explicitly configured external Beagle 5.x JAR.
+    Dosage-based relationship and marker-effect calculations can accept
+    alternative ploidy values, but haplotype inference, phased
+    representations, and compiled LD kernels currently assume diploid,
+    biallelic data.
+License: MIT + file LICENSE
+Depends: R (>= 4.2.0)
+Imports: Rcpp (>= 1.0.10), igraph (>= 1.3.0), data.table (>= 1.14.0),
+        digest, dplyr (>= 1.0.0), rrBLUP, stats, utils, grDevices,
+        scales
+Suggests: AGHmatrix (>= 2.0.0), ASRgenomics (>= 1.1.0), BGLR (>=
+        1.1.0), GA (>= 3.2), genomicSimulation, SNPRelate, gdsfmt,
+        BEDMatrix, bigmemory, future.apply, ggplot2, glmnet, lme4 (>=
+        1.1), lpSolve, optiSel, SimpleMating (>= 0.2.1), DesiredGainR
+        (>= 0.5.0), spelling, usethis, knitr, rmarkdown, testthat (>=
+        3.0.0)
+LinkingTo: Rcpp, RcppArmadillo
+Remotes: github::vllrs/genomicSimulation,
+        github::Resende-Lab/SimpleMating, github::FAkohoue/DesiredGainR
+Encoding: UTF-8
+Language: en-GB
+Roxygen: list(markdown = FALSE)
+Config/testthat/edition: 3
+LazyData: true
+SystemRequirements: C++17, OpenMP (optional), Java 8 or later
+        (optional, for Beagle)
+URL: https://github.com/FAkohoue/HapBlockR,
+        https://FAkohoue.github.io/HapBlockR/
+BugReports: https://github.com/FAkohoue/HapBlockR/issues
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
+Author: Félicien Akohoue [aut, cre] (ORCID:
+    <https://orcid.org/0000-0002-2160-0182>)
+Maintainer: Félicien Akohoue <akohoue.f@gmail.com>
+Built: R 4.5.0; x86_64-w64-mingw32; 2026-08-27 17:33:29 UTC; windows
+Archs: x64

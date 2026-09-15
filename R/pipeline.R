@@ -498,6 +498,12 @@
 #' @param chr          Chromosomes to process (\code{NULL} = all). Default
 #'   \code{NULL}.
 #' @param clean_malformed Remove malformed VCF lines. Default \code{FALSE}.
+#' @param multiallelic Character. Policy for VCF records with multiple ALT
+#'   alleles: \code{"error"} (default) stops, \code{"drop"} excludes the
+#'   complete record, and \code{"first_alt"} retains the first ALT allele while
+#'   treating genotype calls involving other ALT alleles as missing. Haplotype
+#'   construction uses biallelic dosage, so \code{"drop"} is generally the
+#'   appropriate explicit policy for a mixed biallelic/multiallelic VCF.
 #' @param use_bigmemory File-backed bigmemory store. Default \code{FALSE}.
 #' @param bigmemory_path Directory for backing files. Default \code{tempdir()}.
 #' @param bigmemory_type \code{"char"} (default), \code{"short"},
@@ -603,13 +609,15 @@ run_ldx_pipeline <- function(
     use_bigmemory   = FALSE,
     bigmemory_path  = tempdir(),
     bigmemory_type  = "char",
-    verbose         = TRUE
+    verbose         = TRUE,
+    multiallelic    = c("error", "drop", "first_alt")
 ) {
   hap_format     <- match.arg(hap_format)
   method         <- match.arg(method)
   CLQmode        <- match.arg(CLQmode)
   impute         <- match.arg(impute)
   bigmemory_type <- match.arg(bigmemory_type, choices = c("char", "short", "double"))
+  multiallelic   <- match.arg(multiallelic)
 
   .log <- function(...) {
     if (verbose)
@@ -725,7 +733,12 @@ run_ldx_pipeline <- function(
         )
       } else {
         .log("[bigmemory] Building file-backed matrix (type = '", bigmemory_type, "') ...")
-        be_tmp <- read_geno(geno_source, clean_malformed = clean_malformed, verbose = verbose)
+        be_tmp <- read_geno(
+          geno_source,
+          clean_malformed = clean_malformed,
+          multiallelic = multiallelic,
+          verbose = verbose
+        )
         be <- read_geno_bigmemory(
           source      = be_tmp,
           snp_info    = be_tmp$snp_info,
@@ -741,7 +754,12 @@ run_ldx_pipeline <- function(
       on.exit(close_backend(be), add = TRUE)
     } else {
       .log("Opening: ", basename(geno_source))
-      be <- read_geno(geno_source, clean_malformed = clean_malformed, verbose = verbose)
+      be <- read_geno(
+        geno_source,
+        clean_malformed = clean_malformed,
+        multiallelic = multiallelic,
+        verbose = verbose
+      )
       on.exit(close_backend(be), add = TRUE)
     }
 

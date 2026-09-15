@@ -241,13 +241,6 @@ assess_phasing_accuracy <- function(
     sample_column <- match(sample_id, truth_samples)
     for (chromosome in chromosomes) {
       variant_rows <- which(as.character(truth_info$CHR) == chromosome)
-      # Switch-error counting in .phase_accuracy_stratum() assumes consecutive
-      # array positions are consecutive genomic positions (it compares
-      # orientation[-1] against orientation[-length(orientation)] directly).
-      # variant_rows is taken in truth_info's stored row order, which is not
-      # guaranteed to be position-sorted, so sort explicitly here -- mirrors
-      # .block_snp_order()'s explicit sort elsewhere in the package.
-      variant_rows <- variant_rows[order(truth_info$POS[variant_rows])]
       stats <- .phase_accuracy_stratum(
         truth_data$hap1[variant_rows, sample_column],
         truth_data$hap2[variant_rows, sample_column],

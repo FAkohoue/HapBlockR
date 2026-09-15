@@ -37,8 +37,10 @@ breeding targets supply their normalised precision automatically.}
 \item{maxit}{Maximum REML optimiser iterations.}
 }
 \value{
-A \code{hapblockr_result} with variance components and
-  environment-specific genomic predictions.
+A \code{hapblockr_result} with variance components,
+  environment-specific genomic predictions, fixed-effect-adjusted PEV,
+  reliability, and the REML log-likelihood. Compare REML likelihoods only
+  between models with the same fixed-effect design.
 }
 \description{
 Fits a genomic main-effect plus reaction-norm model with record covariance

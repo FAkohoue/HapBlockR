@@ -502,8 +502,8 @@ validate(fam_sel)
 #> 3              method   TRUE select_parents_by_family
 #> 4   sample_ids_unique   TRUE 120 sample identifier(s)
 #> 5  variant_ids_unique   TRUE  0 variant identifier(s)
-#> 6 input_hashes_sha256   TRUE         2 input hash(es)
-#> 7       quality_gates   TRUE        2 quality gate(s)
+#> 6 input_hashes_sha256   TRUE         3 input hash(es)
+#> 7       quality_gates   TRUE        5 quality gate(s)
 #> 8   validation_status   TRUE                   passed
 validate(core_res)
 #>                 check passed                   detail
@@ -532,8 +532,8 @@ validate(exact_res)
 #> 3              method   TRUE  validate_crosses_exact
 #> 4   sample_ids_unique   TRUE 15 sample identifier(s)
 #> 5  variant_ids_unique   TRUE 0 variant identifier(s)
-#> 6 input_hashes_sha256   TRUE        1 input hash(es)
-#> 7       quality_gates   TRUE       2 quality gate(s)
+#> 6 input_hashes_sha256   TRUE        2 input hash(es)
+#> 7       quality_gates   TRUE       4 quality gate(s)
 #> 8   validation_status   TRUE                  passed
 ```
 
@@ -613,7 +613,7 @@ sessionInfo()
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] rrBLUP_4.6.3         pspline_1.0-21       xfun_0.57           
-#>  [4] bslib_0.11.0         nadiv_2.18.0         htmlwidgets_1.6.4   
+#>  [4] bslib_0.12.0         nadiv_2.18.0         htmlwidgets_1.6.4   
 #>  [7] lattice_0.22-6       numDeriv_2016.8-1.1  quadprog_1.5-8      
 #> [10] vctrs_0.7.3          tools_4.5.0          parallel_4.5.0      
 #> [13] rgl_1.3.36           optiSel_2.1.0        pkgconfig_2.0.3     
@@ -631,11 +631,11 @@ sessionInfo()
 #> [49] reshape2_1.4.5       purrr_1.2.2          magic_1.6-1         
 #> [52] splines_4.5.0        extrafont_0.20       fastmap_1.2.0       
 #> [55] grid_4.5.0           cli_3.6.6            magrittr_2.0.5      
-#> [58] base64enc_0.1-6      survival_3.8-3       rmarkdown_2.31      
+#> [58] base64enc_0.1-6      survival_3.8-3       rmarkdown_2.32      
 #> [61] shapes_1.2.8         igraph_2.3.1         otel_0.2.0          
 #> [64] ragg_1.5.2           lpSolve_5.6.23       HaploSim_1.8.4.2    
 #> [67] evaluate_1.0.5       GA_3.2.5             knitr_1.51          
-#> [70] doParallel_1.0.17    rlang_1.2.0          Rcpp_1.1.1-1.1      
+#> [70] doParallel_1.0.17    rlang_1.3.0          Rcpp_1.1.1-1.1      
 #> [73] glue_1.8.1           rstudioapi_0.18.0    reshape_0.8.10      
 #> [76] jsonlite_2.0.0       R6_2.6.1             plyr_1.8.9          
 #> [79] systemfonts_1.3.2    fs_2.1.0

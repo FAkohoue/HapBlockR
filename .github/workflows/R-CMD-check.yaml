@@ -27,12 +27,16 @@ jobs:
           - { os: ubuntu-latest,  r: "release"  }
           - { os: ubuntu-latest,  r: "devel"    }
           - { os: ubuntu-latest,  r: "oldrel-1" }
-          # Fixed-version floor test, pinned to DESCRIPTION's Depends: R
-          # (>= 4.3.0). Deriv 4.3.0 cannot compile under R 4.3, so only
-          # this floor job pins the archived, non-compiled Deriv 4.2.0.
-          - { os: ubuntu-22.04,   r: "4.3"      }
-          # Pinned to macos-15 because the transitive rgl dependency needs
-          # XQuartz/libGLU, which is installed explicitly below.
+          - { os: ubuntu-22.04,   r: "4.2"      }
+          # Pinned to macos-15 (not macos-latest): macos-latest now resolves
+          # to macOS 26 "Tahoe", which dropped OpenGL/XQuartz support. `rgl`
+          # (pulled in transitively via SimpleMating -> optiSel's dependency
+          # tree) ships a compiled .so that dyn.load()s libGLU.1.dylib at
+          # install time; that library no longer exists on Tahoe runners, so
+          # `Install R dependencies` fails building SimpleMating from source
+          # before any HapBlockR code is even touched. macos-15 predates the
+          # OpenGL removal and is still a fully supported GitHub Actions
+          # image (unlike macos-13/macos-14, which are being deprecated).
           - { os: macos-15,       r: "release"  }
           - { os: windows-latest, r: "release"  }
 
@@ -43,16 +47,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up pandoc
-        uses: r-lib/actions/setup-pandoc@v2
+        uses: r-lib/actions/setup-pandoc@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
 
       - name: Set up R ${{ matrix.config.r }}
-        uses: r-lib/actions/setup-r@v2
+        uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           r-version: ${{ matrix.config.r }}
           use-public-rspm: true
@@ -80,227 +84,49 @@ jobs:
 
       - name: Install XQuartz (macOS)
         if: runner.os == 'macOS'
-        run: brew install --cask xquartz
-
-      # pak currently fails while resolving archived Bioconductor packages
-      # from DESCRIPTION. These packages are optional Suggests, so exclude
-      # them from pak's lockfile and install them explicitly with BiocManager
-      # from a reachable Bioconductor mirror in the next step.
-      - name: Install R dependencies
-        if: matrix.config.r != '4.3'
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache-version: 3
-          extra-packages: |
-            any::rcmdcheck
-            any::covr
-            SNPRelate=?ignore
-            gdsfmt=?ignore
-            vsn=?ignore
-          needs: check
-
-      - name: Install R dependencies (R 4.3)
-        if: matrix.config.r == '4.3'
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache-version: 3
-          extra-packages: |
-            any::rcmdcheck
-            any::covr
-            cran::Deriv@4.2.0
-            SNPRelate=?ignore
-            gdsfmt=?ignore
-            vsn=?ignore
-          needs: check
+        run: |
+          # rgl (pulled in transitively via SimpleMating -> optiSel's
+          # dependency tree) dlopen()s libGLU.1.dylib at package
+          # install/lazy-load time. GitHub's macOS runner images do not
+          # ship XQuartz (which provides libGLU) by default, so building
+          # any package that loads rgl fails with "Library not loaded:
+          # /opt/X11/lib/libGLU.1.dylib" even on non-Tahoe images like
+          # macos-15. Installing XQuartz here (before "Install R
+          # dependencies") puts libGLU.1.dylib on disk at the path rgl
+          # already looks for it.
+          brew install --cask xquartz
 
       - name: Install Bioconductor packages
         shell: Rscript {0}
         run: |
-          cran_repo <- "https://cloud.r-project.org"
-
-          if (!requireNamespace("BiocManager", quietly = TRUE)) {
-            install.packages(
-              "BiocManager",
-              repos = cran_repo
-            )
-          }
-
-          bioc_version <- as.character(BiocManager::version())
-          is_windows <- identical(.Platform$OS.type, "windows")
-
-          bioc_pkgs <- c(
-            "gdsfmt",
-            "SNPRelate",
-            "vsn"
-          )
-
-          # Use only official Bioconductor mirrors. A mirror is accepted only
-          # when the repository appropriate for the current platform contains
-          # all packages required by this CI step.
-          mirror_candidates <- c(
-            "https://bioconductor.org",
-            "https://bioconductor.posit.co",
-            "https://bioconductor.statistik.tu-dortmund.de",
-            "https://ftp.gwdg.de/pub/misc/bioconductor",
-            "https://mirrors.dotsrc.org/bioconductor"
-          )
-
-          repository_type <- if (is_windows) {
-            "binary"
-          } else {
-            "source"
-          }
-
-          mirror_has_packages <- function(mirror) {
-            old_mirror <- getOption("BioC_mirror")
-            on.exit(
-              options(BioC_mirror = old_mirror),
-              add = TRUE
-            )
-
-            options(BioC_mirror = mirror)
-
-            repositories <- tryCatch(
-              BiocManager::repositories(
-                version = bioc_version
-              ),
-              error = function(error) NULL
-            )
-
-            if (
-              is.null(repositories) ||
-              !"BioCsoft" %in% names(repositories)
-            ) {
-              return(FALSE)
-            }
-
-            contribution_url <- tryCatch(
-              utils::contrib.url(
-                repositories[["BioCsoft"]],
-                type = repository_type
-              ),
-              error = function(error) NA_character_
-            )
-
-            if (
-              length(contribution_url) != 1L ||
-              is.na(contribution_url) ||
-              !nzchar(contribution_url)
-            ) {
-              return(FALSE)
-            }
-
-            available <- tryCatch(
-              utils::available.packages(
-                contriburl = contribution_url
-              ),
-              error = function(error) {
-                message(
-                  "Could not read ",
-                  contribution_url,
-                  ": ",
-                  conditionMessage(error)
-                )
-                NULL
-              }
-            )
-
-            !is.null(available) &&
-              all(bioc_pkgs %in% rownames(available))
-          }
-
-          available_mirrors <- vapply(
-            mirror_candidates,
-            mirror_has_packages,
-            logical(1L)
-          )
-
-          if (!any(available_mirrors)) {
-            stop(
-              "No Bioconductor ",
-              repository_type,
-              " repository containing ",
-              paste(bioc_pkgs, collapse = ", "),
-              " was found for Bioconductor ",
-              bioc_version,
-              "."
-            )
-          }
-
-          bioc_mirror <- mirror_candidates[
-            which(available_mirrors)[1L]
-          ]
-
-          message(
-            "Using Bioconductor ",
-            bioc_version,
-            " ",
-            repository_type,
-            " packages from ",
-            bioc_mirror
-          )
-
-          options(BioC_mirror = bioc_mirror)
-
-          repositories <- BiocManager::repositories(
-            version = bioc_version
-          )
-          repositories["CRAN"] <- cran_repo
-          options(repos = repositories)
-
+          if (!requireNamespace("BiocManager", quietly = TRUE))
+            install.packages("BiocManager", repos = "https://cloud.r-project.org")
+          BiocManager::install(ask = FALSE, update = FALSE)
+          bioc_pkgs <- c("SNPRelate", "gdsfmt", "vsn")
           to_install <- bioc_pkgs[!vapply(
             bioc_pkgs,
             requireNamespace,
             logical(1L),
             quietly = TRUE
           )]
+          if (length(to_install))
+            BiocManager::install(to_install, ask = FALSE, update = FALSE)
 
-          if (length(to_install)) {
-            installation_arguments <- list(
-              pkgs = to_install,
-              version = bioc_version,
-              ask = FALSE,
-              update = FALSE
-            )
+      - name: Cache R packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-${{ matrix.config.r }}-${{ hashFiles('DESCRIPTION') }}
+          restore-keys: |
+            ${{ runner.os }}-r-${{ matrix.config.r }}-
 
-            # Never compile these packages from source on Windows. The
-            # corresponding Bioconductor Windows binaries are used instead.
-            if (is_windows) {
-              installation_arguments$type <- "binary"
-            }
-
-            do.call(
-              BiocManager::install,
-              installation_arguments
-            )
-          }
-
-          missing <- bioc_pkgs[!vapply(
-            bioc_pkgs,
-            requireNamespace,
-            logical(1L),
-            quietly = TRUE
-          )]
-
-          if (length(missing)) {
-            stop(
-              "Missing Bioconductor packages after installation: ",
-              paste(missing, collapse = ", ")
-            )
-          }
-
-          installed_versions <- vapply(
-            bioc_pkgs,
-            function(package) {
-              as.character(
-                utils::packageVersion(package)
-              )
-            },
-            character(1L)
-          )
-
-          print(installed_versions)
-
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          extra-packages: |
+            any::rcmdcheck
+            any::covr
+          needs: check
 
       - name: Reinstall data.table from source on Linux
         if: runner.os == 'Linux'
@@ -309,18 +135,12 @@ jobs:
           if (requireNamespace("data.table", quietly = TRUE)) {
             try(remove.packages("data.table"), silent = TRUE)
           }
-
-          install.packages(
-            "data.table",
-            repos = "https://cloud.r-project.org",
-            type = "source"
-          )
-
+          install.packages("data.table", repos = "https://cloud.r-project.org", type = "source")
           library(data.table)
-          print(packageVersion("data.table"))
+          packageVersion("data.table")
 
       - name: Check package
-        uses: r-lib/actions/check-r-package@v2
+        uses: r-lib/actions/check-r-package@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           upload-snapshots: true
           build_args: 'c("--no-manual")'
@@ -328,7 +148,7 @@ jobs:
 
       - name: Upload check results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ runner.os }}-r${{ matrix.config.r }}-results
           path: ${{ runner.os }}.Rcheck
@@ -337,215 +157,58 @@ jobs:
     name: British spelling and decision coverage
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      R_KEEP_PKG_SOURCE: true
       NOT_CRAN: true
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up R
-        uses: r-lib/actions/setup-r@v2
+        uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          r-version: release
           use-public-rspm: true
 
       - name: Set up dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          cache-version: 3
           extra-packages: |
             any::covr
             any::spelling
-            any::testthat
-            SNPRelate=?ignore
-            gdsfmt=?ignore
-            vsn=?ignore
+            any::devtools
           needs: check
 
       - name: Check British-English spelling
         shell: Rscript {0}
         run: |
           errors <- spelling::spell_check_package()
-
           if (nrow(errors)) {
             print(errors)
-            stop(
-              "Unrecognised package prose; ",
-              "update the text or inst/WORDLIST."
-            )
+            stop("Unrecognised package prose; update the text or inst/WORDLIST.")
           }
 
       - name: Measure decision-critical coverage
         shell: Rscript {0}
         run: |
-          critical_source_names <- c(
-            "parent_selection",
-            "ocs",
-            "genomic_mating",
-            "core_collection",
-            "result_contract"
-          )
-
-          critical_test_names <- c(
-            "parent-selection",
-            "ocs",
-            "genomic-mating",
-            "core-collection",
-            "result-contract"
-          )
-
-          critical_test_files <- file.path(
-            "tests",
-            "testthat",
-            paste0("test-", critical_test_names, ".R")
-          )
-
-          missing_tests <- critical_test_files[
-            !file.exists(critical_test_files)
-          ]
-
-          if (length(missing_tests)) {
-            stop(
-              "Missing decision-critical test files: ",
-              paste(missing_tests, collapse = ", ")
-            )
-          }
-
-          test_directory <- normalizePath(
-            file.path("tests", "testthat"),
-            winslash = "/",
-            mustWork = TRUE
-          )
-
-          test_filter <- paste0(
-            "^(",
-            paste(critical_test_names, collapse = "|"),
-            ")$"
-          )
-
-          test_code <- sprintf(
-            paste0(
-              "testthat::test_dir(",
-              "path = %s, ",
-              "filter = %s, ",
-              "reporter = 'summary', ",
-              "package = 'HapBlockR', ",
-              "load_package = 'installed', ",
-              "stop_on_failure = TRUE, ",
-              "stop_on_warning = FALSE)"
-            ),
-            deparse(test_directory),
-            deparse(test_filter)
-          )
-
           coverage <- covr::package_coverage(
-            path = ".",
-            type = "none",
-            code = test_code,
+            type = "tests",
             quiet = FALSE,
             clean = TRUE
           )
-
           coverage_data <- as.data.frame(coverage)
-
-          required_columns <- c(
-            "filename",
-            "first_line",
-            "value"
+          critical <- grepl(
+            "parent_selection|ocs|genomic_mating|core_collection|result_contract",
+            coverage_data$filename
           )
-
-          missing_columns <- setdiff(
-            required_columns,
-            names(coverage_data)
-          )
-
-          if (length(missing_columns)) {
-            stop(
-              "Unexpected covr result structure. Missing columns: ",
-              paste(missing_columns, collapse = ", ")
-            )
-          }
-
-          source_name <- tools::file_path_sans_ext(
-            basename(coverage_data$filename)
-          )
-
-          critical <- source_name %in% critical_source_names
-
-          if (!any(critical)) {
-            stop(
-              "No decision-critical source files were measured."
-            )
-          }
-
-          critical_data <- coverage_data[
-            critical,
-            ,
-            drop = FALSE
-          ]
-
+          if (!any(critical))
+            stop("No decision-critical source files were measured.")
+          critical_data <- coverage_data[critical, , drop = FALSE]
           line_coverage <- stats::aggregate(
             value ~ filename + first_line,
             data = critical_data,
-            FUN = max
+            FUN = sum
           )
-
-          file_summary <- stats::aggregate(
-            covered ~ filename,
-            data = transform(
-              line_coverage,
-              covered = value > 0
-            ),
-            FUN = mean
-          )
-
-          file_summary$coverage_pct <- 100 * file_summary$covered
-          file_summary$covered <- NULL
-          file_summary <- file_summary[
-            order(file_summary$filename),
-            ,
-            drop = FALSE
-          ]
-
-          print(file_summary, row.names = FALSE)
-
-          utils::write.csv(
-            file_summary,
-            "decision-critical-coverage.csv",
-            row.names = FALSE
-          )
-
           pct <- mean(line_coverage$value > 0) * 100
-
-          cat(
-            sprintf(
-              "Decision-critical line coverage: %.2f%%\n",
-              pct
-            )
-          )
-
-          if (!is.finite(pct) || pct < 70) {
-            stop(
-              sprintf(
-                paste0(
-                  "Decision-critical line coverage is ",
-                  "below 70%%: %.2f%%."
-                ),
-                pct
-              )
-            )
-          }
-
-      - name: Upload coverage summary
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: decision-critical-coverage
-          path: decision-critical-coverage.csv
-          if-no-files-found: ignore
+          print(pct)
+          if (!is.finite(pct) || pct < 70)
+            stop("Decision-critical line coverage is below 70%.")

@@ -107,16 +107,14 @@ validate_crosses_exact(
 
 ## Value
 
-A `hapblockr_result` list with `exact_plan` (data frame: the optimal
-cross selection, a subset of `data`'s rows, also the decision table),
-`exact_objective` (the true optimal total criterion), `n_candidates`
-(candidate crosses considered after culling), `status` (lpSolve's solver
-status; `0` = optimal solution found), and, if `heuristic_plan` was
-supplied, `heuristic_objective` and `gap_pct` (the heuristic plan's
-percentage shortfall below the exact optimum). Also carries
-`result_contract` (parameters, identifiers, quality gates); check with
-[`validate`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
-before treating `exact_plan` as a recommendation.
+A list inheriting from `HapBlockR_exact_cross_validation` and
+`hapblockr_result`, with `exact_plan` (data frame: the optimal cross
+selection, a subset of `data`'s rows), `exact_objective` (the true
+optimal total criterion), `n_candidates` (candidate crosses considered
+after culling), `status` (lpSolve's solver status; `0` = optimal
+solution found), and, if `heuristic_plan` was supplied,
+`heuristic_objective` and `gap_pct` (the heuristic plan's percentage
+shortfall below the exact optimum).
 
 ## What this is and is not
 

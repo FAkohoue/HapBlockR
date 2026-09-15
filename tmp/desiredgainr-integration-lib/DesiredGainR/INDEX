@@ -1,0 +1,98 @@
+DesiredGainR-data       Example breeding programme shipped with
+                        DesiredGainR
+bend_covariance         Bend a covariance matrix to positive
+                        definiteness
+breeding_scenario       Describe a breeding simulation scenario
+candidate_score_uncertainty
+                        Candidate-specific uncertainty in index scores
+                        and ranks
+compare_dg_and_qgsi     Compare an iteratively optimised DGSI with a
+                        QGSI
+compare_selection_methods
+                        Compare selection methods on one common
+                        decision problem
+comparison_objective    Define one objective for a cross-family
+                        comparison
+define_desired_gain_intervals
+                        Define acceptable intervals for desired genetic
+                        gains
+dosage_diagnostics      Summarise heterozygosity and missingness in a
+                        dosage matrix
+draw_covariance_pairs   Draw jointly admissible genetic and residual
+                        covariance matrices
+effective_weights       Report the effective contribution of each trait
+                        to an index
+estimate_genetic_covariance
+                        Estimate a working genetic covariance matrix
+evaluate_index          Evaluate a selection index against the standard
+                        criteria
+evaluate_restricted_response
+                        Evaluate an achieved response against a
+                        desired-gain direction
+expand_environments     Expand a trait-by-environment structure into an
+                        index problem
+founder_haplotypes      Validate and package phased founder haplotypes
+founder_population      Build an AlphaSimR founder population with a
+                        target genetic covariance
+gain_feasibility        Test whether a desired-gain vector is
+                        attainable
+generalized_index       Fit an index from a general information model
+haplotypes_from_inbred_dosage
+                        Derive phased haplotypes from inbred-line
+                        dosage
+implied_desired_gains   Map economic weights to the desired gains they
+                        imply
+implied_economic_weights
+                        Map desired gains to the aggregate weights they
+                        imply
+import_covariance       Validate and record an extracted genetic
+                        covariance matrix
+index_information_efficiency
+                        Cunningham information-deletion efficiency
+index_uncertainty       Propagate sampling error in the covariance
+                        matrices into an index
+matrix_diagnostics      Report the numerical conditioning of a
+                        covariance matrix
+open_desiredgain_guide
+                        Locate or Open the DesiredGainR Breeder's Guide
+optimize_desired_gains
+                        Search for the desired-gain direction giving
+                        the best multi-cycle outcome
+predict.desiredgainr_index
+                        Score a new candidate set with a fitted index
+propagate_covariance_uncertainty
+                        Propagate covariance uncertainty into a
+                        desired-gain recommendation
+rahimi_debnath_2023     Published selection-index results from Rahimi
+                        and Debnath (2023)
+restricted_breeding_values
+                        Project breeding values into a restricted
+                        response space
+restricted_index        Restricted and proportional-gain selection
+                        indices
+retrospective_weights   Recover the weights implied by past selection
+                        decisions
+run_dgsi                Fit an optimised desired-gain selection index
+run_dgsi_qgsi_pipeline
+                        Run DGSI, QGSI, or both workflows
+run_qgsi                Fit and evaluate a quadratic genomic selection
+                        index
+selection_index         Apply a classical multi-trait selection method
+selection_information   Define the information used by a selection
+                        index
+simulate_selection_cycles
+                        Simulate recurrent selection under a fixed
+                        desired-gain direction
+simulation_calibration
+                        Audit the calibration of an AlphaSimR setup
+stress_test_desired_gains
+                        Stress-test a desired-gain vector across
+                        simulation scenarios
+suggest_desired_gains   Suggest desired-gain directions from the
+                        current population
+summary.desiredgainr_index
+                        Summarise a fitted selection index
+weight_sensitivity      Assess how sensitive a selection decision is to
+                        the stated objective
+widen_environments      Reshape long-format multi-environment trial
+                        data for indexing

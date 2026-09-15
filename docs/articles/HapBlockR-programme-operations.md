@@ -75,9 +75,12 @@ index$scores
 #> 1 G1        2.790244    3
 #> 3 G3        2.431402    4
 index$coefficients
-#>           trait unit direction coefficient expected_response
-#> yield     yield <NA>  increase   0.7042683         0.7857940
-#> disease disease <NA>  decrease   0.4359756        -0.4428416
+#>           trait unit direction coefficient linear_weight expected_response
+#> yield     yield <NA>  increase   0.7042683            NA         0.7857940
+#> disease disease <NA>  decrease   0.4359756            NA        -0.4428416
+#>         realised_response_sd_favourable realised_response_sd_original
+#> yield                                NA                            NA
+#> disease                              NA                            NA
 validate(index)
 #>                 check passed                  detail
 #> 1     required_fields   TRUE                        
@@ -94,21 +97,65 @@ validate(index)
 also provides deterministic Pesek-Baker, Desired-Gain Selection Index
 (DGSI) and Quadratic Genomic Selection Index (QGSI) methods. DGSI and
 QGSI call DesiredGainR. DGSI runs independent optimisation replicates
-and automatically returns the one with the smallest desired-response
-objective; breeders review the compact stability tables rather than
-choosing a run manually. QGSI requires an explicit symmetric
-quadratic-weight matrix and returns candidate-specific linear, squared
-and cross-product contributions.
+and automatically returns the replicate chosen by its declared holdout
+or independent-validation rule; breeders review the compact stability
+tables rather than choosing a run manually. QGSI requires an explicit
+symmetric quadratic-weight matrix and returns candidate-specific linear,
+squared and cross-product contributions.
+
+For every method, `directions` defines favourable orientation.
+`economic_weights` and `desired_gains` are non-negative magnitudes in
+that oriented space; negative objectives are rejected. DGSI reports both
+its model-expected transmitted genetic response in original trait units
+and its realised selected-set differential in candidate SD units. DGSI
+and QGSI use the selection intensity for the number of candidates
+actually selected. QGSI reports model-expected gains using the complete
+QGSI variance and retains its linear and quadratic weights separately
+because no single global QGSI coefficient vector exists. HapBlockR
+converts DesiredGainR’s reported response from its analysis scale back
+to the original trait units. Additional QGSI engine controls, such as
+explicit `Gamma`, relationship information or trait scaling, can be
+supplied through `qgsi_control`. All methods expose a common
+coefficient-table schema.
+
+DGSI interprets `desired_gains` in candidate standard deviations even
+when `scale_traits = FALSE`; Pesek-Baker uses original trait units. For
+example, a DGSI target of 0.5 requests a selected-set shift of half a
+candidate standard deviation in the favourable direction. This target is
+distinct from the model-expected response transmitted to the next
+generation.
+
+Both control lists require exact DesiredGainR argument names. Supply
+reference data with the original-unit trait columns and an `id` column.
+For QGSI, `Gamma` also uses original trait units, whereas the linear and
+quadratic weights refer to the oriented, optionally scaled analysis
+space. `genetic_cov` and `phenotypic_cov` remain upstream context for
+QGSI; they do not replace `Gamma`.
+
+For a DGSI result, use `coefficients_original_units` when combining
+original-unit marker, haplotype or block effects. Candidate scores can
+be reconstructed as
+`trait_values %*% coefficients_original_units + score_intercept`. The
+existing `coefficients$coefficient` field retains DesiredGainR’s
+analysis-scale coefficients. Use `engine_result` when passing the fitted
+index to DesiredGainR’s comparison tools.
 
 Use
 [`fit_multitrait_gblup()`](https://FAkohoue.github.io/HapBlockR/reference/fit_multitrait_gblup.md)
-when genetic and residual covariance must be estimated jointly. Use
+when genetic and residual covariance must be estimated jointly. A
+supplied full sampling covariance is the complete record-error
+covariance by default; request
+`sampling_covariance_mode = "sampling_plus_residual"` only when an
+additional residual nugget is intended. Sampling-covariance keys and
+diagonal precision are checked before fitting. Use
 [`fit_gxe_gblup()`](https://FAkohoue.github.io/HapBlockR/reference/fit_gxe_gblup.md)
 with an environment kernel for reaction-norm predictions.
 Environment-specific predictions support environment-specific parent
 selection. The across-environment output is the internally estimated
 genomic main effect; HapBlockR does not combine environment predictions
-with breeder-specified environment weights.
+with breeder-specified environment weights. Both models report REML
+likelihoods with residual degrees of freedom; compare those likelihoods
+only between models with the same fixed-effect design.
 
 ## Operational screening
 
@@ -308,13 +355,13 @@ sessionInfo()
 #> [1] HapBlockR_0.3.12.9000
 #> 
 #> loaded via a namespace (and not attached):
-#>  [1] cli_3.6.6         knitr_1.51        rlang_1.2.0       xfun_0.57        
+#>  [1] cli_3.6.6         knitr_1.51        rlang_1.3.0       xfun_0.57        
 #>  [5] otel_0.2.0        rrBLUP_4.6.3      textshaping_1.0.5 jsonlite_2.0.0   
 #>  [9] data.table_1.18.4 htmltools_0.5.9   ragg_1.5.2        sass_0.4.10      
-#> [13] rmarkdown_2.31    evaluate_1.0.5    jquerylib_0.1.4   fastmap_1.2.0    
+#> [13] rmarkdown_2.32    evaluate_1.0.5    jquerylib_0.1.4   fastmap_1.2.0    
 #> [17] yaml_2.3.12       lifecycle_1.0.5   compiler_4.5.0    igraph_2.3.1     
 #> [21] fs_2.1.0          pkgconfig_2.0.3   htmlwidgets_1.6.4 Rcpp_1.1.1-1.1   
 #> [25] rstudioapi_0.18.0 systemfonts_1.3.2 digest_0.6.39     R6_2.6.1         
-#> [29] parallel_4.5.0    magrittr_2.0.5    bslib_0.11.0      tools_4.5.0      
+#> [29] parallel_4.5.0    magrittr_2.0.5    bslib_0.12.0      tools_4.5.0      
 #> [33] pkgdown_2.2.0     cachem_1.1.0      desc_1.4.3
 ```

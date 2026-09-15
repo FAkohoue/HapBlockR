@@ -321,13 +321,11 @@ certify_mating_plan <- function(
   violations <- list()
   add_violation <- function(x) violations[[length(violations) + 1L]] <<- x
 
-  cross_label <- paste(mating$female, mating$male, sep = " x ")
-
   invalid_rows <- which(!screened$feasible)
   if (length(invalid_rows)) {
     for (row in invalid_rows)
       add_violation(.hb_violation_row(
-        "cross_rule", cross_label[row], 0, 1, screened$reasons[row]
+        "cross_rule", row, 0, 1, screened$reasons[row]
       ))
   }
   small <- which(mating$family_size < min_family_size)
@@ -346,11 +344,9 @@ certify_mating_plan <- function(
   pair_key <- .hb_pair_key(mating$female, mating$male, FALSE)
   if (isTRUE(no_repeated_cross) && anyDuplicated(pair_key)) {
     repeated <- duplicated(pair_key) | duplicated(pair_key, fromLast = TRUE)
-    pair_counts <- table(pair_key)
     for (row in which(repeated))
       add_violation(.hb_violation_row(
-        "no_repeated_cross", cross_label[row],
-        unname(pair_counts[pair_key[row]]), 1, "repeated_unordered_pair"
+        "no_repeated_cross", row, 2, 1, "repeated_unordered_pair"
       ))
     mating$reasons[repeated] <- paste0(
       ifelse(nzchar(mating$reasons[repeated]),

@@ -93,13 +93,8 @@ when estimating \eqn{M_{\mathrm{eff}}}. Default \code{1000L}.}
 \item{verbose}{Logical. \code{TRUE} (default) prints progress per trait.}
 }
 \value{
-A \code{hapblockr_result} of class
-  \code{c("HapBlockR_diplotype", "hapblockr_result", "list")} with three
-  elements plus a \code{result_contract} (parameters, identifiers,
-  transformations, quality gates, \code{omnibus_tests} as the decision
-  table, and \code{diplotype_means} as the uncertainty table). Check with
-  \code{\link{validate}} before treating a block's effects as a
-  recommendation.
+A named list of class \code{c("HapBlockR_diplotype", "list")}
+  with three elements:
 
 \describe{
   \item{\code{diplotype_means}}{Data frame. One row per diplotype class per

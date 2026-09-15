@@ -94,12 +94,7 @@ column is set to \code{TRUE}. Default \code{0.80}. Raise this value
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
 }
 \value{
-A \code{hapblockr_result} of class
-  \code{c("HapBlockR_effect_concordance", "hapblockr_result", "list")},
-  also carrying a \code{result_contract} (parameters, identifiers,
-  transformations, quality gates, \code{concordance} as the decision
-  table, and \code{shared_alleles} as the uncertainty table). Check with
-  \code{\link{validate}} before treating a block as replicated:
+A named list of class \code{c("HapBlockR_effect_concordance", "list")}:
 \describe{
   \item{\code{concordance}}{Data frame with one row per block per trait.
     Columns:

@@ -1,0 +1,2 @@
+sampled_marker_rows,filtered_markers,candidates,repeats,folds,mean_correlation,sd_correlation,lower_correlation,upper_correlation,published_correlation,negative_control_correlation,marker_filter,relationship,validation
+6011,1058,1000,10,5,0.483765988582941,0.00757496787587348,0.469384735619277,0.494545742988001,0.55,0.0570142153110824,C0 call rate >= 0.90 and MAF > 0.05,VanRaden-I from deterministic genome-wide marker sample,repeated five-fold family CV; GCV-tuned kernel ridge/GBLUP lambda

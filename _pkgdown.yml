@@ -49,36 +49,9 @@ authors:
 
 navbar:
   structure:
-    left:  [reference, tutorial, articles, guide, news]
+    left:  [intro, reference, articles, news]
     right: [search, github]
   components:
-    tutorial:
-      text: Tutorial
-      href: articles/HapBlockR-intro.html
-    articles:
-      text: Vignettes
-      menu:
-        - text: Full pipeline walkthrough
-          href: articles/HapBlockR-full-pipeline.html
-        - text: -------
-        - text: "Methods"
-        - text: "LD Metrics: Standard r² and Kinship-Adjusted rV²"
-          href: articles/HapBlockR-ld-metrics.html
-        - text: From Local GEBV to a Crossing Decision
-          href: articles/HapBlockR-breeding-decisions.html
-        - text: -------
-        - text: "Advanced"
-        - text: Large-Data Backends and Reproducible Performance Evidence
-          href: articles/HapBlockR-large-scale.html
-        - text: Statistical Phasing with External Beagle 5.x
-          href: articles/HapBlockR-phasing.html
-        - text: Programme-Level Models, Feasibility, and Data Exchange
-          href: articles/HapBlockR-programme-operations.html
-        - text: From Genotypes to a Validated Breeding Decision
-          href: articles/HapBlockR-workflow.html
-    guide:
-      text: Breeder guide
-      href: breeder-guide.html
     github:
       icon: fab fa-github fa-lg
       href: https://github.com/FAkohoue/HapBlockR
@@ -113,7 +86,6 @@ articles:
     navbar: ~
     contents:
       - HapBlockR-intro
-      - HapBlockR-full-pipeline
   - title: "Methods"
     navbar: "Methods"
     contents:
@@ -126,6 +98,7 @@ articles:
       - HapBlockR-phasing
       - HapBlockR-programme-operations
       - HapBlockR-workflow
+      - HapBlockR-full-pipeline
 
 reference:
 

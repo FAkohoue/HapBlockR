@@ -59,7 +59,8 @@ run_ldx_pipeline(
   use_bigmemory = FALSE,
   bigmemory_path = tempdir(),
   bigmemory_type = "char",
-  verbose = TRUE
+  verbose = TRUE,
+  multiallelic = c("error", "drop", "first_alt")
 )
 ```
 
@@ -281,6 +282,15 @@ run_ldx_pipeline(
 - verbose:
 
   Print progress. Default `TRUE`.
+
+- multiallelic:
+
+  Character. Policy for VCF records with multiple ALT alleles: `"error"`
+  (default) stops, `"drop"` excludes the complete record, and
+  `"first_alt"` retains the first ALT allele while treating genotype
+  calls involving other ALT alleles as missing. Haplotype construction
+  uses biallelic dosage, so `"drop"` is generally the appropriate
+  explicit policy for a mixed biallelic/multiallelic VCF.
 
 ## Value
 

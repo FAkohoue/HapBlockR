@@ -973,11 +973,9 @@
 #'   \code{\link{run_haplotype_prediction}}. Cross reliability is the
 #'   conservative minimum of its two parental reliabilities.
 #' @param phasing_reliability Optional named numeric vector in [0, 1].
-#'   For \code{variance_model = "phased"} or \code{"linked"} -- both build
-#'   progeny variance from phased haplotype blocks and depend equally on
-#'   phasing accuracy -- each cross uses the conservative minimum of
-#'   parental prediction and phasing reliability. Missing phasing
-#'   reliability therefore cannot pass the recommendation gate in either
+#'   For \code{variance_model = "phased"}, each cross uses the conservative
+#'   minimum of parental prediction and phasing reliability. Missing phasing
+#'   reliability therefore cannot pass the recommendation gate in phased
 #'   mode.
 #' @param downside_quantile Numeric in (0, 0.5). Progeny-distribution
 #'   quantile reported as \code{downside_value}. Default \code{0.10}.
@@ -1389,11 +1387,7 @@ usefulness_criterion <- function(
   out <- out[ord, , drop = FALSE]
   out <- .augment_uc_uncertainty(
     out, gebv_se, gebv_reliability, phasing_reliability,
-    # "linked" depends on phased-haplotype accuracy just as much as "phased"
-    # (both build progeny variance from phased haplotype blocks), so both
-    # get the strict phasing-reliability gate; "block_independent" and
-    # "simplemating" do not use phased haplotypes for progeny variance.
-    variance_model %in% c("phased", "linked"), n_progeny,
+    variance_model == "phased", n_progeny,
     downside_quantile, min_reliability
   )
   out$rank <- seq_len(nrow(out))

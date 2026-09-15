@@ -1,9 +1,12 @@
 # Fit a Multivariate Genomic BLUP
 
-Fits a multivariate GBLUP by restricted maximum likelihood using \\V =
-Sigma_g \otimes K + Sigma_e \otimes I\\. Missing phenotype cells are
-allowed; all candidates must be represented in the genomic relationship
-matrix.
+Fits a multivariate GBLUP by restricted maximum likelihood. Without a
+full sampling covariance, the model uses \\V = Sigma_g \otimes K +
+Sigma_e \otimes R\\, where \\R\\ carries relative precision. With a full
+sampling covariance \\S\\, the default is \\V = Sigma_g \otimes K + S\\;
+an explicit option adds \\Sigma_e \otimes I\\. Missing phenotype cells
+are allowed; all candidates must be represented in the genomic
+relationship matrix.
 
 ## Usage
 
@@ -13,6 +16,7 @@ fit_multitrait_gblup(
   K,
   genetic_cov = NULL,
   residual_cov = NULL,
+  sampling_covariance_mode = c("sampling_only", "sampling_plus_residual"),
   estimate_covariances = is.null(genetic_cov) && is.null(residual_cov),
   maxit = 200L,
   reltol = 1e-08,
@@ -41,6 +45,16 @@ fit_multitrait_gblup(
 
   Optional named residual covariance matrix.
 
+- sampling_covariance_mode:
+
+  Treatment of a full sampling covariance supplied through
+  [`prepare_breeding_targets`](https://FAkohoue.github.io/HapBlockR/reference/prepare_breeding_targets.md).
+  With `"sampling_only"` (default), the known matrix is the complete
+  record-error covariance and no additional residual covariance is
+  fitted. With `"sampling_plus_residual"`, an additional \\Sigma_e
+  \otimes I\\ nugget is fitted. The option has no effect when no full
+  sampling covariance is present.
+
 - estimate_covariances:
 
   Logical. Estimate covariance matrices by REML.
@@ -60,4 +74,6 @@ fit_multitrait_gblup(
 ## Value
 
 A `hapblockr_result` with trait covariance diagnostics, multivariate
-predictions, PEV, reliability, and fitted means.
+predictions, fixed-effect-adjusted PEV, reliability, fitted means, the
+REML log-likelihood, and sampling-covariance provenance. Compare REML
+likelihoods only between models with the same fixed-effect design.

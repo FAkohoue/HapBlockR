@@ -9,30 +9,17 @@ const { chromium } = require("playwright");
 const { PDFDocument } = require("pdf-lib");
 
 const root = path.resolve(__dirname, "..");
-// The version-controlled source is a genuine R Markdown document (YAML
-// frontmatter, one inline `r ...` expression for the build date). This
-// script does not invoke R/knitr/pandoc -- it parses the document as plain
-// Markdown via `marked` -- so parseFrontmatter()/stripHeadingAttributes()/
-// numberHeadings() below reproduce, by hand, the small subset of
-// rmarkdown::html_document behaviour (title block, `number_sections`,
-// `{.unnumbered}`) that this guide actually relies on.
 const sourcePath = path.join(
   root,
   "inst",
   "guide",
-  "HapBlockR_Breeder_Guide.Rmd"
+  "HapBlockR_Breeder_Guide.md"
 );
-const pdfOutputPath = path.join(
+const outputPath = path.join(
   root,
   "inst",
   "extdata",
   "HapBlockR_Breeder_Guide.pdf"
-);
-const htmlOutputPath = path.join(
-  root,
-  "inst",
-  "extdata",
-  "HapBlockR_Breeder_Guide.html"
 );
 
 function slugify(text) {
@@ -44,136 +31,50 @@ function slugify(text) {
     .toLowerCase();
 }
 
-// Extracts the leading `---\n...\n---` YAML block by hand (no YAML
-// dependency is otherwise needed), evaluates the one inline R date
-// expression at build time, and returns the frontmatter fields plus the
-// markdown body with the block removed.
-function parseFrontmatter(markdown) {
-  const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
-  if (!match) {
-    throw new Error("Expected YAML frontmatter at the top of the guide source.");
-  }
-  const block = match[1];
-  const field = (name) => {
-    const m = block.match(new RegExp(`^${name}:\\s*"(.*)"\\s*$`, "m"));
-    return m ? m[1] : "";
-  };
-  let date = field("date");
-  if (/`r .*`/.test(date)) {
-    date = new Date().toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "long",
-      year: "numeric"
-    });
-  }
-  const meta = {
-    title: field("title"),
-    subtitle: field("subtitle"),
-    author: field("author"),
-    date,
-    compatibleVersion: field("compatible_package_version")
-  };
-  return { meta, body: markdown.slice(match[0].length) };
-}
-
-// Removes pandoc header-attribute syntax (`{.unnumbered}`, `{#id}`, ...)
-// from ATX headings before handing the text to `marked`, which does not
-// understand it. `.unnumbered` is preserved as an inline HTML comment so
-// numberHeadings() can still see it after parsing.
-function stripHeadingAttributes(markdown) {
-  return markdown.replace(
-    /^(#{1,6}\s+.*?)\s*\{([^}]*)\}\s*$/gm,
-    (match, heading, attrs) => (
-      /\.unnumbered/.test(attrs) ? `${heading} <!--unnumbered-->` : heading
-    )
-  );
-}
-
-// Reproduces pandoc's `number_sections: true`: walks h1/h2/h3 in document
-// order, numbers them "1", "1.1", "1.1.1" (skipping any marked
-// `<!--unnumbered-->`), and assigns each a slug id built from the now
-// numbered text -- so `1 Purpose and scope` gets id="1-purpose-and-scope",
-// matching how a real pandoc/knitr render would build the same guide.
-// Returns the updated HTML plus the ordered list of numbered h1 entries,
-// which insertContents() below uses to build a Contents block that can
-// never drift out of sync with the actual chapters.
-function numberHeadings(html) {
-  const counters = [0, 0, 0];
+function addHeadingIdentifiers(html) {
   const used = new Map();
-  const h1Entries = [];
-  const updated = html.replace(
+  return html.replace(
     /<(h[1-3])>([\s\S]*?)<\/\1>/g,
-    (match, tag, rawText) => {
-      const level = Number(tag[1]);
-      const unnumbered = /<!--unnumbered-->/.test(rawText);
-      const text = rawText.replace(/\s*<!--unnumbered-->\s*/g, "").trim();
-      let displayText = text;
-      if (!unnumbered) {
-        counters[level - 1] += 1;
-        for (let i = level; i < 3; i++) counters[i] = 0;
-        const prefix = counters.slice(0, level).join(".");
-        displayText = `${prefix} ${text}`;
-      }
-      const base = slugify(displayText) || "section";
+    (match, tag, text) => {
+      const base = slugify(text) || "section";
       const count = used.get(base) || 0;
       used.set(base, count + 1);
-      const id = count ? `${base}-${count + 1}` : base;
-      if (level === 1 && !unnumbered) {
-        h1Entries.push({ id, text });
-      }
-      return `<${tag} id="${id}">${displayText}</${tag}>`;
+      const identifier = count ? `${base}-${count + 1}` : base;
+      return `<${tag} id="${identifier}">${text}</${tag}>`;
     }
   );
-  return { html: updated, h1Entries };
 }
 
-// Inserts a Contents block built from the real numbered chapters, right
-// before the first one, instead of relying on a hand-maintained anchor
-// list that silently drifts out of date whenever a chapter is added,
-// removed or renamed.
-function insertContents(html, h1Entries) {
-  if (h1Entries.length === 0) return html;
-  const items = h1Entries
-    .map((entry) => `    <li><a href="#${entry.id}">${entry.text}</a></li>`)
-    .join("\n");
+function replaceContents(html) {
   const contents = `
 <h2 id="contents">Contents</h2>
 <nav class="contents" aria-label="Guide contents">
   <ol>
-${items}
+    <li><a href="#1-purpose-and-scope">Purpose and scope</a></li>
+    <li><a href="#2-before-any-recommendation">Before any recommendation</a></li>
+    <li><a href="#3-the-nine-decision-tools-and-their-variants">The nine decision tools and their variants</a></li>
+    <li><a href="#4-worked-crossing-decision">Worked crossing decision</a></li>
+    <li><a href="#5-interpreting-quality-control-and-uncertainty">Interpreting quality control and uncertainty</a></li>
+    <li><a href="#6-interpreting-results-and-defining-their-scope">Interpreting results and defining their scope</a></li>
+    <li><a href="#7-decision-sign-off">Decision sign-off</a></li>
+    <li><a href="#8-supporting-tools-and-complete-function-map">Supporting tools and complete function map</a></li>
+    <li><a href="#9-references">References and change history</a></li>
   </ol>
-</nav>
-`;
-  const anchor = `<h1 id="${h1Entries[0].id}">`;
-  const idx = html.indexOf(anchor);
-  if (idx === -1) return html;
-  return html.slice(0, idx) + contents + html.slice(idx);
+</nav>`;
+  return html.replace(
+    /<h2 id="contents">Contents<\/h2>[\s\S]*?(?=<h2 id="1-purpose-and-scope">)/,
+    contents
+  );
 }
 
-// Builds the pandoc-style title block (title/subtitle/author/date) that
-// rmarkdown::html_document would normally generate from the YAML
-// frontmatter, since `marked` never sees the frontmatter at all. The CSS in
-// documentHtml() below (`h1 + h2`, `h1 + h2 + p ...`) targets exactly this
-// four-element structure.
-function titleBlockHtml(meta) {
-  const compat = meta.compatibleVersion
-    ? `<p class="compat">Compatible with HapBlockR ${meta.compatibleVersion}</p>`
-    : "";
-  return `<h1 class="title">${meta.title}</h1>
-<h2 class="subtitle">${meta.subtitle}</h2>
-<p class="author">${meta.author}</p>
-<p class="date">${meta.date}</p>
-${compat}`;
-}
-
-function documentHtml(body, meta) {
+function documentHtml(body) {
   return `<!doctype html>
 <html lang="en-GB">
 <head>
   <meta charset="utf-8">
-  <meta name="author" content="${meta.author}">
+  <meta name="author" content="Félicien Akohoue">
   <meta name="description" content="HapBlockR breeder guide for traceable parent and cross decisions">
-  <title>${meta.title}</title>
+  <title>The HapBlockR Breeder's Guide</title>
   <style>
     :root {
       --navy: #123167;
@@ -281,18 +182,15 @@ function documentHtml(body, meta) {
       padding: 3mm 5mm;
     }
     .contents ol { margin-bottom: 0; }
-    /* Title-block elements are matched by class, not by h1+h2 tag
-       adjacency: several real chapters (e.g. "Before any recommendation")
-       have their first h2 subsection immediately after the chapter h1 with
-       no intervening paragraph, so a bare adjacent-sibling selector would
-       misapply the subtitle style to those subsection headings too. */
-    h2.subtitle {
+    h1 + h2 {
       margin-top: 0;
       border: 0;
       color: var(--green);
       font-size: 15pt;
     }
-    p.author, p.date, p.compat {
+    h1 + h2 + p,
+    h1 + h2 + p + p,
+    h1 + h2 + p + p + p {
       color: var(--muted);
     }
   </style>
@@ -312,21 +210,14 @@ ${body}
   const { marked } = await import(
     pathToFileURL(require.resolve("marked")).href
   );
-  const raw = fs.readFileSync(sourcePath, "utf8");
-  const { meta, body: withoutFrontmatter } = parseFrontmatter(raw);
-  let markdown = stripHeadingAttributes(withoutFrontmatter);
+  let markdown = fs.readFileSync(sourcePath, "utf8");
   markdown = markdown.replace(
     /<!--\s*pagebreak\s*-->/gi,
     '<div class="page-break" aria-hidden="true"></div>'
   );
   let body = marked.parse(markdown, { gfm: true });
-  const numbered = numberHeadings(body);
-  body = insertContents(numbered.html, numbered.h1Entries);
-  body = `${titleBlockHtml(meta)}\n${body}`;
-
-  const fullHtml = documentHtml(body, meta);
-  fs.writeFileSync(htmlOutputPath, fullHtml);
-  process.stdout.write(`Generated ${htmlOutputPath}\n`);
+  body = addHeadingIdentifiers(body);
+  body = replaceContents(body);
 
   const browserCandidates = [
     process.env.CHROME_PATH,
@@ -350,9 +241,9 @@ ${body}
   });
   try {
     const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: "load" });
+    await page.setContent(documentHtml(body), { waitUntil: "load" });
     await page.pdf({
-      path: pdfOutputPath,
+      path: outputPath,
       format: "A4",
       printBackground: true,
       preferCSSPageSize: true,
@@ -363,7 +254,7 @@ ${body}
       footerTemplate: `
         <div style="width:100%;font:8px Arial;color:#536276;
                     padding:0 16mm;display:flex;justify-content:space-between">
-          <span>HBR-GUIDE-001 · HapBlockR ${meta.compatibleVersion}</span>
+          <span>HBR-GUIDE-001 · HapBlockR 0.3.12.9000</span>
           <span>Page <span class="pageNumber"></span> of
                 <span class="totalPages"></span></span>
         </div>`
@@ -372,9 +263,9 @@ ${body}
     await browser.close();
   }
 
-  const pdf = await PDFDocument.load(fs.readFileSync(pdfOutputPath));
-  pdf.setTitle(meta.title);
-  pdf.setAuthor(meta.author);
+  const pdf = await PDFDocument.load(fs.readFileSync(outputPath));
+  pdf.setTitle("The HapBlockR Breeder's Guide");
+  pdf.setAuthor("Félicien Akohoue");
   pdf.setSubject("Traceable parent and cross decisions with HapBlockR");
   pdf.setKeywords([
     "HapBlockR",
@@ -383,13 +274,13 @@ ${body}
     "genomic mating"
   ]);
   pdf.setCreator("HapBlockR accessible guide builder");
-  fs.writeFileSync(pdfOutputPath, await pdf.save());
+  fs.writeFileSync(outputPath, await pdf.save());
 
-  const bytes = fs.statSync(pdfOutputPath).size;
+  const bytes = fs.statSync(outputPath).size;
   if (bytes < 20000) {
     throw new Error(`Generated guide is unexpectedly small: ${bytes} bytes`);
   }
-  process.stdout.write(`Generated ${pdfOutputPath} (${bytes} bytes)\n`);
+  process.stdout.write(`Generated ${outputPath} (${bytes} bytes)\n`);
 })().catch((error) => {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exit(1);

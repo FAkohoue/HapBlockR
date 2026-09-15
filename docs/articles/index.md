@@ -4,8 +4,6 @@
 
 - [Introduction to
   HapBlockR](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-intro.md):
-- [The Full Pipeline: Genotypes to a Certified Mating
-  Plan](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-full-pipeline.md):
 
 ### Methods
 
@@ -24,3 +22,5 @@
   Exchange](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-programme-operations.md):
 - [From Genotypes to a Validated Breeding
   Decision](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-workflow.md):
+- [The Full Pipeline: Genotypes to a Certified Mating
+  Plan](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-full-pipeline.md):

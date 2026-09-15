@@ -19,7 +19,7 @@ from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Mm, Pt, RGBColor
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,10 +32,12 @@ GREEN = "3D7D44"
 PALE_BLUE = "E8EEF5"
 LIGHT_GREY = "F2F4F7"
 BODY_COLOUR = RGBColor(23, 32, 51)
-USABLE_WIDTH_DXA = 9360
+# A4 width minus the 16 mm left and right margins, expressed in twentieths
+# of a point for native Word table geometry.
+USABLE_WIDTH_DXA = round((210 - 32) / 25.4 * 1440)
 
 
-def set_cell_margins(cell, top=80, start=120, bottom=80, end=120):
+def set_cell_margins(cell, top=60, start=120, bottom=60, end=120):
     tc_pr = cell._tc.get_or_add_tcPr()
     tc_mar = tc_pr.first_child_found_in("w:tcMar")
     if tc_mar is None:
@@ -330,12 +332,12 @@ def configure_styles(document):
 
 def configure_document(document):
     section = document.sections[0]
-    section.page_width = Inches(8.5)
-    section.page_height = Inches(11)
-    section.top_margin = Inches(1)
-    section.bottom_margin = Inches(1)
-    section.left_margin = Inches(1)
-    section.right_margin = Inches(1)
+    section.page_width = Mm(210)
+    section.page_height = Mm(297)
+    section.top_margin = Mm(17)
+    section.bottom_margin = Mm(20)
+    section.left_margin = Mm(16)
+    section.right_margin = Mm(16)
     section.header_distance = Inches(0.492)
     section.footer_distance = Inches(0.492)
     section.different_first_page_header_footer = True
@@ -451,10 +453,11 @@ def add_table(document, raw_lines):
             paragraph = cell.paragraphs[0]
             paragraph.paragraph_format.space_after = Pt(0)
             paragraph.paragraph_format.line_spacing = 1.0
-            add_inline(paragraph, value, base_size=8.3)
+            add_inline(paragraph, value, base_size=8.0)
+            if len(rows) <= 10 and row_index < len(rows) - 1:
+                paragraph.paragraph_format.keep_with_next = True
             if row_index == 0:
                 shade_cell(cell, PALE_BLUE)
-                paragraph.paragraph_format.keep_with_next = True
                 for run in paragraph.runs:
                     run.bold = True
                     run.font.color.rgb = RGBColor.from_string(DARK_BLUE)
@@ -501,7 +504,12 @@ def build():
         nonlocal paragraph_buffer
         if paragraph_buffer:
             joined = " ".join(part.strip() for part in paragraph_buffer).strip()
-            add_body_paragraph(document, joined, cover=before_first_break)
+            paragraph = add_body_paragraph(
+                document, joined, cover=before_first_break
+            )
+            if re.match(r"^Edition \d+(?:,|:)", joined):
+                paragraph.paragraph_format.space_after = Pt(2)
+                paragraph.paragraph_format.line_spacing = 1.15
             paragraph_buffer = []
 
     index = 0

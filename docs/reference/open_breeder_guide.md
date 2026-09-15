@@ -1,6 +1,6 @@
 # Locate or Open the HapBlockR Breeder's Guide
 
-The PDF and HTML editions of the HapBlockR Breeder's Guide are
+The PDF and Word editions of the HapBlockR Breeder's Guide are
 standalone companions to the *From Local GEBV to a Crossing Decision*
 vignette – the same nine parent- and cross-selection tools
 ([`truncation_selection`](https://FAkohoue.github.io/HapBlockR/reference/truncation_selection.md),
@@ -22,7 +22,7 @@ do not necessarily run R themselves.
 ## Usage
 
 ``` r
-open_breeder_guide(open = TRUE, format = c("pdf", "html"))
+open_breeder_guide(open = TRUE, format = c("pdf", "docx"))
 ```
 
 ## Arguments
@@ -38,8 +38,8 @@ open_breeder_guide(open = TRUE, format = c("pdf", "html"))
 
 - format:
 
-  Character, one of `"pdf"` (default) or `"html"`. Selects the tagged
-  fixed-layout edition or HTML edition.
+  Character, one of `"pdf"` (default) or `"docx"`. Selects the tagged
+  fixed-layout edition or the editable Word edition.
 
 ## Value
 
@@ -49,12 +49,12 @@ requested edition is unavailable.
 
 ## Details
 
-The tagged PDF provides a fixed reference edition and the HTML edition
-renders the same content for on-screen reading. These standalone files
-have no vignette engine, so they are not indexed by
+The tagged PDF provides a fixed reference edition and the Word document
+provides an editable edition for programme-specific annotation. These
+standalone files have no vignette engine, so they are not indexed by
 [`vignette()`](https://rdrr.io/r/utils/vignette.html)/[`browseVignettes()`](https://rdrr.io/r/utils/browseVignettes.html)
 like the package's `.Rmd` vignettes. Their version-controlled source is
-`inst/guide/HapBlockR_Breeder_Guide.Rmd`; both generated files ship in
+`inst/guide/HapBlockR_Breeder_Guide.md`; both generated files ship in
 `inst/extdata/` and are located via
 [`system.file`](https://rdrr.io/r/base/system.file.html).
 
@@ -72,12 +72,12 @@ code;
 ## Examples
 
 ``` r
-pdf_path  <- open_breeder_guide(open = FALSE)
+pdf_path <- open_breeder_guide(open = FALSE)
 #> [open_breeder_guide] Guide located at: C:/Users/fakohoue/AppData/Local/R/win-library/4.5/HapBlockR/extdata/HapBlockR_Breeder_Guide.pdf
-html_path <- open_breeder_guide(open = FALSE, format = "html")
-#> [open_breeder_guide] Guide located at: C:/Users/fakohoue/AppData/Local/R/win-library/4.5/HapBlockR/extdata/HapBlockR_Breeder_Guide.html
+word_path <- open_breeder_guide(open = FALSE, format = "docx")
+#> [open_breeder_guide] Guide located at: C:/Users/fakohoue/AppData/Local/R/win-library/4.5/HapBlockR/extdata/HapBlockR_Breeder_Guide.docx
 file.exists(pdf_path)
 #> [1] TRUE
-file.exists(html_path)
+file.exists(word_path)
 #> [1] TRUE
 ```

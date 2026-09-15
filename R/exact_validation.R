@@ -94,17 +94,15 @@
 #'   blindly.
 #' @param verbose Logical, default \code{TRUE}.
 #'
-#' @return A \code{hapblockr_result} list with \code{exact_plan} (data frame:
-#'   the optimal cross selection, a subset of \code{data}'s rows, also the
-#'   decision table), \code{exact_objective} (the true optimal total
-#'   criterion), \code{n_candidates} (candidate crosses considered after
-#'   culling), \code{status} (lpSolve's solver status; \code{0} = optimal
-#'   solution found), and, if \code{heuristic_plan} was supplied,
-#'   \code{heuristic_objective} and \code{gap_pct} (the heuristic plan's
-#'   percentage shortfall below the exact optimum). Also carries
-#'   \code{result_contract} (parameters, identifiers, quality gates); check
-#'   with \code{\link{validate}} before treating \code{exact_plan} as a
-#'   recommendation.
+#' @return A list inheriting from \code{HapBlockR_exact_cross_validation}
+#'   and \code{hapblockr_result}, with \code{exact_plan} (data frame: the optimal cross
+#'   selection, a subset of \code{data}'s rows), \code{exact_objective}
+#'   (the true optimal total criterion), \code{n_candidates} (candidate
+#'   crosses considered after culling), \code{status} (lpSolve's solver
+#'   status; \code{0} = optimal solution found), and, if
+#'   \code{heuristic_plan} was supplied, \code{heuristic_objective} and
+#'   \code{gap_pct} (the heuristic plan's percentage shortfall below the
+#'   exact optimum).
 #'
 #' @seealso \code{\link{select_parents_ocs}}, \code{\link{usefulness_criterion}}
 #' @export
@@ -128,6 +126,7 @@ validate_crosses_exact <- function(
          "install.packages('lpSolve')", call. = FALSE)
   if (!is.data.frame(data))
     stop("data must be a data frame.", call. = FALSE)
+  data_input <- data
 
   req  <- c(parent1_col, parent2_col, criterion_col)
   miss <- setdiff(req, names(data))
@@ -136,7 +135,15 @@ validate_crosses_exact <- function(
          " (set parent1_col/parent2_col/criterion_col to match your data's ",
          "column names).", call. = FALSE)
 
-  data <- data[!is.na(data[[criterion_col]]), , drop = FALSE]
+  input_rows <- seq_len(nrow(data))
+  missing_criterion <- is.na(data[[criterion_col]])
+  excluded_records <- data.frame(
+    input_row = input_rows[missing_criterion],
+    reason = rep("missing_selection_criterion", sum(missing_criterion)),
+    stringsAsFactors = FALSE
+  )
+  data <- data[!missing_criterion, , drop = FALSE]
+  input_rows <- input_rows[!missing_criterion]
   if (!nrow(data))
     stop("No rows in data have a non-NA criterion_col value.", call. = FALSE)
 
@@ -161,7 +168,22 @@ validate_crosses_exact <- function(
 
   if (!is.null(culling_pairwise_k) && !is.null(Kvec)) {
     keep <- which(Kvec <= culling_pairwise_k)
+    removed <- setdiff(seq_along(Kvec), keep)
+    if (length(removed)) {
+      excluded_records <- rbind(
+        excluded_records,
+        data.frame(
+          input_row = input_rows[removed],
+          reason = rep(
+            "pairwise_relatedness_above_culling_threshold",
+            length(removed)
+          ),
+          stringsAsFactors = FALSE
+        )
+      )
+    }
     data <- data[keep, , drop = FALSE]
+    input_rows <- input_rows[keep]
     p1 <- p1[keep]; p2 <- p2[keep]
   }
 
@@ -252,30 +274,63 @@ validate_crosses_exact <- function(
             " cross(es).")
   }
 
+  parent_load <- table(c(
+    as.character(exact_plan[[parent1_col]]),
+    as.character(exact_plan[[parent2_col]])
+  ))
+  contract_inputs <- list(candidate_crosses = data_input)
+  if (!is.null(G)) contract_inputs$relationship_matrix <- G
+  if (!is.null(heuristic_plan))
+    contract_inputs$heuristic_plan <- heuristic_plan
+  plan_score <- as.numeric(exact_plan[[criterion_col]])
+  decision_table <- data.frame(
+    parent1 = as.character(exact_plan[[parent1_col]]),
+    parent2 = as.character(exact_plan[[parent2_col]]),
+    score = plan_score,
+    rank = rank(-plan_score, ties.method = "first"),
+    selected = TRUE,
+    stringsAsFactors = FALSE
+  )
+  uncertainty <- data.frame(
+    exact_objective = exact_objective,
+    heuristic_objective = if (is.null(out$heuristic_objective))
+      NA_real_ else out$heuristic_objective,
+    gap_pct = if (is.null(out$gap_pct)) NA_real_ else out$gap_pct,
+    stringsAsFactors = FALSE
+  )
+
+  class(out) <- c("HapBlockR_exact_cross_validation", "list")
   .add_hapblockr_contract(
     result = out,
     method = "validate_crosses_exact",
     call = result_call,
     parameters = list(
-      n_cross = n_cross, max_cross = max_cross,
-      culling_pairwise_k = culling_pairwise_k, max_vars = max_vars
+      n_cross = n_cross,
+      max_cross = max_cross,
+      culling_pairwise_k = culling_pairwise_k,
+      parent1_col = parent1_col,
+      parent2_col = parent2_col,
+      criterion_col = criterion_col,
+      relatedness_col = relatedness_col,
+      max_vars = max_vars
     ),
     sample_ids = parents,
-    inputs = list(data = data),
+    inputs = contract_inputs,
     transformations = c(
-      "binary ILP maximisation (lpSolve)",
-      if (!is.null(culling_pairwise_k)) "pairwise-relatedness culling" else NULL
+      "missing-criterion exclusion",
+      if (!is.null(culling_pairwise_k))
+        "pairwise-relatedness culling" else character(),
+      "exact binary integer linear optimisation"
     ),
     quality_gates = c(
-      # sol$status is lpSolve's own return type (documented only as
-      # "Numeric indicator: 0 = success"), not guaranteed to be a double
-      # 0 rather than an integer 0L -- identical(sol$status, 0) silently
-      # fails whenever it's the latter, since identical() treats integer
-      # and double as different types even when numerically equal. `==`
-      # compares by value regardless of that distinction.
-      optimal_solution_found = isTRUE(sol$status == 0),
-      meets_target_cross_count = nrow(exact_plan) == n_cross
+      solver_optimal = isTRUE(sol$status == 0L),
+      exact_cross_count = nrow(exact_plan) == n_cross,
+      parent_contribution_cap = is.null(max_cross) ||
+        all(parent_load <= max_cross),
+      selected_criteria_finite = all(is.finite(plan_score))
     ),
-    decision_table = exact_plan
+    excluded_records = excluded_records,
+    decision_table = decision_table,
+    uncertainty = uncertainty
   )
 }

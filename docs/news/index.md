@@ -4,45 +4,51 @@
 
 ### Scientific correctness
 
-- Fixed a platform-dependent test failure in
-  [`fit_gxe_gblup()`](https://FAkohoue.github.io/HapBlockR/reference/fit_gxe_gblup.md)
-  caught by GitHub Actions R CMD check (reproduced on R-devel and older
-  R versions, but not R-release): `across_environment_predictions` was
-  built with `unique(grid[c("id", "genomic_main")])`. `genomic_main` is
-  mathematically constant across environments for a given id, but
-  deduplicating on its floating-point value is fragile – BLAS/LAPACK can
-  return values equal to many decimal places but not bit-identical
-  across platforms/R versions, silently producing more than one “unique”
-  row for the same id. Now deduplicates on `id` alone
-  (`grid[!duplicated(grid$id), ...]`), with no floating-point comparison
-  involved.
-
-- Fixed
-  [`validate_crosses_exact()`](https://FAkohoue.github.io/HapBlockR/reference/validate_crosses_exact.md)’s
-  `optimal_solution_found` quality gate, caught by `R CMD check` failing
-  to rebuild the *full pipeline* vignette: `identical(sol$status, 0)`
-  compared [`lpSolve::lp()`](https://rdrr.io/pkg/lpSolve/man/lp.html)’s
-  returned status against a double `0` literal using
-  [`identical()`](https://rdrr.io/r/base/identical.html), which treats
-  integer and double as different types even when numerically equal – so
-  the gate failed on every genuinely optimal solve whenever lpSolve
-  returned an integer status. Replaced with `isTRUE(sol$status == 0)`,
-  which compares by value regardless of that type distinction.
-
-- Fixed a regression in
-  [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md)’s
-  family-size eligibility rule caught by the test suite: under
-  `family_select_mode = "count"` with a named-vector `n_per_family`, an
-  earlier revision in this same development version used each family’s
-  own named quota as its exclusion threshold when available. That broke
-  the documented and tested behaviour – `n_per_family` is only
-  guaranteed to be defined for whichever families end up *chosen*, which
-  isn’t decided until after ranking, so a name already present at the
-  pre-ranking exclusion stage cannot yet be trusted as that family’s
-  real quota. `rank_k` is now the exclusion threshold for every family
-  under a named-vector quota, named or not, matching the original design
-  and `test-family-selection.R`.
-
+- Selection-index objectives now use one sign convention: `directions`
+  controls increase or decrease and weights or desired gains must be
+  non-negative favourable-direction magnitudes. Silent
+  [`abs()`](https://rdrr.io/r/base/MathFun.html) coercion has been
+  removed.
+- QGSI now receives `n_select`, reports linear and quadratic weights
+  without fabricating one global coefficient vector, and reports
+  model-expected gains from the total QGSI variance. DGSI now reports
+  both its model-expected genetic response and its separately labelled
+  standardised realised selected-set differential. Coefficient tables
+  have one schema across all four methods.
+- The DesiredGainR integration now requires version 0.5.0 and consumes
+  its authoritative DGSI theoretical response and QGSI expected-gain
+  outputs. Responses are converted from the engine’s analysis scale to
+  original trait units, including when scaling is requested, and
+  selection intensity reflects the number actually selected.
+  `qgsi_control` exposes non-structural `run_qgsi()` controls without
+  allowing HapBlockR’s data, objective, direction or selection-count
+  arguments to be overridden.
+- Integration tests now compare delegated outputs directly with the
+  updated DesiredGainR engines, including reference scaling, holdout
+  selection, eligibility thresholds, explicit genomic covariance and
+  relationship-aware covariance estimation. Control names must match the
+  installed API exactly. DGSI returns `coefficients_original_units` and
+  `score_intercept` for correct original-unit effect propagation and
+  score reconstruction, while preserving the engine’s coefficients and
+  complete result. Result provenance records the dependency version and
+  hashes the objective and engine controls.
+- Multivariate and GxE REML likelihoods now use residual degrees of
+  freedom. Prediction error variances include fixed-effect estimation
+  uncertainty.
+- Full sampling covariance uses exact target record keys and checked
+  diagonal precision. `sampling_covariance_mode` explicitly selects
+  sampling-only or sampling-plus-residual models, preventing silent
+  covariance loss or unintended residual duplication. The sampling-only
+  optimiser no longer allocates a dense zero matrix during every
+  objective evaluation.
+- GxE across-environment predictions again select one row explicitly per
+  genotype, avoiding BLAS-dependent duplicate IDs caused by
+  final-decimal differences. Prepared-target validation now requires
+  `record_key` and uses the same trait-by-environment precision grouping
+  during preparation and covariance consistency checks.
+- Kernel diagonal validation is independent of the spectral PSD
+  tolerance, and selection intensity requires one positive finite real
+  scalar.
 - Parent shortlisting now separates coverage-only
   [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
   from the explicit joint
@@ -51,116 +57,31 @@
   contribution, records its own result method and cannot silently fall
   back to coverage-only selection. Merit floors, `merit_priority` and
   `merit_weight` now belong only to the hybrid interface.
-
 - [`select_parents_ga()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_ga.md)
   now evaluates the complete documented objective and enforces exact
   founder count and relatedness limits as hard postconditions.
   Replicated searches report stability and automatically return the
   feasible replicate with the greatest complete objective.
-
 - `select_parents_ocs(engine = "optisel")` no longer silently
   substitutes a heuristic plan after a failed solver call. Parent-count
   limits trigger a genuine constrained re-solve.
-
 - Cross-validation now returns row-level out-of-fold predictions and
   pooled predictive ability, RMSE, MAE, bias, and calibration. Random,
   grouped, and forward designs are available.
-
 - Epistasis fine mapping removes degenerate interaction terms, uses
   deterministic folds, and reports the actual number of tests.
-
 - Association testing no longer labels an unadjusted result as adjusted
   when the requested mixed model cannot be fitted. Fallback behaviour is
   explicit.
-
 - Core-collection selection validates metric-distance assumptions and
   uses square-root Euclidean distances derived from genomic
   relationships.
-
-- Fixed `get_V_inv_sqrt(method = "chol")` (the default): the Cholesky
-  whitening factor was returned untransposed, so it did not satisfy
-  `A V t(A) = I` for a non-diagonal relationship matrix. This silently
-  defeated `rV2`’s kinship whitening for structured/related populations
-  – exactly the case the metric exists for – while remaining invisible
-  on the diagonal matrices the previous test suite used.
-  `method = "eigen"` was unaffected. A non-diagonal regression test now
-  covers this.
-
 - Merit-floor interfaces now provide `min_sel_mode = "sd_above_mean"`
   for intuitive selection of directionally superior candidates. A value
   of zero retains candidates at or above the mean and positive values
   require the stated SD superiority. Deliberately broad candidate pools
   use the clearer `"relaxed_pool"` name. The former `"sd_below_mean"`
   name remains only as a deprecated compatibility alias.
-
-- Epistasis fine mapping’s `p_bonf` now uses the number of interaction
-  tests that actually produced a valid fit, not the pre-loop
-  candidate-pair count (which counted pairs later skipped for
-  degenerate/rank-deficient OLS fits). This makes the multiple-testing
-  correction match the number of tests actually reported, as already
-  documented above.
-
-- [`compare_gwas_effects()`](https://FAkohoue.github.io/HapBlockR/reference/compare_gwas_effects.md)’s
-  single-lead-SNP-per-block comparison now computes a genuine
-  2-population, 1-df Cochran’s Q heterogeneity test – the same test its
-  sibling function
-  [`compare_block_effects()`](https://FAkohoue.github.io/HapBlockR/reference/compare_block_effects.md)
-  already used for a single shared allele – instead of declaring Q
-  “undefined” and falling back to pooled-effect significance. A QTL with
-  a large effect in one population and a much smaller (even same-signed)
-  effect in the other is now correctly flagged as not replicating.
-
-- [`cv_haplotype_prediction()`](https://FAkohoue.github.io/HapBlockR/reference/cv_haplotype_prediction.md)’s
-  quality gate no longer requires every individual/trait/repetition
-  combination to be populated. It now only flags an individual actually
-  tested MORE than once for the same trait within the same repetition
-  (real test-set duplication). The previous all-cells-populated check
-  produced spurious failures under multi-trait `"forward"` validation
-  whenever traits had different phenotyping coverage.
-
-- [`usefulness_criterion()`](https://FAkohoue.github.io/HapBlockR/reference/usefulness_criterion.md)’s
-  strict phasing-reliability gate now applies to
-  `variance_model = "linked"` as well as `"phased"` – both build progeny
-  variance from phased haplotype blocks and depend equally on phasing
-  accuracy.
-
-- [`assess_phasing_accuracy()`](https://FAkohoue.github.io/HapBlockR/reference/assess_phasing_accuracy.md)’s
-  per-chromosome switch-error computation now explicitly sorts variants
-  by position before counting orientation transitions. It previously
-  assumed the truth set’s stored row order was already position-sorted
-  within each chromosome.
-
-- Fixed a block-overlap-resolution gap in the C++
-  `resolve_overlap_cpp()` kernel used by
-  [`Big_LD()`](https://FAkohoue.github.io/HapBlockR/reference/Big_LD.md):
-  a single batch pass could leave a chain of 3+ mutually overlapping
-  blocks incorrectly resolved – two independently computed boundary
-  splits could squeeze the shared middle block into an invalid interval
-  (silently dropped) while the two outer blocks, whose direct overlap
-  was never itself checked, survived as still-overlapping in the output.
-  The resolver now repeats the detect/resolve/clean pass on the current
-  block state until a pass finds no remaining overlaps.
-
-- [`select_parents_by_family()`](https://FAkohoue.github.io/HapBlockR/reference/select_parents_by_family.md),
-  [`validate_crosses_exact()`](https://FAkohoue.github.io/HapBlockR/reference/validate_crosses_exact.md),
-  [`estimate_diplotype_effects()`](https://FAkohoue.github.io/HapBlockR/reference/estimate_diplotype_effects.md),
-  [`compare_block_effects()`](https://FAkohoue.github.io/HapBlockR/reference/compare_block_effects.md),
-  and
-  [`compare_gwas_effects()`](https://FAkohoue.github.io/HapBlockR/reference/compare_gwas_effects.md)
-  now return versioned `hapblockr_result` objects (parameters,
-  identifiers, transformations, quality gates, decision table, and
-  uncertainty), matching every other breeder-facing decision function.
-  [`validate()`](https://FAkohoue.github.io/HapBlockR/reference/validate.md)
-  and
-  [`build_breeding_exchange()`](https://FAkohoue.github.io/HapBlockR/reference/build_breeding_exchange.md)
-  previously errored on these five results because they were plain
-  lists.
-
-- [`certify_mating_plan()`](https://FAkohoue.github.io/HapBlockR/reference/certify_mating_plan.md)’s
-  `cross_rule` and `no_repeated_cross` violation rows now identify the
-  actual parent pair rather than a row index, and the repeated-cross
-  violation reports the true observed repeat count instead of a
-  hardcoded value of 2.
 
 ### Identity, provenance, and reproducibility
 
@@ -241,48 +162,20 @@
 - Compiled parallel methods use at most two threads, check for user
   interruption, and build with optional OpenMP through portable
   configure logic.
-- Raised the declared minimum R version from `4.2.0` to `4.3.0`
-  (`DESCRIPTION`’s `Depends`), and moved the CI floor-version check
-  (`.github/workflows/R-CMD-check.yaml`) from R 4.2 to R 4.3 to match.
-  `ASRgenomics` (Suggests) now transitively needs
-  `FactoMineR (>= 2.13)`, which itself requires R \>= 4.3 – upstream
-  CRAN drift in a third-party dependency, not a HapBlockR requirement,
-  but it made a full-Suggests dependency install no longer resolvable on
-  R 4.2.
 
 ### Documentation and repository
 
 - Package-level claims now distinguish file-backed from in-memory
   pathways and state the limits of diploid, biallelic haplotype support.
 - The breeder’s guide is generated from version-controlled source as a
-  tagged PDF and HTML edition. It now includes detailed tool variants, a
-  worked decision, uncertainty and feasibility gates,
+  tagged PDF and editable Word document. It now includes detailed tool
+  variants, a worked decision, uncertainty and feasibility gates,
   result-interpretation guidance, references, change history, and a
   sign-off template.
-- `tools/build_breeder_guide_accessible.cjs` now actually builds both
-  shipped editions from the real `.Rmd` source: it previously pointed at
-  a non-existent `.md` file and, even if redirected, would have parsed
-  the document’s YAML frontmatter and inline R date expression as
-  literal text (no R/knitr/pandoc is invoked). The script now strips and
-  evaluates the frontmatter, builds a title block, reproduces
-  `number_sections`-style chapter numbering, derives the in-page
-  Contents list from the actual chapters instead of a hand-maintained
-  anchor list, and writes the HTML edition in addition to the PDF.
 - British English is declared for package prose. Citation, contribution,
   conduct, security, and support files have been added.
-- The README is now a short, task-oriented front door: install, one
-  example, the capability map, and links to the vignettes and Breeder’s
-  Guide, rather than a complete method catalogue. Its Breeder’s Guide
-  reference previously named the wrong source path and claimed a Word
-  format that
-  [`open_breeder_guide()`](https://FAkohoue.github.io/HapBlockR/reference/open_breeder_guide.md)
-  has never offered (`c("pdf", "html")` only); both are now corrected
-  package-wide (`R/breeder_guide.R`, `man/open_breeder_guide.Rd`,
-  `README.md`).
-- The pkgdown navbar now has explicit Tutorial, Vignettes, and Breeder
-  guide tabs (`_pkgdown.yml`), and the GitHub Actions pkgdown workflow
-  publishes the built Breeder’s Guide alongside the site so the new
-  navbar link resolves to a real page.
+- The README is now a task-oriented introduction rather than a complete
+  method catalogue.
 
 ## HapBlockR 0.3.12
 

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head><title>R: LD Blocks, Haplotype Analysis, and Breeding Decisions</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body><div class="container">
+<h1> LD Blocks, Haplotype Analysis, and Breeding Decisions
+<img class="toplogo" src="../../../doc/html/Rlogo.svg" alt="[R logo]" />
+</h1>
+<hr/>
+<div style="text-align: center;">
+<a href="../../../doc/html/packages.html"><img class="arrow" src="../../../doc/html/left.jpg" alt="[Up]" /></a>
+<a href="../../../doc/html/index.html"><img class="arrow" src="../../../doc/html/up.jpg" alt="[Top]" /></a>
+</div><h2>Documentation for package &lsquo;HapBlockR&rsquo; version 0.3.12.9000</h2>
+
+<ul><li><a href="../DESCRIPTION" type="text/plain; charset=utf-8">DESCRIPTION file</a>.</li>
+<li><a href="../NEWS.md">Package NEWS</a>.</li>
+</ul>
+
+<h2>Help Pages</h2>
+
+
+<table style="width: 100%;">
+<tr><td style="width: 25%;"><a href="HapBlockR-package.html">HapBlockR-package</a></td>
+<td>HapBlockR: Genome-Wide LD Block Detection, Haplotype Analysis, Genomic Prediction, and Breeding Decision Support</td></tr>
+<tr><td style="width: 25%;"><a href="assess_decision_stability.html">assess_decision_stability</a></td>
+<td>Assess Recommendation Stability Across Scenarios</td></tr>
+<tr><td style="width: 25%;"><a href="assess_phasing_accuracy.html">assess_phasing_accuracy</a></td>
+<td>Assess Phasing Accuracy against a Truth Set</td></tr>
+<tr><td style="width: 25%;"><a href="backsolve_snp_effects.html">backsolve_snp_effects</a></td>
+<td>Backsolve SNP Effects from GEBV (Tong et al. 2025)</td></tr>
+<tr><td style="width: 25%;"><a href="Big_LD.html">Big_LD</a></td>
+<td>LD Block Segmentation (r^2 or rV^2, C++ accelerated)</td></tr>
+<tr><td style="width: 25%;"><a href="breeding_target_types.html">breeding_target_types</a></td>
+<td>Describe Accepted Breeding-target Inputs</td></tr>
+<tr><td style="width: 25%;"><a href="build_breeding_exchange.html">build_breeding_exchange</a></td>
+<td>Build a BrAPI/MIAPPE-Oriented Recommendation Bundle</td></tr>
+<tr><td style="width: 25%;"><a href="build_environment_kernel.html">build_environment_kernel</a></td>
+<td>Build an Environmental Similarity Kernel</td></tr>
+<tr><td style="width: 25%;"><a href="build_haplotype_feature_matrix.html">build_haplotype_feature_matrix</a></td>
+<td>Build Haplotype Dosage Matrix for Genomic Prediction</td></tr>
+<tr><td style="width: 25%;"><a href="build_selection_index.html">build_selection_index</a></td>
+<td>Construct an Economic or Desired-Gain Selection Index</td></tr>
+<tr><td style="width: 25%;"><a href="certify_mating_plan.html">certify_mating_plan</a></td>
+<td>Certify an Operational Mating Plan</td></tr>
+<tr><td style="width: 25%;"><a href="close_backend.html">close_backend</a></td>
+<td>Close an HapBlockR Backend and Release File Handles</td></tr>
+<tr><td style="width: 25%;"><a href="cluster_selection_groups.html">cluster_selection_groups</a></td>
+<td>Cluster Individuals on Retained Principal Components and Cross-Tabulate Selection Coverage</td></tr>
+<tr><td style="width: 25%;"><a href="collapse_haplotypes.html">collapse_haplotypes</a></td>
+<td>Collapse Rare Haplotype Alleles Into Biologically Meaningful Groups</td></tr>
+<tr><td style="width: 25%;"><a href="compare_block_effects.html">compare_block_effects</a></td>
+<td>Cross-Population Haplotype Effect Concordance</td></tr>
+<tr><td style="width: 25%;"><a href="compare_gwas_effects.html">compare_gwas_effects</a></td>
+<td>Cross-Population GWAS Effect Concordance from External Results</td></tr>
+<tr><td style="width: 25%;"><a href="compare_haplotype_populations.html">compare_haplotype_populations</a></td>
+<td>Compare Haplotype Allele Frequencies Between Two Population Groups</td></tr>
+<tr><td style="width: 25%;"><a href="compute_dominance_grm.html">compute_dominance_grm</a></td>
+<td>Genomic Dominance Relationship Matrix (Vitezica et al. 2013)</td></tr>
+<tr><td style="width: 25%;"><a href="compute_haplotype_diversity.html">compute_haplotype_diversity</a></td>
+<td>Compute Haplotype Diversity Per Block</td></tr>
+<tr><td style="width: 25%;"><a href="compute_haplotype_grm.html">compute_haplotype_grm</a></td>
+<td>Compute Haplotype-Based Genomic Relationship Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="compute_ld_decay.html">compute_ld_decay</a></td>
+<td>Compute LD Decay and Chromosome-Specific Decay Distances</td></tr>
+<tr><td style="width: 25%;"><a href="compute_local_gebv.html">compute_local_gebv</a></td>
+<td>Compute Local Haplotype GEBV per Block (Tong et al. 2025)</td></tr>
+<tr><td style="width: 25%;"><a href="compute_r2.html">compute_r2</a></td>
+<td>Compute Standard r^2 LD Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="compute_rV2.html">compute_rV2</a></td>
+<td>Compute Kinship-Adjusted rV^2 LD Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="cv_haplotype_prediction.html">cv_haplotype_prediction</a></td>
+<td>K-Fold Cross-Validation for Haplotype-Based Genomic Prediction</td></tr>
+<tr><td style="width: 25%;"><a href="decode_haplotype_strings.html">decode_haplotype_strings</a></td>
+<td>Decode Haplotype Strings to Nucleotide Sequences</td></tr>
+<tr><td style="width: 25%;"><a href="decompose_block_effects.html">decompose_block_effects</a></td>
+<td>Decompose Per-SNP Effects into Per-Haplotype-Allele Effect Table</td></tr>
+<tr><td style="width: 25%;"><a href="define_qtl_regions.html">define_qtl_regions</a></td>
+<td>Map GWAS Hits to LD Blocks (Post-GWAS QTL Region Definition)</td></tr>
+<tr><td style="width: 25%;"><a href="estimate_diplotype_effects.html">estimate_diplotype_effects</a></td>
+<td>Estimate Diplotype Effects and Dominance Deviations Per LD Block</td></tr>
+<tr><td style="width: 25%;"><a href="estimate_marker_effects.html">estimate_marker_effects</a></td>
+<td>Estimate Per-SNP Marker Effects via GBLUP, rrBLUP (SNP-BLUP), or Bayesian Regression</td></tr>
+<tr><td style="width: 25%;"><a href="export_candidate_regions.html">export_candidate_regions</a></td>
+<td>Export Candidate Gene Regions to BED, CSV, or biomaRt Format</td></tr>
+<tr><td style="width: 25%;"><a href="extract_haplotypes.html">extract_haplotypes</a></td>
+<td>Extract Haplotype Dosage Strings from LD Blocks</td></tr>
+<tr><td style="width: 25%;"><a href="fine_map_epistasis_block.html">fine_map_epistasis_block</a></td>
+<td>Fine-Map Epistatic SNP Pairs Within a Single Block</td></tr>
+<tr><td style="width: 25%;"><a href="fit_gxe_gblup.html">fit_gxe_gblup</a></td>
+<td>Fit a Reaction-Norm Genomic GxE Model</td></tr>
+<tr><td style="width: 25%;"><a href="fit_multitrait_gblup.html">fit_multitrait_gblup</a></td>
+<td>Fit a Multivariate Genomic BLUP</td></tr>
+<tr><td style="width: 25%;"><a href="ga_vs_ts_simulation.html">ga_vs_ts_simulation</a></td>
+<td>Simulate GA-Selected vs. Truncation-Selected Founders Over Generations</td></tr>
+<tr><td style="width: 25%;"><a href="get_V_inv_sqrt.html">get_V_inv_sqrt</a></td>
+<td>Compute the Inverse Square Root (Whitening Factor) of a Kinship Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="HapBlockR-package.html">HapBlockR</a></td>
+<td>HapBlockR: Genome-Wide LD Block Detection, Haplotype Analysis, Genomic Prediction, and Breeding Decision Support</td></tr>
+<tr><td style="width: 25%;"><a href="harmonize_haplotypes.html">harmonize_haplotypes</a></td>
+<td>Harmonise Haplotype Allele Labels Across Panels or Analysis Runs</td></tr>
+<tr><td style="width: 25%;"><a href="infer_block_haplotypes.html">infer_block_haplotypes</a></td>
+<td>Infer Structured Block-Level Diplotypes Per Individual</td></tr>
+<tr><td style="width: 25%;"><a href="integrate_gwas_haplotypes.html">integrate_gwas_haplotypes</a></td>
+<td>Integrate GWAS QTL Regions with Haplotype Prediction Results</td></tr>
+<tr><td style="width: 25%;"><a href="ldx_blocks.html">ldx_blocks</a></td>
+<td>Example LD Block Table</td></tr>
+<tr><td style="width: 25%;"><a href="ldx_blues.html">ldx_blues</a></td>
+<td>Pre-Adjusted Phenotype Means (BLUEs) for Genomic Prediction Examples</td></tr>
+<tr><td style="width: 25%;"><a href="ldx_blues_list.html">ldx_blues_list</a></td>
+<td>Per-Environment BLUEs for Stability Analysis Examples</td></tr>
+<tr><td style="width: 25%;"><a href="ldx_geno.html">ldx_geno</a></td>
+<td>Example Genotype Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="ldx_gwas.html">ldx_gwas</a></td>
+<td>Example GWAS Marker Table</td></tr>
+<tr><td style="width: 25%;"><a href="ldx_snp_info.html">ldx_snp_info</a></td>
+<td>Example SNP Information Table</td></tr>
+<tr><td style="width: 25%;"><a href="open_breeder_guide.html">open_breeder_guide</a></td>
+<td>Locate or Open the HapBlockR Breeder's Guide</td></tr>
+<tr><td style="width: 25%;"><a href="pareto_front.html">pareto_front</a></td>
+<td>Pareto (Non-Dominated) Front of a Set of Candidates</td></tr>
+<tr><td style="width: 25%;"><a href="phase_with_beagle.html">phase_with_beagle</a></td>
+<td>Statistical Phasing via Beagle 5.x</td></tr>
+<tr><td style="width: 25%;"><a href="plot_block_funnel.html">plot_block_funnel</a></td>
+<td>Funnel Plot of Block Importance</td></tr>
+<tr><td style="width: 25%;"><a href="plot_ga_vs_ts_simulation.html">plot_ga_vs_ts_simulation</a></td>
+<td>Plot Realised Genetic Gain: GA vs. Truncation Selection (and Beyond)</td></tr>
+<tr><td style="width: 25%;"><a href="plot_haplotype_network.html">plot_haplotype_network</a></td>
+<td>Plot a Minimum-Spanning Haplotype Network for One LD Block</td></tr>
+<tr><td style="width: 25%;"><a href="plot_ld_blocks.html">plot_ld_blocks</a></td>
+<td>Plot LD Block Structure Across Chromosomes</td></tr>
+<tr><td style="width: 25%;"><a href="plot_ld_decay.html">plot_ld_decay</a></td>
+<td>Plot LD Decay Curve</td></tr>
+<tr><td style="width: 25%;"><a href="plot_parent_selection_pca.html">plot_parent_selection_pca</a></td>
+<td>PCA of Parent-Selection Groups</td></tr>
+<tr><td style="width: 25%;"><a href="plot_selection_clusters.html">plot_selection_clusters</a></td>
+<td>Plot Individuals Coloured by Genetic Cluster</td></tr>
+<tr><td style="width: 25%;"><a href="prepare_breeding_targets.html">prepare_breeding_targets</a></td>
+<td>Prepare Externally Analysed Breeding Targets</td></tr>
+<tr><td style="width: 25%;"><a href="prepare_gblup_inputs.html">prepare_gblup_inputs</a></td>
+<td>Prepare Genomic Prediction Inputs for External GBLUP Software</td></tr>
+<tr><td style="width: 25%;"><a href="prepare_geno.html">prepare_geno</a></td>
+<td>Prepare Genotype Matrix for LD Computation</td></tr>
+<tr><td style="width: 25%;"><a href="print.HapBlockR_backend.html">print.HapBlockR_backend</a></td>
+<td>Print Method for HapBlockR Backend</td></tr>
+<tr><td style="width: 25%;"><a href="rank_haplotype_blocks.html">rank_haplotype_blocks</a></td>
+<td>Rank Haplotype Blocks by Evidence Strength</td></tr>
+<tr><td style="width: 25%;"><a href="read_breeding_exchange.html">read_breeding_exchange</a></td>
+<td>Read and Verify a Breeding Exchange Bundle</td></tr>
+<tr><td style="width: 25%;"><a href="read_chunk.html">read_chunk</a></td>
+<td>Extract a Genotype Slice from an HapBlockR Backend</td></tr>
+<tr><td style="width: 25%;"><a href="read_geno.html">read_geno</a></td>
+<td>Read Genotype Data into an HapBlockR Backend</td></tr>
+<tr><td style="width: 25%;"><a href="read_geno_bigmemory.html">read_geno_bigmemory</a></td>
+<td>Open a bigmemory-backed Genotype Store</td></tr>
+<tr><td style="width: 25%;"><a href="read_phased_vcf.html">read_phased_vcf</a></td>
+<td>Read Pre-Phased VCF</td></tr>
+<tr><td style="width: 25%;"><a href="run_Big_LD_all_chr.html">run_Big_LD_all_chr</a></td>
+<td>Genome-Wide LD Block Detection by Chromosome</td></tr>
+<tr><td style="width: 25%;"><a href="run_haplotype_prediction.html">run_haplotype_prediction</a></td>
+<td>Haplotype Prediction and Block Importance from Pre-Adjusted Phenotypes</td></tr>
+<tr><td style="width: 25%;"><a href="run_haplotype_stability.html">run_haplotype_stability</a></td>
+<td>Finlay-Wilkinson Stability Analysis of Haplotype Effects Across Environments</td></tr>
+<tr><td style="width: 25%;"><a href="run_ldx_pipeline.html">run_ldx_pipeline</a></td>
+<td>End-to-End Haplotype Block Pipeline</td></tr>
+<tr><td style="width: 25%;"><a href="scan_block_by_block_epistasis.html">scan_block_by_block_epistasis</a></td>
+<td>Between-Block Haplotype Allele Epistasis Scan</td></tr>
+<tr><td style="width: 25%;"><a href="scan_block_epistasis.html">scan_block_epistasis</a></td>
+<td>Within-Block Pairwise SNP Epistasis Scan</td></tr>
+<tr><td style="width: 25%;"><a href="scan_diversity_windows.html">scan_diversity_windows</a></td>
+<td>Sliding-Window Genome-Wide Diversity Scan</td></tr>
+<tr><td style="width: 25%;"><a href="score_favorable_haplotypes.html">score_favorable_haplotypes</a></td>
+<td>Score Individual Haplotype Portfolios Against Known Allele Effects</td></tr>
+<tr><td style="width: 25%;"><a href="screen_candidate_crosses.html">screen_candidate_crosses</a></td>
+<td>Screen Crosses for Operational Feasibility</td></tr>
+<tr><td style="width: 25%;"><a href="select_core_collection.html">select_core_collection</a></td>
+<td>Core-Collection / Diversity-Maximizing Subset Selection</td></tr>
+<tr><td style="width: 25%;"><a href="select_parents_by_family.html">select_parents_by_family</a></td>
+<td>Family- or Genetic-Cluster-Quota Parent Selection (Best Groups, Then Best Lines Within Them)</td></tr>
+<tr><td style="width: 25%;"><a href="select_parents_ga.html">select_parents_ga</a></td>
+<td>Select Parents by Genetic-Algorithm Haplotype Coverage</td></tr>
+<tr><td style="width: 25%;"><a href="select_parents_ga_ts.html">select_parents_ga_ts</a></td>
+<td>Select Parents by Joint GA and Whole-Genome Merit</td></tr>
+<tr><td style="width: 25%;"><a href="select_parents_ocs.html">select_parents_ocs</a></td>
+<td>True Optimal Contribution Selection (OCS) and Mate Allocation</td></tr>
+<tr><td style="width: 25%;"><a href="select_parents_pareto.html">select_parents_pareto</a></td>
+<td>Pareto Frontier of Parent Sets: Merit vs. Relatedness</td></tr>
+<tr><td style="width: 25%;"><a href="select_top_blocks.html">select_top_blocks</a></td>
+<td>Select Top-Ranked Blocks by Count, Percentage, or Cumulative Variance</td></tr>
+<tr><td style="width: 25%;"><a href="suggest_merit_weight.html">suggest_merit_weight</a></td>
+<td>Suggest a Starting merit_weight for select_parents_ga_ts()</td></tr>
+<tr><td style="width: 25%;"><a href="summarise_blocks.html">summarise_blocks</a></td>
+<td>Summarise LD Block Characteristics</td></tr>
+<tr><td style="width: 25%;"><a href="summarize_parent_haplotypes.html">summarize_parent_haplotypes</a></td>
+<td>Summarise Haplotype Allele Inventory Per Candidate Parent</td></tr>
+<tr><td style="width: 25%;"><a href="summary.HapBlockR_backend.html">summary.HapBlockR_backend</a></td>
+<td>Summary Method for HapBlockR Backend</td></tr>
+<tr><td style="width: 25%;"><a href="test_block_haplotypes.html">test_block_haplotypes</a></td>
+<td>Block-Level Haplotype Association Testing (Q+K Mixed Linear Model with simpleM Multiple-Testing Correction)</td></tr>
+<tr><td style="width: 25%;"><a href="truncation_selection.html">truncation_selection</a></td>
+<td>Truncation Selection (Top-n by a Single Score)</td></tr>
+<tr><td style="width: 25%;"><a href="tune_LD_params.html">tune_LD_params</a></td>
+<td>Auto-Tune LD Block Detection Parameters</td></tr>
+<tr><td style="width: 25%;"><a href="usefulness_criterion.html">usefulness_criterion</a></td>
+<td>Usefulness Criterion (UC) / Genomic Mating: Rank Candidate Crosses</td></tr>
+<tr><td style="width: 25%;"><a href="validate.html">validate</a></td>
+<td>Validate an Object</td></tr>
+<tr><td style="width: 25%;"><a href="validate_breeding_metadata.html">validate_breeding_metadata</a></td>
+<td>Validate Traceable Breeding Metadata</td></tr>
+<tr><td style="width: 25%;"><a href="validate_crosses_exact.html">validate_crosses_exact</a></td>
+<td>Exact (ILP) Cross Selection: A Validation Check for Heuristic Mating Plans</td></tr>
+<tr><td style="width: 25%;"><a href="validate_hapblockr_result.html">validate_hapblockr_result</a></td>
+<td>Validate a HapBlockR Result Contract</td></tr>
+<tr><td style="width: 25%;"><a href="write_breeding_exchange.html">write_breeding_exchange</a></td>
+<td>Write a Breeding Exchange Bundle</td></tr>
+<tr><td style="width: 25%;"><a href="write_haplotype_character.html">write_haplotype_character</a></td>
+<td>Write Haplotype Character (Nucleotide) Matrix</td></tr>
+<tr><td style="width: 25%;"><a href="write_haplotype_diversity.html">write_haplotype_diversity</a></td>
+<td>Write Haplotype Diversity Table</td></tr>
+<tr><td style="width: 25%;"><a href="write_haplotype_numeric.html">write_haplotype_numeric</a></td>
+<td>Write Haplotype Feature Matrix as Numeric Dosage Table</td></tr>
+</table>
+</div></body></html>

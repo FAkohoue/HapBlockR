@@ -99,7 +99,7 @@ A_chol <- get_V_inv_sqrt(V_demo, method = "chol")
 A_eig  <- get_V_inv_sqrt(V_demo, method = "eigen")
 
 max(abs(A_chol %*% V_demo %*% t(A_chol) - diag(120)))
-#> [1] 1.810564e-14
+#> [1] 80.21798
 max(abs(A_eig  %*% V_demo %*% t(A_eig)  - diag(120)))
 #> [1] 4.574119e-14
 ```
@@ -119,7 +119,7 @@ rv2_mat <- compute_rV2(X_whit)
 cat("Mean r² :", round(mean(r2_mat[upper.tri(r2_mat)]),  4), "\n")
 #> Mean r² : 0.3302
 cat("Mean rV²:", round(mean(rv2_mat[upper.tri(rv2_mat)]), 4), "\n")
-#> Mean rV²: 0.0337
+#> Mean rV²: 0.3388
 ```
 
 ``` r

@@ -758,10 +758,31 @@ static arma::vec score_overlap_cpp(
    if (n_blocks < 2) return blocks;
 
    // --------------------------------------------------------------------------
+   // Sort blocks by start ascending and end descending.
+   // Wider intervals are placed before nested intervals with the same start.
+   // --------------------------------------------------------------------------
+   {
+     std::vector<int> ord(n_blocks);
+     std::iota(ord.begin(), ord.end(), 0);
+
+     std::sort(ord.begin(), ord.end(), [&](int a, int b) {
+       if (blocks(a, 0) != blocks(b, 0)) return blocks(a, 0) < blocks(b, 0);
+       return blocks(a, 1) > blocks(b, 1);
+     });
+
+     arma::imat sorted(n_blocks, 2);
+
+     for (int i = 0; i < n_blocks; i++) {
+       sorted(i, 0) = blocks(ord[i], 0);
+       sorted(i, 1) = blocks(ord[i], 1);
+     }
+
+     blocks = sorted;
+   }
+
+   // --------------------------------------------------------------------------
    // Lazy standardisation cache.
-   // Each adjusted genotype column is standardised at most once, shared
-   // across every pass below -- a SNP's z-score doesn't depend on which
-   // block boundary is currently drawn around it.
+   // Each adjusted genotype column is standardised at most once.
    // --------------------------------------------------------------------------
    std::vector<double>    sd_vec(p, -1.0);
    std::vector<arma::vec> z_vec(p);
@@ -790,280 +811,228 @@ static arma::vec score_overlap_cpp(
    };
 
    // --------------------------------------------------------------------------
-   // Iterative resolution.
-   //
-   // A single batch pass (sort once -> detect all overlapping pairs from one
-   // frozen snapshot -> resolve every pair independently off that snapshot
-   // -> apply all resolutions at once) is not sufficient for a chain of 3+
-   // mutually/transitively overlapping blocks: if the A-B split and the
-   // (independently computed, from the SAME frozen snapshot) B-C split both
-   // push their boundary toward the block they share (B), B's final interval
-   // can come out invalid (start > end) and get silently dropped by
-   // clean_blocks(), while A and C -- whose direct mutual overlap was never
-   // checked, only inferred transitively through B -- can survive as two
-   // separate, still-overlapping blocks in the output.
-   //
-   // Re-running the whole detect/resolve/apply/clean pass on the CURRENT
-   // state (not the original input) fixes this: any overlap the previous
-   // pass left behind or introduced is a fresh, correctly-detected pair on
-   // the next pass, using each block's ACTUAL current boundaries rather than
-   // a stale snapshot. A pass that finds no overlapping pairs means the
-   // current block set is genuinely non-overlapping, so that is the fixed
-   // point and the loop stops. The iteration cap is a defensive bound (each
-   // pass strictly reduces the block count or the disputed span, so this
-   // converges quickly in practice), not an expected trip count.
+   // Max-end sweep:
+   // Finds overlapping or nested intervals after sorting.
    // --------------------------------------------------------------------------
-   int max_iter = n_blocks + 1;
+   struct SeamPair {
+     int A_row, B_row;
+     int sA, eA, sB, eB;
+   };
 
-   for (int iter = 0; iter < max_iter; iter++) {
+   std::vector<SeamPair> pairs;
+   pairs.reserve(64);
 
-     n_blocks = (int)blocks.n_rows;
-     if (n_blocks < 2) break;
+   int max_end_holder = 0;
 
-     // -- Sort blocks by start ascending, end descending (wider intervals
-     // before nested intervals sharing the same start). --------------------
-     {
-       std::vector<int> ord(n_blocks);
-       std::iota(ord.begin(), ord.end(), 0);
+   for (int i = 1; i < n_blocks; i++) {
 
-       std::sort(ord.begin(), ord.end(), [&](int a, int b) {
-         if (blocks(a, 0) != blocks(b, 0)) return blocks(a, 0) < blocks(b, 0);
-         return blocks(a, 1) > blocks(b, 1);
+     int eA = blocks(max_end_holder, 1);
+     int sB = blocks(i, 0);
+
+     if (eA >= sB) {
+       pairs.push_back({
+         max_end_holder,
+         i,
+         blocks(max_end_holder, 0),
+         eA,
+         sB,
+         blocks(i, 1)
        });
-
-       arma::imat sorted(n_blocks, 2);
-
-       for (int i = 0; i < n_blocks; i++) {
-         sorted(i, 0) = blocks(ord[i], 0);
-         sorted(i, 1) = blocks(ord[i], 1);
-       }
-
-       blocks = sorted;
      }
 
-     // -- Max-end sweep: finds overlapping or nested intervals after sorting.
-     struct SeamPair {
-       int A_row, B_row;
-       int sA, eA, sB, eB;
-     };
-
-     std::vector<SeamPair> pairs;
-     pairs.reserve(64);
-
-     int max_end_holder = 0;
-
-     for (int i = 1; i < n_blocks; i++) {
-
-       int eA = blocks(max_end_holder, 1);
-       int sB = blocks(i, 0);
-
-       if (eA >= sB) {
-         pairs.push_back({
-           max_end_holder,
-           i,
-           blocks(max_end_holder, 0),
-           eA,
-           sB,
-           blocks(i, 1)
-         });
-       }
-
-       if (blocks(i, 1) > blocks(max_end_holder, 1)) {
-         max_end_holder = i;
-       }
+     if (blocks(i, 1) > blocks(max_end_holder, 1)) {
+       max_end_holder = i;
      }
+   }
 
-     if (pairs.empty()) {
-       blocks = clean_blocks(blocks);
-       break;
-     }
+   if (pairs.empty()) {
+     return clean_blocks(blocks);
+   }
 
-     // -- LD-informed cumulative-score resolution, one pass. -----------------
-     int n_pairs = (int)pairs.size();
+   // --------------------------------------------------------------------------
+   // LD-informed cumulative-score resolution.
+   // --------------------------------------------------------------------------
+   int n_pairs = (int)pairs.size();
 
-     struct Resolution {
-       int  A_row, B_row;
-       bool merged;
-       int  merge_start, merge_end;
-       int  new_eA, new_sB;
-     };
+   struct Resolution {
+     int  A_row, B_row;
+     bool merged;
+     int  merge_start, merge_end;
+     int  new_eA, new_sB;
+   };
 
-     std::vector<Resolution> resolutions(n_pairs);
+   std::vector<Resolution> resolutions(n_pairs);
 
-     Rcpp::checkUserInterrupt();
+   Rcpp::checkUserInterrupt();
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic, 1) num_threads(1)
 #endif
-     for (int pi = 0; pi < n_pairs; pi++) {
+   for (int pi = 0; pi < n_pairs; pi++) {
 
-       auto& P = pairs[pi];
+     auto& P = pairs[pi];
 
-       int sA = P.sA;
-       int eA = P.eA;
-       int sB = P.sB;
-       int eB = P.eB;
+     int sA = P.sA;
+     int eA = P.eA;
+     int sB = P.sB;
+     int eB = P.eB;
 
-       bool has_left  = (sB > sA);
-       bool has_right = (eB > eA);
+     bool has_left  = (sB > sA);
+     bool has_right = (eB > eA);
 
-       // Containment or same-start case:
-       // no valid left/right exclusive cores, so keep the union and remove B.
-       if (!has_left || !has_right) {
-         resolutions[pi] = {
-           P.A_row,
-           P.B_row,
-           true,
-           std::min(sA, sB),
-           std::max(eA, eB),
-           0,
-           0
-         };
-         continue;
-       }
-
-       int left_len  = sB - sA;
-       int right_len = eB - eA;
-
-       int k_L = std::min(k_rep, left_len);
-       int k_R = std::min(k_rep, right_len);
-
-       std::vector<int> left_reps(k_L);
-       std::vector<int> right_reps(k_R);
-
-       for (int r = 0; r < k_L; r++) {
-         left_reps[r] = sB - 1 - k_L + r;
-       }
-
-       for (int r = 0; r < k_R; r++) {
-         right_reps[r] = eA + r;
-       }
-
-       int ovlp_len = eA - sB + 1;
-
-       std::vector<int> ovlp_cols(ovlp_len);
-
-       for (int oi = 0; oi < ovlp_len; oi++) {
-         ovlp_cols[oi] = sB - 1 + oi;
-       }
-
-       for (int r : left_reps)  get_z(r);
-       for (int r : right_reps) get_z(r);
-
-       arma::mat Z_o(n, ovlp_len);
-       arma::mat Z_L_m(n, k_L);
-       arma::mat Z_R_m(n, k_R);
-
-       for (int oi = 0; oi < ovlp_len; oi++) {
-         Z_o.col(oi) = get_z(ovlp_cols[oi]);
-       }
-
-       for (int r = 0; r < k_L; r++) {
-         Z_L_m.col(r) = get_z(left_reps[r]);
-       }
-
-       for (int r = 0; r < k_R; r++) {
-         Z_R_m.col(r) = get_z(right_reps[r]);
-       }
-
-       arma::vec scores(ovlp_len, arma::fill::zeros);
-
-       if (k_L > 0) {
-         arma::mat C_L = (Z_o.t() * Z_L_m) / (double)(n - 1);
-         scores += arma::sum(
-           arma::clamp(C_L % C_L, 0.0, 1.0),
-           1
-         ) / (double)k_L;
-       }
-
-       if (k_R > 0) {
-         arma::mat C_R = (Z_o.t() * Z_R_m) / (double)(n - 1);
-         scores -= arma::sum(
-           arma::clamp(C_R % C_R, 0.0, 1.0),
-           1
-         ) / (double)k_R;
-       }
-
-       double cum = 0.0;
-       int last_left = 0;
-
-       for (int oi = 0; oi < ovlp_len; oi++) {
-         cum += scores[oi];
-         if (cum >= 0.0) {
-           last_left = oi + 1;
-         }
-       }
-
-       int new_eA;
-       int new_sB;
-
-       if (last_left == 0) {
-         new_eA = sB - 1;
-         new_sB = sB;
-       } else if (last_left == ovlp_len) {
-         new_eA = eA;
-         new_sB = eA + 1;
-       } else {
-         int split = sB + last_left - 1;
-         new_eA = split;
-         new_sB = split + 1;
-       }
-
+     // Containment or same-start case:
+     // no valid left/right exclusive cores, so keep the union and remove B.
+     if (!has_left || !has_right) {
        resolutions[pi] = {
          P.A_row,
          P.B_row,
-         false,
+         true,
+         std::min(sA, sB),
+         std::max(eA, eB),
          0,
-         0,
-         new_eA,
-         new_sB
+         0
        };
+       continue;
      }
-     Rcpp::checkUserInterrupt();
 
-     // -- Apply resolutions with a keep[] vector; no shed_row, so no
-     // index shifting during this pass. ---------------------------------
-     std::vector<bool> keep(n_blocks, true);
+     int left_len  = sB - sA;
+     int right_len = eB - eA;
 
-     for (int pi = 0; pi < n_pairs; pi++) {
+     int k_L = std::min(k_rep, left_len);
+     int k_R = std::min(k_rep, right_len);
 
-       auto& R = resolutions[pi];
+     std::vector<int> left_reps(k_L);
+     std::vector<int> right_reps(k_R);
 
-       if (R.merged) {
+     for (int r = 0; r < k_L; r++) {
+       left_reps[r] = sB - 1 - k_L + r;
+     }
 
-         blocks(R.A_row, 0) = R.merge_start;
-         blocks(R.A_row, 1) = R.merge_end;
-         keep[R.B_row] = false;
+     for (int r = 0; r < k_R; r++) {
+       right_reps[r] = eA + r;
+     }
 
-       } else {
+     int ovlp_len = eA - sB + 1;
 
-         blocks(R.A_row, 1) = R.new_eA;
-         blocks(R.B_row, 0) = R.new_sB;
+     std::vector<int> ovlp_cols(ovlp_len);
+
+     for (int oi = 0; oi < ovlp_len; oi++) {
+       ovlp_cols[oi] = sB - 1 + oi;
+     }
+
+     for (int r : left_reps)  get_z(r);
+     for (int r : right_reps) get_z(r);
+
+     arma::mat Z_o(n, ovlp_len);
+     arma::mat Z_L_m(n, k_L);
+     arma::mat Z_R_m(n, k_R);
+
+     for (int oi = 0; oi < ovlp_len; oi++) {
+       Z_o.col(oi) = get_z(ovlp_cols[oi]);
+     }
+
+     for (int r = 0; r < k_L; r++) {
+       Z_L_m.col(r) = get_z(left_reps[r]);
+     }
+
+     for (int r = 0; r < k_R; r++) {
+       Z_R_m.col(r) = get_z(right_reps[r]);
+     }
+
+     arma::vec scores(ovlp_len, arma::fill::zeros);
+
+     if (k_L > 0) {
+       arma::mat C_L = (Z_o.t() * Z_L_m) / (double)(n - 1);
+       scores += arma::sum(
+         arma::clamp(C_L % C_L, 0.0, 1.0),
+         1
+       ) / (double)k_L;
+     }
+
+     if (k_R > 0) {
+       arma::mat C_R = (Z_o.t() * Z_R_m) / (double)(n - 1);
+       scores -= arma::sum(
+         arma::clamp(C_R % C_R, 0.0, 1.0),
+         1
+       ) / (double)k_R;
+     }
+
+     double cum = 0.0;
+     int last_left = 0;
+
+     for (int oi = 0; oi < ovlp_len; oi++) {
+       cum += scores[oi];
+       if (cum >= 0.0) {
+         last_left = oi + 1;
        }
      }
 
-     int n_keep = (int)std::count(keep.begin(), keep.end(), true);
+     int new_eA;
+     int new_sB;
 
-     arma::imat result(n_keep, 2);
-
-     int ri = 0;
-
-     for (int i = 0; i < n_blocks; i++) {
-       if (keep[i]) {
-         result(ri, 0) = blocks(i, 0);
-         result(ri, 1) = blocks(i, 1);
-         ri++;
-       }
+     if (last_left == 0) {
+       new_eA = sB - 1;
+       new_sB = sB;
+     } else if (last_left == ovlp_len) {
+       new_eA = eA;
+       new_sB = eA + 1;
+     } else {
+       int split = sB + last_left - 1;
+       new_eA = split;
+       new_sB = split + 1;
      }
 
-     // clean_blocks() drops any block left invalid by this pass (e.g. a
-     // block squeezed from both sides by two independent splits) and any
-     // block now fully contained in another -- both of which can newly
-     // arise from this pass's boundary updates and must be re-checked, not
-     // assumed away, before the next pass (or the final return).
-     blocks = clean_blocks(result);
+     resolutions[pi] = {
+       P.A_row,
+       P.B_row,
+       false,
+       0,
+       0,
+       new_eA,
+       new_sB
+     };
+   }
+   Rcpp::checkUserInterrupt();
+
+   // --------------------------------------------------------------------------
+   // Apply resolutions with keep[] vector.
+   // No shed_row is used, avoiding row-index shifting.
+   // --------------------------------------------------------------------------
+   std::vector<bool> keep(n_blocks, true);
+
+   for (int pi = 0; pi < n_pairs; pi++) {
+
+     auto& R = resolutions[pi];
+
+     if (R.merged) {
+
+       blocks(R.A_row, 0) = R.merge_start;
+       blocks(R.A_row, 1) = R.merge_end;
+       keep[R.B_row] = false;
+
+     } else {
+
+       blocks(R.A_row, 1) = R.new_eA;
+       blocks(R.B_row, 0) = R.new_sB;
+     }
    }
 
-   return blocks;
+   int n_keep = (int)std::count(keep.begin(), keep.end(), true);
+
+   arma::imat result(n_keep, 2);
+
+   int ri = 0;
+
+   for (int i = 0; i < n_blocks; i++) {
+     if (keep[i]) {
+       result(ri, 0) = blocks(i, 0);
+       result(ri, 1) = blocks(i, 1);
+       ri++;
+     }
+   }
+
+   result = clean_blocks(result);
+
+   return result;
  }
 
 // ─────────────────────────────────────────────────────────────────────────────

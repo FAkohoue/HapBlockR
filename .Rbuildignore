@@ -1,8 +1,5 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^\.RDataTmp$
-^\.RData$
-^\.Rhistory$
 ^\.github$
 ^data-raw$
 ^docs$
@@ -17,8 +14,9 @@
 ^LICENSE\.md$
 ^.*\.bak$
 ^HapBlockR_Breeder_Guide_UPDATED_DRAFT\.md$
-^The_HapBlockR_Breeders_Guide\.html$
+^The_HapBlockR_Breeders_Guide\.docx$
 ^The_HapBlockR_Breeders_Guide\.pdf$
+^my-writing-style-SKILL\.md$
 ^benchmarks$
 ^CITATION\.cff$
 ^CODE_OF_CONDUCT\.md$
@@ -27,6 +25,10 @@
 ^SUPPORT\.md$
 ^HapBlockR_COMPLETE_AUDIT\.(md|html)$
 ^tmp$
-^tools/\.pnpm-store$
+^\.pnpm-store($|/)
+^tools/\.pnpm-store($|/)
+^tools/node_modules($|/)
 ^man/figures/HapBlockR_schematic\.(svg|png)$
 ^man/figures/logo\.png$
+^DGQGSI$
+^DesiredGainR$

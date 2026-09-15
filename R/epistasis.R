@@ -701,11 +701,11 @@ scan_block_by_block_epistasis <- function(
   query_indices <- lapply(seq_len(n_sig), function(i) {
     .query_index(sig_alleles$block_id[i], sig_alleles$allele[i])
   })
-  n_candidate_tests <- sum(vapply(seq_len(n_sig), function(i) {
+  n_tests <- sum(vapply(seq_len(n_sig), function(i) {
     if (!length(query_indices[[i]])) return(0L)
     sum(col_blks != sig_alleles$block_id[i])
   }, integer(1L)))
-  .log("Candidate interaction tests: ", format(n_candidate_tests, big.mark = ","),
+  .log("Total interaction tests: ", format(n_tests, big.mark = ","),
        " across ", n_sig, " query allele(s) and ", n_total,
        " retained allele columns")
 
@@ -813,16 +813,6 @@ scan_block_by_block_epistasis <- function(
       )
     }
   }
-
-  # n_tests must reflect the number of interaction tests that actually
-  # produced a valid result row (k), not the pre-loop candidate-pair count
-  # (n_candidate_tests): pairs are skipped inside the loop whenever the OLS
-  # fit is degenerate or rank-deficient (singular X'X, non-finite SE, etc.),
-  # so using the candidate count would overstate the true number of tests
-  # and make p_bonf/Meff-fallback more conservative than the actual family
-  # of tests performed -- contradicting the documented "actual number of
-  # tests" behaviour.
-  n_tests <- k
 
   results_df <- if (k > 0L) {
     df <- do.call(rbind, result_rows[seq_len(k)])
