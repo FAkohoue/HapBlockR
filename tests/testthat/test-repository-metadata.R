@@ -5,7 +5,14 @@
     file.path(getwd(), "..")
   ))
   candidates <- normalizePath(candidates, mustWork = FALSE)
-  matches <- candidates[file.exists(file.path(candidates, "DESCRIPTION"))]
+  # Installed packages also contain DESCRIPTION, but `inst` files have been
+  # relocated and source-only files such as CITATION.cff and tools are absent.
+  # .Rbuildignore is deliberately source-only and therefore distinguishes the
+  # repository checkout from the installed-package tree used by covr/R CMD check.
+  matches <- candidates[
+    file.exists(file.path(candidates, "DESCRIPTION")) &
+      file.exists(file.path(candidates, ".Rbuildignore"))
+  ]
   if (!length(matches))
     testthat::skip("Repository-source consistency check.")
   matches[1L]

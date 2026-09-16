@@ -182,6 +182,14 @@ jobs:
       - name: Measure decision-critical coverage
         shell: Rscript {0}
         run: |
+          # Repository-layout assertions are meaningful only in the checkout.
+          # Installed-package tests skip them because `inst` files are
+          # relocated and source-only files are deliberately excluded.
+          testthat::test_file(
+            "tests/testthat/test-repository-metadata.R",
+            reporter = "summary",
+            stop_on_failure = TRUE
+          )
           coverage <- covr::package_coverage(
             type = "tests",
             quiet = FALSE,
