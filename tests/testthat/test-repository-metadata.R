@@ -5,14 +5,7 @@
     file.path(getwd(), "..")
   ))
   candidates <- normalizePath(candidates, mustWork = FALSE)
-  # Installed packages also contain DESCRIPTION, but `inst` files have been
-  # relocated and source-only files such as CITATION.cff and tools are absent.
-  # .Rbuildignore is deliberately source-only and therefore distinguishes the
-  # repository checkout from the installed-package tree used by covr/R CMD check.
-  matches <- candidates[
-    file.exists(file.path(candidates, "DESCRIPTION")) &
-      file.exists(file.path(candidates, ".Rbuildignore"))
-  ]
+  matches <- candidates[file.exists(file.path(candidates, "DESCRIPTION"))]
   if (!length(matches))
     testthat::skip("Repository-source consistency check.")
   matches[1L]
@@ -86,4 +79,56 @@ test_that("package declares British English", {
   description <- read.dcf(file.path(root, "DESCRIPTION"))[1L, ]
   expect_identical(unname(description[["Language"]]), "en-GB")
   expect_true(file.exists(file.path(root, "inst", "WORDLIST")))
+})
+
+test_that("pkgdown exposes every breeder-facing navigation tab", {
+  root <- .repository_source_root()
+  config <- paste(
+    readLines(file.path(root, "_pkgdown.yml"), warn = FALSE),
+    collapse = "\n"
+  )
+
+  expect_match(
+    config,
+    "left:  [reference, tutorial, articles, guide, news]",
+    fixed = TRUE
+  )
+  expect_match(config, "text: Tutorial", fixed = TRUE)
+  expect_match(config, "text: Vignettes", fixed = TRUE)
+  expect_match(config, "text: Breeder guide", fixed = TRUE)
+  expect_match(
+    config,
+    "href: articles/HapBlockR-breeder-guide.html",
+    fixed = TRUE
+  )
+
+  article_targets <- c(
+    "HapBlockR-intro", "HapBlockR-ld-metrics",
+    "HapBlockR-breeding-decisions", "HapBlockR-large-scale",
+    "HapBlockR-phasing", "HapBlockR-programme-operations",
+    "HapBlockR-workflow", "HapBlockR-breeder-guide"
+  )
+  expect_true(all(file.exists(file.path(
+    root, "vignettes", paste0(article_targets, ".Rmd")
+  ))))
+
+  expect_true(file.exists(file.path(
+    root, "inst", "guide", "HapBlockR_Breeder_Guide.md"
+  )))
+  expect_true(file.exists(file.path(
+    root, "inst", "extdata", "HapBlockR_Breeder_Guide.pdf"
+  )))
+  expect_true(file.exists(file.path(
+    root, "inst", "extdata", "HapBlockR_Breeder_Guide.docx"
+  )))
+
+  workflow <- paste(
+    readLines(
+      file.path(root, ".github", "workflows", "pkgdown.yaml"),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  expect_match(workflow, "docs/breeder-guide.pdf", fixed = TRUE)
+  expect_match(workflow, "docs/breeder-guide.docx", fixed = TRUE)
 })

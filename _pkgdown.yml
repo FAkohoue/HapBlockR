@@ -49,9 +49,35 @@ authors:
 
 navbar:
   structure:
-    left:  [intro, reference, articles, news]
+    left:  [reference, tutorial, articles, guide, news]
     right: [search, github]
   components:
+    tutorial:
+      text: Tutorial
+      href: articles/HapBlockR-intro.html
+    articles:
+      text: Vignettes
+      menu:
+        - text: "Methods"
+        - text: LD metrics and block detection
+          href: articles/HapBlockR-ld-metrics.html
+        - text: Breeding decisions
+          href: articles/HapBlockR-breeding-decisions.html
+        - text: -------
+        - text: "Data preparation"
+        - text: Large-scale genomic data
+          href: articles/HapBlockR-large-scale.html
+        - text: Statistical phasing
+          href: articles/HapBlockR-phasing.html
+        - text: -------
+        - text: "Breeding programme workflows"
+        - text: Programme operations
+          href: articles/HapBlockR-programme-operations.html
+        - text: Complete workflow
+          href: articles/HapBlockR-workflow.html
+    guide:
+      text: Breeder guide
+      href: articles/HapBlockR-breeder-guide.html
     github:
       icon: fab fa-github fa-lg
       href: https://github.com/FAkohoue/HapBlockR
@@ -98,6 +124,10 @@ articles:
       - HapBlockR-phasing
       - HapBlockR-programme-operations
       - HapBlockR-workflow
+  - title: "Breeder guide"
+    navbar: ~
+    contents:
+      - HapBlockR-breeder-guide
       - HapBlockR-full-pipeline
 
 reference:

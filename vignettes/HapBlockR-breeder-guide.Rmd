@@ -1,0 +1,36 @@
+---
+title: "The HapBlockR Breeder's Guide"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: false
+vignette: >
+  %\VignetteIndexEntry{The HapBlockR Breeder's Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+[Download the PDF edition](../breeder-guide.pdf) | [Download the Word edition](../breeder-guide.docx)
+
+```{r guide-content, echo=FALSE, results='asis'}
+guide_name <- "HapBlockR_Breeder_Guide.md"
+guide_path <- system.file("guide", guide_name, package = "HapBlockR")
+
+if (!nzchar(guide_path)) {
+  candidates <- c(
+    file.path("..", "inst", "guide", guide_name),
+    file.path("inst", "guide", guide_name)
+  )
+  guide_path <- candidates[file.exists(candidates)][1L]
+}
+
+if (!length(guide_path) || is.na(guide_path) || !file.exists(guide_path)) {
+  stop("Cannot locate the maintained Breeder's Guide source.", call. = FALSE)
+}
+
+guide <- readLines(guide_path, encoding = "UTF-8", warn = FALSE)
+if (length(guide) && grepl("^# ", guide[[1L]])) {
+  guide <- guide[-1L]
+}
+cat(paste(guide, collapse = "\n"))
+```

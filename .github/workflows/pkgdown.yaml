@@ -97,6 +97,23 @@ jobs:
             install     = FALSE
           )
 
+      - name: Publish the Breeder's Guide alongside the pkgdown site
+        run: |
+          guide_pdf="inst/extdata/HapBlockR_Breeder_Guide.pdf"
+          guide_docx="inst/extdata/HapBlockR_Breeder_Guide.docx"
+
+          for guide_file in "$guide_pdf" "$guide_docx"; do
+            if [ ! -s "$guide_file" ]; then
+              echo "Breeder's Guide file is missing or empty: $guide_file"
+              exit 1
+            fi
+          done
+
+          cp "$guide_pdf" docs/breeder-guide.pdf
+          cp "$guide_docx" docs/breeder-guide.docx
+
+          echo "Published breeder-guide.pdf and breeder-guide.docx"
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 

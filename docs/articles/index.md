@@ -22,5 +22,10 @@
   Exchange](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-programme-operations.md):
 - [From Genotypes to a Validated Breeding
   Decision](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-workflow.md):
+
+### Breeder guide
+
+- [The HapBlockR Breeder's
+  Guide](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-breeder-guide.md):
 - [The Full Pipeline: Genotypes to a Certified Mating
   Plan](https://FAkohoue.github.io/HapBlockR/articles/HapBlockR-full-pipeline.md):
