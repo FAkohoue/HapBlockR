@@ -250,7 +250,7 @@
 </div>
 <div class="section level3">
 <h3 id="p1--repair-epistasis-fine-mapping-and-eliminate-skip-on-error-tests">P1 — Repair epistasis fine mapping and eliminate skip-on-error tests<a class="anchor" aria-label="anchor" href="#p1--repair-epistasis-fine-mapping-and-eliminate-skip-on-error-tests"></a></h3>
-<p><strong>Evidence.</strong> The least absolute shrinkage and selection operator (LASSO) path can pass degenerate columns to <code><a href="https://glmnet.stanford.edu/reference/cv.glmnet.html" class="external-link">glmnet::cv.glmnet()</a></code> and fail with <code>non-conformable arrays</code>. The tests catch the error and call <code>skip()</code>, converting a regression into an apparent pass. Six block-by-block epistasis tests also skip because their own fixture contains no valid haplotype columns.</p>
+<p><strong>Evidence.</strong> The least absolute shrinkage and selection operator (LASSO) path can pass degenerate columns to <code><a href="https://rdrr.io/pkg/glmnet/man/cv.glmnet.html" class="external-link">glmnet::cv.glmnet()</a></code> and fail with <code>non-conformable arrays</code>. The tests catch the error and call <code>skip()</code>, converting a regression into an apparent pass. Six block-by-block epistasis tests also skip because their own fixture contains no valid haplotype columns.</p>
 <p><strong>Required correction.</strong></p>
 <ol style="list-style-type: decimal"><li>remove zero-variance and aliased features before scaling;</li>
 <li>calculate an effective fold count from the usable sample size and response distribution;</li>

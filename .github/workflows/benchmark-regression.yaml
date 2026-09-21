@@ -33,8 +33,8 @@ jobs:
       - name: Install dependencies
         uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
+          dependencies: '"hard"'
           extra-packages: any::devtools
-          needs: check
 
       - name: Run correctness and performance gate
         shell: Rscript {0}

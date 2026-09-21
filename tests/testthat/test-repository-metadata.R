@@ -5,9 +5,12 @@
     file.path(getwd(), "..")
   ))
   candidates <- normalizePath(candidates, mustWork = FALSE)
-  matches <- candidates[file.exists(file.path(candidates, "DESCRIPTION"))]
+  is_checkout <- file.exists(file.path(candidates, "DESCRIPTION")) &
+    file.exists(file.path(candidates, "_pkgdown.yml")) &
+    file.exists(file.path(candidates, ".git"))
+  matches <- candidates[is_checkout]
   if (!length(matches))
-    testthat::skip("Repository-source consistency check.")
+    testthat::skip("Repository-layout assertions run only in a Git checkout.")
   matches[1L]
 }
 
@@ -131,4 +134,34 @@ test_that("pkgdown exposes every breeder-facing navigation tab", {
   )
   expect_match(workflow, "docs/breeder-guide.pdf", fixed = TRUE)
   expect_match(workflow, "docs/breeder-guide.docx", fixed = TRUE)
+})
+
+test_that("specialist workflows install bounded dependency sets", {
+  root <- .repository_source_root()
+  workflow_names <- c(
+    "beagle-integration.yaml",
+    "benchmark-regression.yaml",
+    "compiled-valgrind.yaml"
+  )
+  workflows <- lapply(workflow_names, function(workflow_name) {
+    paste(
+      readLines(
+        file.path(root, ".github", "workflows", workflow_name),
+        warn = FALSE
+      ),
+      collapse = "\n"
+    )
+  })
+
+  for (workflow in workflows) {
+    expect_match(workflow, "dependencies: '\"hard\"'", fixed = TRUE)
+    expect_false(grepl("needs: check", workflow, fixed = TRUE))
+  }
+  expect_match(workflows[[1L]], "SNPRelate", fixed = TRUE)
+  expect_match(workflows[[1L]], "gdsfmt", fixed = TRUE)
+  expect_match(
+    workflows[[3L]],
+    '_R_CHECK_FORCE_SUGGESTS_: "false"',
+    fixed = TRUE
+  )
 })
