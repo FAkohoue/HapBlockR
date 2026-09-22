@@ -28,10 +28,10 @@ jobs:
           # R-devel and the minimum supported R release exercise the package
           # core. Optional integrations have their own dedicated workflow and
           # must not make the compatibility lanes unsatisfiable.
-          - { os: ubuntu-latest,  r: "release",  dependencies: '"all"',  force_suggests: "true"  }
-          - { os: ubuntu-latest,  r: "devel",    dependencies: '"hard"', force_suggests: "false" }
-          - { os: ubuntu-latest,  r: "oldrel-1", dependencies: '"all"',  force_suggests: "true"  }
-          - { os: ubuntu-22.04,   r: "4.2",      dependencies: '"hard"', force_suggests: "false" }
+          - { os: ubuntu-latest,  r: "release",  dependencies: '"all"',  force_suggests: "true",  optisel_source: "github::cran/optiSel@4317bc1a4468e23f8ceca33b54b308302f984530" }
+          - { os: ubuntu-latest,  r: "devel",    dependencies: '"hard"', force_suggests: "false", optisel_source: "" }
+          - { os: ubuntu-latest,  r: "oldrel-1", dependencies: '"all"',  force_suggests: "true",  optisel_source: "github::cran/optiSel@4317bc1a4468e23f8ceca33b54b308302f984530" }
+          - { os: ubuntu-22.04,   r: "4.2",      dependencies: '"hard"', force_suggests: "false", optisel_source: "" }
           # Pinned to macos-15 (not macos-latest): macos-latest now resolves
           # to macOS 26 "Tahoe", which dropped OpenGL/XQuartz support. `rgl`
           # (pulled in transitively via SimpleMating -> optiSel's dependency
@@ -41,8 +41,8 @@ jobs:
           # before any HapBlockR code is even touched. macos-15 predates the
           # OpenGL removal and is still a fully supported GitHub Actions
           # image (unlike macos-13/macos-14, which are being deprecated).
-          - { os: macos-15,       r: "release", dependencies: '"all"', force_suggests: "true" }
-          - { os: windows-latest, r: "release", dependencies: '"all"', force_suggests: "true" }
+          - { os: macos-15,       r: "release", dependencies: '"all"', force_suggests: "true", optisel_source: "github::cran/optiSel@4317bc1a4468e23f8ceca33b54b308302f984530" }
+          - { os: windows-latest, r: "release", dependencies: '"all"', force_suggests: "true", optisel_source: "github::cran/optiSel@4317bc1a4468e23f8ceca33b54b308302f984530" }
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -126,6 +126,7 @@ jobs:
             any::testthat
             any::knitr
             any::rmarkdown
+            ${{ matrix.config.optisel_source }}
 
       - name: Check package
         uses: r-lib/actions/check-r-package@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
@@ -183,6 +184,7 @@ jobs:
             any::spelling
             any::devtools
             any::testthat
+            github::cran/optiSel@4317bc1a4468e23f8ceca33b54b308302f984530
           needs: check
 
       - name: Check British-English spelling

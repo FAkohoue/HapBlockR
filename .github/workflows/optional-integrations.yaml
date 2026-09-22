@@ -59,7 +59,7 @@ jobs:
             any::BGLR
             any::glmnet
             any::lpSolve
-            any::optiSel
+            github::cran/optiSel@4317bc1a4468e23f8ceca33b54b308302f984530
             github::Resende-Lab/SimpleMating
             github::FAkohoue/DesiredGainR
 

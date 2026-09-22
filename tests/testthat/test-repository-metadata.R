@@ -204,3 +204,38 @@ test_that("CI dependency contracts separate core compatibility from integrations
   )
   expect_false(grepl("needs: check", integrations, fixed = TRUE))
 })
+
+test_that("workflows pin the archived optiSel source explicitly", {
+  root <- .repository_source_root()
+  read_workflow <- function(name) {
+    paste(
+      readLines(
+        file.path(root, ".github", "workflows", name),
+        warn = FALSE
+      ),
+      collapse = "\n"
+    )
+  }
+
+  source <- paste0(
+    "github::cran/optiSel@",
+    "4317bc1a4468e23f8ceca33b54b308302f984530"
+  )
+  check <- read_workflow("R-CMD-check.yaml")
+  pkgdown <- read_workflow("pkgdown.yaml")
+  integrations <- read_workflow("optional-integrations.yaml")
+
+  source_count <- lengths(regmatches(
+    check,
+    gregexpr(source, check, fixed = TRUE)
+  ))
+  expect_identical(source_count, 5L)
+  expect_match(
+    check,
+    '${{ matrix.config.optisel_source }}',
+    fixed = TRUE
+  )
+  expect_match(pkgdown, source, fixed = TRUE)
+  expect_match(integrations, source, fixed = TRUE)
+  expect_false(grepl("any::optiSel", integrations, fixed = TRUE))
+})
