@@ -3,7 +3,7 @@
 [Download the PDF
 edition](https://FAkohoue.github.io/HapBlockR/breeder-guide.pdf) \|
 [Download the Word
-edition](https://FAkohoue.github.io/HapBlockR/breeder-guide.docx)
+edition](https://FAkohoue.github.io/HapBlockR/breeder-guide.md)
 
 ## Choosing parents and crosses with haplotype-aware tools
 

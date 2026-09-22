@@ -525,7 +525,7 @@ validate(certificate)
 #> 6 input_hashes_sha256   TRUE        5 input hash(es)
 #> 7       quality_gates   TRUE       6 quality gate(s)
 #> 8   validation_status   TRUE                  passed
-validate(exact_res)
+if (have_lpsolve) validate(exact_res)
 #>                 check passed                  detail
 #> 1     required_fields   TRUE                        
 #> 2      schema_version   TRUE                   1.0.0

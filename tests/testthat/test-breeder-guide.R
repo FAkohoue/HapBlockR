@@ -19,10 +19,10 @@ test_that("open_breeder_guide: locates the installed .pdf file", {
 })
 
 test_that("open_breeder_guide: locates the editable Word edition", {
-  path <- open_breeder_guide(open = FALSE, format = "docx")
+  path <- open_breeder_guide(open = FALSE, format = "html")
   expect_true(is.character(path))
   expect_true(file.exists(path))
-  expect_match(path, "HapBlockR_Breeder_Guide\\.docx$")
+  expect_match(path, "HapBlockR_Breeder_Guide\\.html$")
 })
 
 test_that("open_breeder_guide: returns the path invisibly", {

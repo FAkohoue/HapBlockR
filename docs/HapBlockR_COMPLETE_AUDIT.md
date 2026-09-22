@@ -363,7 +363,7 @@ before and after both successful and failing calls.
 
 **Evidence.** The least absolute shrinkage and selection operator
 (LASSO) path can pass degenerate columns to
-[`glmnet::cv.glmnet()`](https://rdrr.io/pkg/glmnet/man/cv.glmnet.html)
+[`glmnet::cv.glmnet()`](https://glmnet.stanford.edu/reference/cv.glmnet.html)
 and fail with `non-conformable arrays`. The tests catch the error and
 call `skip()`, converting a regression into an apparent pass. Six
 block-by-block epistasis tests also skip because their own fixture

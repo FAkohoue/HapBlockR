@@ -10,7 +10,7 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-[Download the PDF edition](../breeder-guide.pdf) | [Download the Word edition](../breeder-guide.docx)
+[Download the PDF edition](../breeder-guide.pdf) | [Download the Word edition](../breeder-guide.html)
 
 ```{r guide-content, echo=FALSE, results='asis'}
 guide_name <- "HapBlockR_Breeder_Guide.md"

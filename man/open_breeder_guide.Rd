@@ -4,7 +4,7 @@
 \alias{open_breeder_guide}
 \title{Locate or Open the HapBlockR Breeder's Guide}
 \usage{
-open_breeder_guide(open = TRUE, format = c("pdf", "docx"))
+open_breeder_guide(open = TRUE, format = c("pdf", "html"))
 }
 \arguments{
 \item{open}{Logical, default \code{TRUE}. If \code{TRUE} and the session
@@ -13,7 +13,7 @@ application for the selected file via \code{\link[utils]{browseURL}}.
 If \code{FALSE}, or the session is non-interactive, the file is not
 opened -- only its path is returned.}
 
-\item{format}{Character, one of \code{"pdf"} (default) or \code{"docx"}.
+\item{format}{Character, one of \code{"pdf"} (default) or \code{"html"}.
 Selects the tagged fixed-layout edition or the editable Word edition.}
 }
 \value{
@@ -49,7 +49,7 @@ standalone files have no vignette engine, so they are not indexed by
 }
 \examples{
 pdf_path <- open_breeder_guide(open = FALSE)
-word_path <- open_breeder_guide(open = FALSE, format = "docx")
+word_path <- open_breeder_guide(open = FALSE, format = "html")
 file.exists(pdf_path)
 file.exists(word_path)
 

@@ -1542,7 +1542,7 @@ whichever of those you need next.
 ## 15. See also
 
 - **The HapBlockR Breeder’s Guide** (`HapBlockR_Breeder_Guide.pdf` and
-  `HapBlockR_Breeder_Guide.docx`) — a standalone, non-technical
+  `HapBlockR_Breeder_Guide.html`) — a standalone, non-technical
   companion covering the same nine tools from Sections 5 and 8-12 (what
   each is, when to reach for it, how to interpret its output, a worked
   decision, uncertainty and feasibility gates, plus a programme-shape

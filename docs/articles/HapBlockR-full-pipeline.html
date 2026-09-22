@@ -105,7 +105,7 @@
                         <h4 data-toc-skip class="author">HapBlockR
 Development Team</h4>
             
-            <h4 data-toc-skip class="date">2026-09-21</h4>
+            <h4 data-toc-skip class="date">2026-09-22</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/FAkohoue/HapBlockR/blob/HEAD/vignettes/HapBlockR-full-pipeline.Rmd" class="external-link"><code>vignettes/HapBlockR-full-pipeline.Rmd</code></a></small>
       <div class="d-none name"><code>HapBlockR-full-pipeline.Rmd</code></div>
@@ -618,7 +618,7 @@ in the Breeder’s Guide.</p>
 <span><span class="co">#&gt; 6 input_hashes_sha256   TRUE        5 input hash(es)</span></span>
 <span><span class="co">#&gt; 7       quality_gates   TRUE       6 quality gate(s)</span></span>
 <span><span class="co">#&gt; 8   validation_status   TRUE                  passed</span></span>
-<span><span class="fu"><a href="../reference/validate.html">validate</a></span><span class="op">(</span><span class="va">exact_res</span><span class="op">)</span></span>
+<span><span class="kw">if</span> <span class="op">(</span><span class="va">have_lpsolve</span><span class="op">)</span> <span class="fu"><a href="../reference/validate.html">validate</a></span><span class="op">(</span><span class="va">exact_res</span><span class="op">)</span></span>
 <span><span class="co">#&gt;                 check passed                  detail</span></span>
 <span><span class="co">#&gt; 1     required_fields   TRUE                        </span></span>
 <span><span class="co">#&gt; 2      schema_version   TRUE                   1.0.0</span></span>

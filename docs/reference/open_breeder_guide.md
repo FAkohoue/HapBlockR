@@ -22,7 +22,7 @@ do not necessarily run R themselves.
 ## Usage
 
 ``` r
-open_breeder_guide(open = TRUE, format = c("pdf", "docx"))
+open_breeder_guide(open = TRUE, format = c("pdf", "html"))
 ```
 
 ## Arguments
@@ -38,7 +38,7 @@ open_breeder_guide(open = TRUE, format = c("pdf", "docx"))
 
 - format:
 
-  Character, one of `"pdf"` (default) or `"docx"`. Selects the tagged
+  Character, one of `"pdf"` (default) or `"html"`. Selects the tagged
   fixed-layout edition or the editable Word edition.
 
 ## Value
@@ -74,8 +74,8 @@ code;
 ``` r
 pdf_path <- open_breeder_guide(open = FALSE)
 #> [open_breeder_guide] Guide located at: C:/Users/fakohoue/AppData/Local/R/win-library/4.5/HapBlockR/extdata/HapBlockR_Breeder_Guide.pdf
-word_path <- open_breeder_guide(open = FALSE, format = "docx")
-#> [open_breeder_guide] Guide located at: C:/Users/fakohoue/AppData/Local/R/win-library/4.5/HapBlockR/extdata/HapBlockR_Breeder_Guide.docx
+word_path <- open_breeder_guide(open = FALSE, format = "html")
+#> [open_breeder_guide] Guide located at: C:/Users/fakohoue/AppData/Local/R/win-library/4.5/HapBlockR/extdata/HapBlockR_Breeder_Guide.html
 file.exists(pdf_path)
 #> [1] TRUE
 file.exists(word_path)

@@ -13,6 +13,9 @@ benchmarks/results/
 tools/node_modules/
 inst/extdata/AlphaMate.exe
 inst/extdata/libiomp5md.dll
+inst/guide/HapBlockR_Breeder_Guide.md
+inst/guide/HapBlockR_Breeder_Guide.Rmd
+inst/extdata/HapBlockR_Breeder_Guide.docx
 HapBlockR_Breeder_Guide_UPDATED_DRAFT.md
 The_HapBlockR_Breeders_Guide.docx
 The_HapBlockR_Breeders_Guide.pdf

@@ -49,7 +49,7 @@
 #'   application for the selected file via \code{\link[utils]{browseURL}}.
 #'   If \code{FALSE}, or the session is non-interactive, the file is not
 #'   opened -- only its path is returned.
-#' @param format Character, one of \code{"pdf"} (default) or \code{"docx"}.
+#' @param format Character, one of \code{"pdf"} (default) or \code{"html"}.
 #'   Selects the tagged fixed-layout edition or the editable Word edition.
 #'
 #' @return The file path (character, invisibly) to the selected guide edition
@@ -65,12 +65,12 @@
 #'
 #' @examples
 #' pdf_path <- open_breeder_guide(open = FALSE)
-#' word_path <- open_breeder_guide(open = FALSE, format = "docx")
+#' word_path <- open_breeder_guide(open = FALSE, format = "html")
 #' file.exists(pdf_path)
 #' file.exists(word_path)
 #'
 #' @export
-open_breeder_guide <- function(open = TRUE, format = c("pdf", "docx")) {
+open_breeder_guide <- function(open = TRUE, format = c("pdf", "html")) {
   format <- match.arg(format)
   guide_name <- paste0("HapBlockR_Breeder_Guide.", format)
   guide_path <- system.file("extdata", guide_name,
