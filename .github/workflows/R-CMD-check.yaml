@@ -126,6 +126,7 @@ jobs:
             any::testthat
             any::knitr
             any::rmarkdown
+            any::GA
             ${{ matrix.config.optisel_source }}
 
       - name: Check package

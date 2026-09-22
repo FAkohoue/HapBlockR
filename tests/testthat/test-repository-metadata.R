@@ -190,6 +190,7 @@ test_that("CI dependency contracts separate core compatibility from integrations
     '_R_CHECK_FORCE_SUGGESTS_: ${{ matrix.config.force_suggests }}',
     fixed = TRUE
   )
+  expect_match(check, "any::GA", fixed = TRUE)
   expect_false(grepl("Reinstall data.table from source", check, fixed = TRUE))
 
   for (workflow in c(check, pkgdown)) {
