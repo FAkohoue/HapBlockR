@@ -50,15 +50,18 @@ jobs:
       - name: Install package dependencies
         uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
+          dependencies: '"hard"'
           extra-packages: |
             any::devtools
+            any::testthat
             any::BEDMatrix
             any::bigmemory
             any::BGLR
             any::glmnet
             any::lpSolve
             any::optiSel
-          needs: check
+            github::Resende-Lab/SimpleMating
+            github::FAkohoue/DesiredGainR
 
       - name: Install Bioconductor backends
         shell: Rscript {0}

@@ -165,3 +165,42 @@ test_that("specialist workflows install bounded dependency sets", {
     fixed = TRUE
   )
 })
+
+test_that("CI dependency contracts separate core compatibility from integrations", {
+  root <- .repository_source_root()
+  read_workflow <- function(name) {
+    paste(
+      readLines(
+        file.path(root, ".github", "workflows", name),
+        warn = FALSE
+      ),
+      collapse = "\n"
+    )
+  }
+
+  check <- read_workflow("R-CMD-check.yaml")
+  pkgdown <- read_workflow("pkgdown.yaml")
+  integrations <- read_workflow("optional-integrations.yaml")
+
+  expect_match(check, 'r: "release",  dependencies: \'"all"\'', fixed = TRUE)
+  expect_match(check, 'r: "devel",    dependencies: \'"hard"\'', fixed = TRUE)
+  expect_match(check, 'r: "4.2",      dependencies: \'"hard"\'', fixed = TRUE)
+  expect_match(
+    check,
+    '_R_CHECK_FORCE_SUGGESTS_: ${{ matrix.config.force_suggests }}',
+    fixed = TRUE
+  )
+  expect_false(grepl("Reinstall data.table from source", check, fixed = TRUE))
+
+  for (workflow in c(check, pkgdown)) {
+    expect_match(workflow, '"SNPRelate", "gdsfmt", "vsn"', fixed = TRUE)
+  }
+
+  expect_match(integrations, "dependencies: '\"hard\"'", fixed = TRUE)
+  expect_match(
+    integrations,
+    "github::FAkohoue/DesiredGainR",
+    fixed = TRUE
+  )
+  expect_false(grepl("needs: check", integrations, fixed = TRUE))
+})

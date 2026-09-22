@@ -42,6 +42,7 @@ BrAPI
 Bron
 Bunya
 CHR
+CIAT
 CLQD
 CLQmode
 CMD
@@ -258,6 +259,7 @@ env
 epyc
 eq
 erroring
+estimand
 etc
 fallbacks
 finemap

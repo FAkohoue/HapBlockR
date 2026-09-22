@@ -53,7 +53,10 @@ jobs:
           if (!requireNamespace("BiocManager", quietly = TRUE))
             install.packages("BiocManager", repos = "https://cloud.r-project.org")
           BiocManager::install(ask = FALSE, update = FALSE)
-          bioc_pkgs <- c("SNPRelate", "gdsfmt")
+          # ASRgenomics' dependency graph also uses vsn. Installing all three
+          # Bioconductor packages before pak resolves the website dependency
+          # graph consistently with the successful R-CMD-check release lane.
+          bioc_pkgs <- c("SNPRelate", "gdsfmt", "vsn")
           to_install <- bioc_pkgs[!vapply(bioc_pkgs, requireNamespace,
                                           logical(1L), quietly = TRUE)]
           if (length(to_install))
