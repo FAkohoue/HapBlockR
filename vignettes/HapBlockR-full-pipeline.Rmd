@@ -405,7 +405,7 @@ validate(ga_sel)
 validate(fam_sel)
 validate(core_res)
 validate(certificate)
-validate(exact_res)
+if (have_lpsolve) validate(exact_res)
 ```
 
 ## Stage 16 -- Export for exchange

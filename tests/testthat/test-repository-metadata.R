@@ -206,6 +206,24 @@ test_that("CI dependency contracts separate core compatibility from integrations
   expect_false(grepl("needs: check", integrations, fixed = TRUE))
 })
 
+test_that("the full-pipeline vignette guards optional exact-solver output", {
+  root <- .repository_source_root()
+  vignette <- paste(
+    readLines(
+      file.path(root, "vignettes", "HapBlockR-full-pipeline.Rmd"),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(
+    vignette,
+    "if (have_lpsolve) validate(exact_res)",
+    fixed = TRUE
+  )
+  expect_false(grepl("\nvalidate(exact_res)\n", vignette, fixed = TRUE))
+})
+
 test_that("workflows pin the archived optiSel source explicitly", {
   root <- .repository_source_root()
   read_workflow <- function(name) {
